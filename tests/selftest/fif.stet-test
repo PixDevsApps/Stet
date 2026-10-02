@@ -1,0 +1,117 @@
+# Find in Files (Ctrl+Shift+F) on a generated tree: the folder default, filters, subfolders,
+# hidden files, .gitignore, unsaved open documents searched from memory, a result in an unopened
+# file, a missing folder, and Stop.
+
+mkdir $TMP/tree/.git
+write $TMP/tree/.gitignore "ignored.rs\n"
+write $TMP/tree/a.rs "fn main() {\n    // needle\n}\n"
+write $TMP/tree/b.txt "needle\nneedle\n"
+write $TMP/tree/c.min.js "needle\n"
+write $TMP/tree/sub/d.rs "needle in sub\n"
+write $TMP/tree/target/e.rs "needle in target\n"
+write $TMP/tree/.hidden/f.rs "needle hidden\n"
+write $TMP/tree/ignored.rs "needle ignored\n"
+
+# The folder defaults to the current file's folder.
+open tree/a.rs
+action find-in-files
+assert-bar-mode files
+assert-field directory "$TMP/tree"
+assert-field filters "*.*"
+find needle
+fif-start
+wait-fif
+assert-fif searched 5
+assert-fif matched 5
+assert-fif hits 6
+assert-fif cancelled false
+assert-results-heading "Search “needle” (6 hits in 5 files of 5 searched)"
+assert-results-status "6 hits in 5 files of 5 searched"
+assert-results-contains "  $TMP/tree/sub/d.rs (1 hit)\n    Line 1: needle in sub\n"
+assert-history directory "$TMP/tree"
+
+# Filters: names, exclusions, folders.
+fif-filters "*.rs !target/"
+fif-start
+wait-fif
+assert-fif matched 2
+assert-fif hits 2
+assert-fif searched 2
+fif-filters "*.* !*.min.js !\\sub"
+fif-start
+wait-fif
+assert-fif matched 3
+assert-results-contains "  $TMP/tree/target/e.rs (1 hit)"
+
+# Without subfolders; then hidden files and ignored ones too.
+fif-filters "*.*"
+find-option subfolders false
+fif-start
+wait-fif
+assert-fif matched 3
+assert-fif hits 4
+find-option subfolders true
+find-option hidden true
+find-option gitignore false
+fif-start
+wait-fif
+assert-fif matched 7
+assert-fif hits 8
+find-option hidden false
+find-option gitignore true
+
+# Regex mode and whole word, with the bar's options.
+find-mode regex
+find "needle (in|hidden)"
+fif-start
+wait-fif
+assert-fif hits 2
+find-mode normal
+find-option word true
+find "needle"
+fif-start
+wait-fif
+assert-fif hits 6
+find-option word false
+
+# An open document with unsaved changes is searched from its text, not from the disk.
+open tree/b.txt
+cursor 1 1
+type "needle first\n"
+assert-dirty true
+fif-filters "b.txt"
+fif-start
+wait-fif
+assert-fif hits 3
+assert-results-contains "    Line 1: needle first\n    Line 2: needle\n    Line 3: needle\n"
+
+# A hit in a file that is not open opens it at the match.
+fif-filters "d.rs"
+fif-start
+wait-fif
+assert-fif matched 1
+results-activate 2
+wait-until assert-title "d.rs — $TMP/tree/sub — Stet"
+wait-until assert-selection needle
+assert-cursor 1 7
+
+# A folder that does not exist.
+fif-folder "$TMP/missing"
+fif-start
+assert-find-message "“$TMP/missing” is not a folder"
+assert-fif-running false
+
+# Stop: a slow search over a bigger tree ends at once, with what it found so far.
+generate-tree $TMP/big 400 1000
+find-mode regex
+find "(\\w+\\s+){3}\\d{7}"
+fif-folder "$TMP/big"
+fif-filters "*.*"
+fif-start
+assert-fif-running true
+fif-stop
+wait-fif
+assert-fif cancelled true
+assert-fif searched-below 400
+assert-results-status "stopped"
+report-fif

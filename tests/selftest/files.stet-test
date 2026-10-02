@@ -1,0 +1,151 @@
+# Tabs and files (M1, with M3's encodings): open, edit, save, dirty markers, close with a
+# prompt, restore a closed tab, Save As, read-only files, recent files and dropped files.
+# Encodings, line endings and large files have their own scripts.
+
+write $TMP/src/main.rs "fn main() {\n    println!(\"hi\");\n}\n"
+chmod $TMP/src/main.rs 0640
+
+# Opening a file replaces the pristine Untitled 1 tab.
+open src/main.rs
+assert-tab-count 1
+assert-title "main.rs — $TMP/src — Stet"
+assert-tab-title 1 "main.rs"
+assert-language rust
+assert-status "Rust"
+assert-status "LF"
+assert-status "UTF-8"
+assert-dirty false
+
+# Typing marks the document dirty in the tab and the window title.
+cursor 2 5
+type "let x = 1; "
+assert-dirty true
+assert-title "*main.rs — $TMP/src — Stet"
+assert-tab-title 1 "● main.rs"
+assert-status "Ln 2, Col 16"
+
+# Save writes through a temporary file and keeps the file's mode.
+action save
+wait-idle
+assert-dirty false
+assert-title "main.rs — $TMP/src — Stet"
+assert-file $TMP/src/main.rs "fn main() {\n    let x = 1; println!(\"hi\");\n}\n"
+assert-mode $TMP/src/main.rs 0640
+
+# Recent files are kept in the session in the state directory, with private permissions
+# (M2; M1 wrote recent.json), and listed in File › Open Recent.
+assert-recent $TMP/src/main.rs
+session-commit
+session-flush
+assert-mode $TMP/state/stet/session.json 0600
+assert-session-contains $TMP/state/stet "$TMP/src/main.rs"
+assert-missing $TMP/state/stet/recent.json
+assert-mode $TMP/state/stet 0700
+assert-action-enabled clear-recent true
+assert-menu-contains main.rs
+assert-menu-contains "Clear Recent Files"
+assert-menu
+
+# Opening an open file selects its tab instead of opening it twice.
+action new-tab
+assert-tab-count 2
+open src/main.rs
+assert-tab-count 2
+assert-title "main.rs — $TMP/src — Stet"
+
+# Closing a dirty tab asks; Discard closes it; the closed tab comes back with its text.
+action next-tab
+assert-title "Untitled 1 — Stet"
+type "scratch notes"
+action close-tab
+assert-dialog true
+respond discard
+assert-dialog false
+assert-tab-count 1
+assert-closed 1
+action restore-closed-tab
+assert-tab-count 2
+# An untitled document is named after its first line (M8).
+assert-title "*scratch notes — Stet"
+assert-text "scratch notes"
+assert-dirty true
+
+# Cancel keeps the tab open.
+action close-tab
+respond cancel
+assert-tab-count 2
+
+# Save As names the document and adds it to the recent files.
+save-as $TMP/notes.txt
+assert-file $TMP/notes.txt "scratch notes"
+assert-title "notes.txt — $TMP — Stet"
+assert-dirty false
+assert-recent $TMP/notes.txt
+
+# Close All asks once for every dirty document.
+type " more"
+action close-all
+assert-dialog true
+respond save
+wait-idle
+assert-tab-count 1
+assert-title "Untitled 1 — Stet"
+assert-file $TMP/notes.txt "scratch notes more"
+
+# A Latin-1 file opens as Windows-1252, editable, and an edit keeps its encoding (M3).
+write-hex $TMP/latin1.txt "63 61 66 e9 0a"
+open latin1.txt
+assert-read-only false
+assert-status "Windows-1252"
+assert-text "café\n"
+cursor 1 5
+type "!"
+action save
+wait-idle
+assert-file-hex $TMP/latin1.txt "63 61 66 e9 21 0a"
+assert-dirty false
+
+# NUL characters are shown as placeholders, read-only.
+write-hex $TMP/nul.bin "61 00 62"
+open nul.bin
+assert-read-only true
+assert-text "a␀b"
+assert-banner "NUL"
+
+# CRLF files keep their line endings; the status bar shows what was found.
+write $TMP/dos.txt "one\r\ntwo\r\n"
+open dos.txt
+assert-status "CRLF"
+cursor 1 4
+type "!"
+action save
+wait-idle
+assert-file $TMP/dos.txt "one!\r\ntwo\r\n"
+
+# Dropped files open as tabs; nothing is inserted into the editor.
+write $TMP/dropped.md "# Dropped\n"
+drop $TMP/dropped.md
+assert-title "dropped.md — $TMP — Stet"
+assert-language markdown
+assert-text "# Dropped\n"
+
+# A missing recent file is reported and leaves the recent list.
+write $TMP/gone.txt "soon gone\n"
+open gone.txt
+assert-recent $TMP/gone.txt
+action close-tab
+remove $TMP/gone.txt
+action open-recent $TMP/gone.txt
+wait-idle
+assert-title "dropped.md — $TMP — Stet"
+assert-recent $TMP/dropped.md
+
+# Quitting no longer asks about unsaved changes (M2): the session keeps them;
+# session.stet-test and session-restore.stet-test cover it.
+
+# Clear Recent Files empties the list and the submenu, and the session's list.
+action clear-recent
+assert-action-enabled clear-recent false
+session-commit
+session-flush
+assert-session-contains $TMP/state/stet "\"recent_files\": []"

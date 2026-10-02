@@ -1,0 +1,78 @@
+# M5's text tools on large documents: past 512 KiB an operation runs on a worker, with a
+# revision check; above 2,000 edits it is applied as one bulk edit (ADR-003); a result over
+# 1 MiB goes in a piece at a time inside the one user action, so the window keeps painting;
+# and each is one undo step. Frames are unpaced, so the main-loop measurements are real.
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/toolbox-large.stet-test
+
+unpace-frames
+
+# More than 2,000 edits on a small document: one bulk edit, on the GTK thread.
+write-generated $TMP/small.txt numbers 40000
+open small.txt
+wait-idle
+text-checkpoint small
+action trim-both
+wait-tool
+assert-tool-stats false true
+assert-line 1 "0"
+action undo
+assert-text-checkpoint small
+assert-can-undo false
+
+# An integer sort of about 270,000 lines (3 MB): on a worker, and in pieces.
+write-generated $TMP/numbers.txt numbers 3000000
+open numbers.txt
+wait-idle
+text-checkpoint numbers
+heartbeat-start
+action sort-integer-ascending
+wait-tool
+assert-tool-stats true true
+assert-tool-pieces 2
+assert-line 1 "  0  "
+assert-line 2 "  8  "
+assert-max-block 200
+action undo
+wait-idle
+assert-text-checkpoint numbers
+# Trimming both ends of every line: 540,000 edits, one bulk edit.
+action trim-both
+wait-tool
+assert-tool-stats true true
+assert-line 1 "0"
+action undo
+wait-idle
+assert-text-checkpoint numbers
+assert-can-undo false
+# The document changes while the worker sorts: nothing is applied.
+action-nowait sort-integer-descending
+assert-editable false
+set-text "changed meanwhile"
+wait-tool
+assert-text "changed meanwhile"
+assert-toast "changed while"
+
+# Formatting a 20 MB JSON file never blocks the window (PRD; M5 exit criterion).
+write-generated $TMP/big.json json-lines 20000000
+open big.json
+wait-idle
+assert-large false
+report-memory before-format
+heartbeat-start
+action format-json
+wait-tool
+assert-max-block 200
+assert-tool-stats true true
+assert-tool-pieces 20
+report-memory after-format
+assert-line 1 "["
+assert-line 2 "  {"
+assert-line 3 "    \"id\": 0,"
+assert-dialog false
+assert-focus editor
+# Undoing it is one step, which GtkTextBuffer applies at once: reported, not held to a bar.
+heartbeat-start
+action undo
+wait-idle
+assert-max-block 60000
+assert-line 2 "{\"id\":0,\"name\":\"item 0\",\"tags\":[\"a\",\"b\"],\"score\":0.5},"

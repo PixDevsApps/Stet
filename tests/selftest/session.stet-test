@@ -1,0 +1,171 @@
+# The session in one process (M2, ADR-006): dirty and untitled documents backed up by the 7 s
+# timer, what session.json keeps, saved and closed documents dropping their backups, no
+# periodic backup in large-file mode, Forget Unsaved Drafts, and --wait command lines from
+# another terminal while Stet runs. Restoring after SIGKILL, quitting and SIGTERM needs new
+# processes: session-restore.stet-test. Stet not running: activation.stet-test.
+
+assert-session on
+unpace-frames
+
+# A dirty file and an untitled document: the 7 s timer backs both up, without a forced commit,
+# and the session file and backups are private.
+write $TMP/notes.txt "one\ntwo\n"
+open notes.txt
+cursor 2 4
+type " more"
+action new-tab
+type "an untitled draft"
+assert-backed-up false
+wait-backed-up 8000
+assert-backed-up true
+assert-backups $TMP/state/stet 2
+assert-session-tabs $TMP/state/stet 2
+assert-session-contains $TMP/state/stet "$TMP/notes.txt"
+assert-session-contains $TMP/state/stet "\"untitled_number\": 1"
+assert-session-contains $TMP/state/stet "\"active_tab\": 1"
+assert-mode $TMP/state/stet/session.json 0600
+assert-mode $TMP/state/stet/backup 0700
+assert-files-like $TMP/state/stet/backup .txt 2
+report-session
+
+# Saving the file drops its backup with the next commit; so does closing the untitled document
+# with Discard.
+select-tab 1
+action save
+wait-idle
+session-commit
+session-flush
+assert-backups $TMP/state/stet 1
+assert-session-contains $TMP/state/stet "\"dirty\": false"
+select-tab 2
+action close-tab
+assert-focus dialog
+respond discard
+assert-focus editor
+assert-tab-count 1
+session-commit
+session-flush
+assert-backups $TMP/state/stet 0
+assert-session-tabs $TMP/state/stet 1
+
+# The histories (Find in Files' folders and filters too), the zoom and the caret are in the
+# session.
+set-history find "needle|other"
+set-history replace "thread"
+set-history directory "$TMP"
+set-history filters "*.rs"
+action zoom-in
+cursor 2 2
+session-commit
+session-flush
+assert-session-contains $TMP/state/stet "\"find_history\": [\n    \"needle\",\n    \"other\"\n  ]"
+assert-session-contains $TMP/state/stet "\"replace_history\": [\n    \"thread\"\n  ]"
+assert-session-contains $TMP/state/stet "\"filter_history\": [\n    \"*.rs\"\n  ]"
+assert-session-contains $TMP/state/stet "\"zoom\": 1"
+assert-session-contains $TMP/state/stet "\"caret\": 5"
+action zoom-reset
+
+# Large-file mode: a dirty document gets no periodic backup (closing the window asks about it
+# instead; session-restore.stet-test).
+write-generated $TMP/big.log log 55000000
+open big.log
+assert-large true
+type "x"
+assert-dirty true
+session-commit
+session-flush
+assert-backups $TMP/state/stet 0
+assert-session-contains $TMP/state/stet "big.log"
+action undo
+assert-dirty false
+action close-tab
+assert-tab-count 1
+
+# Forget Unsaved Drafts asks first; Cancel keeps everything.
+write $TMP/draft.txt "on disk\n"
+open draft.txt
+type "unsaved "
+action new-tab
+type "untitled draft"
+session-commit
+session-flush
+assert-backups $TMP/state/stet 2
+action forget-drafts
+wait-until assert-dialog true
+assert-dialog-text "Forget all unsaved drafts?"
+assert-focus dialog
+respond cancel
+assert-focus editor
+assert-tab-count 3
+assert-backups $TMP/state/stet 2
+# Forget: the untitled document closes, the file goes back to what is on disk, and every
+# backup goes.
+action forget-drafts
+wait-until assert-dialog true
+respond accept
+wait-idle
+assert-focus editor
+assert-tab-count 2
+assert-toast "Forgot every unsaved draft"
+select-tab 2
+assert-text "on disk\n"
+assert-dirty false
+assert-backups $TMP/state/stet 0
+assert-orphans $TMP/state/stet 0
+assert-session-tabs $TMP/state/stet 2
+assert-session-lacks $TMP/state/stet "\"dirty\": true"
+
+# --wait from another terminal while Stet runs: the command line waits until its own tab
+# closes, and a saved message gives status 0. Its tab stays out of the session.
+write $TMP/git/COMMIT_EDITMSG "\n# Please enter the commit message\n"
+spawn-bg git1 --wait git/COMMIT_EDITMSG
+wait-until assert-title "COMMIT_EDITMSG — $TMP/git — Stet"
+wait-idle
+assert-waiting 1
+assert-focus editor
+cursor 1 1
+type "Fix the frobnicator"
+session-commit
+session-flush
+assert-session-lacks $TMP/state/stet "COMMIT_EDITMSG"
+assert-session-tabs $TMP/state/stet 2
+action save
+wait-idle
+assert-waiting 1
+action close-tab
+spawn-wait git1 0
+assert-waiting 0
+assert-file $TMP/git/COMMIT_EDITMSG "Fix the frobnicator\n# Please enter the commit message\n"
+
+# Closed with unsaved changes (Discard): status 1, so git aborts.
+spawn-bg git2 --wait git/COMMIT_EDITMSG
+wait-until assert-title "COMMIT_EDITMSG — $TMP/git — Stet"
+wait-idle
+type "half a message "
+action close-tab
+assert-focus dialog
+respond discard
+spawn-wait git2 1
+assert-focus editor
+assert-file $TMP/git/COMMIT_EDITMSG "Fix the frobnicator\n# Please enter the commit message\n"
+
+# Several files: the command line waits for all of them, a file that was open already
+# included.
+write $TMP/a.txt "a\n"
+write $TMP/b.txt "b\n"
+open a.txt
+spawn-bg both --wait a.txt b.txt
+wait-until assert-title "b.txt — $TMP — Stet"
+wait-idle
+assert-waiting 1
+action close-tab
+assert-waiting 1
+open a.txt
+action close-tab
+spawn-wait both 0
+assert-waiting 0
+
+# --wait without a file has nothing to wait for; --no-session can't change a running Stet.
+spawn-stet --wait
+spawn-stet --no-session
+assert-session on

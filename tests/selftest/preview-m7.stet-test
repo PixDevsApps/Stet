@@ -1,0 +1,47 @@
+# Preview screenshots for M7 (bookmarks and marks, split view, Compare), in real Omarchy themes.
+# Needs Omarchy's themes in /usr/share/omarchy/themes, so it is not part of tools/ci.sh; it
+# writes into tools/progress/public/. Run from the repository root:
+#   tools/headless.sh 61 target/debug/stet --self-test tests/selftest/preview-m7.stet-test
+
+write $TMP/stet/src/main.rs "use std::io;\n\nmod greet;\n\n/// Reads a name and greets it.\nfn main() -> io::Result<()> {\n\tlet mut name = String::new();\n\tio::stdin().read_line(&mut name)?;\n\t// TODO: ask again on empty input\n\tprintln!(\"{}\", greet::greet(name.trim()));\n\tOk(())\n}\n"
+write $TMP/stet/src/greet.rs "/// Greets someone by name.\npub fn greet(name: &str) -> String {\n\tformat!(\"Hello, {name}!\")\n}\n\n// TODO: greet in more languages\npub fn shout(name: &str) -> String {\n\tgreet(name).to_uppercase()\n}\n\npub fn whisper(name: &str) -> String {\n\tgreet(name).to_lowercase()\n}\n"
+write $TMP/stet/src/greet-old.rs "/// Greets someone.\npub fn greet(name: &str) -> String {\n\tformat!(\"Hi, {name}!\")\n}\n\npub fn whisper(name: &str) -> String {\n\tgreet(name).to_lowercase()\n}\n\n// TODO: greet in more languages\npub fn shout(name: &str) -> String {\n\tgreet(name).to_uppercase()\n}\n\npub fn wave() {}\n"
+
+# Bookmarks in the gutter, Mark in the Find Mark Style, and two style tokens, in a dark theme.
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+open stet/src/main.rs
+gutter-click 6
+gutter-click 9
+cursor 1 10
+action style-token-1
+cursor 10 20
+action style-token-2
+action mark
+find "name"
+action mark-all
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m7-bookmarks-marks-tokyo-night-2026-10-01.png
+key find Escape
+
+# The split view with a clone of main.rs beside greet.rs, in a light theme.
+theme-set /usr/share/omarchy/themes/catppuccin-latte catppuccin-latte
+wait-until assert-theme-source omarchy:catppuccin-latte
+open stet/src/greet.rs
+action move-to-other-view
+view-focus 1
+action clone-to-other-view
+cursor 9 1
+view-focus 1
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m7-split-clone-catppuccin-latte-2026-10-01.png
+
+# A comparison: added, removed, changed and moved lines with padding, in gruvbox.
+theme-set /usr/share/omarchy/themes/gruvbox gruvbox
+wait-until assert-theme-source omarchy:gruvbox
+action close-all
+open stet/src/greet-old.rs stet/src/greet.rs
+action compare
+wait-compare
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m7-compare-gruvbox-2026-10-01.png

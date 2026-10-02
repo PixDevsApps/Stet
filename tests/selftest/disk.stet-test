@@ -1,0 +1,169 @@
+# Files changed by other programs, symbolic links, read-only files and safe-save leftovers
+# (M3). The file monitor waits 300 ms for a burst of events, so the checks use wait-until.
+# Run: tools/headless.sh 30 target/debug/stet --self-test tests/selftest/disk.stet-test
+
+# A clean file changed on disk reloads quietly, also in a background tab, without switching
+# tabs; the caret stays, and the reload is one undo step.
+write $TMP/notes.txt "one\ntwo\nthree\n"
+write $TMP/other.txt "other\n"
+open notes.txt
+cursor 3 2
+open other.txt
+assert-title "other.txt — $TMP — Stet"
+write $TMP/notes.txt "one\nTWO\nthree\n"
+wait-until assert-tab-text 1 "one\nTWO\nthree\n"
+assert-title "other.txt — $TMP — Stet"
+select-tab 1
+assert-cursor 3 2
+assert-dirty false
+assert-banner none
+action undo
+assert-text "one\ntwo\nthree\n"
+assert-dirty true
+action redo
+assert-text "one\nTWO\nthree\n"
+assert-dirty false
+
+# Our own save is not an outside change.
+cursor 3 3
+type "x"
+action save
+wait-idle
+sleep 700
+assert-banner none
+assert-file $TMP/notes.txt "one\nTWO\nthxree\n"
+
+# With unsaved changes a banner asks; Keep Mine keeps them and the next save wins.
+type "y"
+write $TMP/notes.txt "disk version\n"
+wait-until assert-banner "“notes.txt” changed on disk."
+assert-text "one\nTWO\nthxyree\n"
+banner-click "Keep Mine"
+wait-until assert-no-banner "changed on disk"
+assert-dirty true
+action save
+wait-idle
+assert-file $TMP/notes.txt "one\nTWO\nthxyree\n"
+
+# Reload on the banner takes the file's text; Undo brings the edits back.
+type "z"
+write $TMP/notes.txt "second disk version\n"
+wait-until assert-banner "“notes.txt” changed on disk."
+banner-click Reload
+wait-idle
+assert-text "second disk version\n"
+assert-dirty false
+assert-banner none
+action undo
+assert-text "one\nTWO\nthxyzree\n"
+action redo
+
+# A deleted file: a banner, and the document counts as modified; Save writes it back.
+remove $TMP/notes.txt
+wait-until assert-banner "“notes.txt” is no longer on disk."
+assert-dirty true
+assert-title "*notes.txt — $TMP — Stet"
+banner-click Save
+wait-idle
+assert-file $TMP/notes.txt "second disk version\n"
+assert-banner none
+assert-dirty false
+
+# Deleted and written again while clean (a checkout): it reloads quietly.
+remove $TMP/notes.txt
+wait-until assert-banner "is no longer on disk"
+write $TMP/notes.txt "checked out\n"
+wait-until assert-text "checked out\n"
+assert-banner none
+assert-dirty false
+
+# A file replaced by a rename, as `sed -i` and many editors save, reloads too.
+write $TMP/.notes.txt.new "renamed into place\n"
+rename $TMP/.notes.txt.new $TMP/notes.txt
+wait-until assert-text "renamed into place\n"
+assert-banner none
+assert-dirty false
+
+# Without change events (a network file system), focus brings the check.
+write $TMP/remote.txt "first\n"
+open remote.txt
+unwatch
+write $TMP/remote.txt "second\n"
+sleep 700
+assert-text "first\n"
+window-focus
+wait-until assert-text "second\n"
+
+# Reload from Disk asks first when there are unsaved changes.
+type "!"
+action reload-from-disk
+wait-until assert-dialog true
+assert-dialog-text "Reload “remote.txt” from disk?"
+respond cancel
+assert-text "!second\n"
+action reload-from-disk
+wait-until assert-dialog true
+respond accept
+wait-idle
+assert-text "second\n"
+assert-dirty false
+
+# Saving through a symbolic link writes the target and keeps the link; a change to the
+# target reloads the tab.
+mkdir $TMP/real
+write $TMP/real/target.txt "linked\n"
+symlink $TMP/real/target.txt $TMP/link.txt
+open link.txt
+type "!"
+action save
+wait-idle
+assert-file $TMP/real/target.txt "!linked\n"
+assert-symlink $TMP/link.txt $TMP/real/target.txt
+write $TMP/real/target.txt "changed through the target\n"
+wait-until assert-text "changed through the target\n"
+
+# A save removes what an interrupted earlier save left next to the file, but not a
+# temporary file that another save may be writing right now.
+write $TMP/stale.txt "x\n"
+write $TMP/.stale.txt.Ab3xYz.stet-tmp "left by a crashed save"
+set-mtime $TMP/.stale.txt.Ab3xYz.stet-tmp 3600
+write $TMP/.stale.txt.Fresh1.stet-tmp "a save running right now"
+open stale.txt
+action save
+wait-idle
+assert-missing $TMP/.stale.txt.Ab3xYz.stet-tmp
+assert-file $TMP/.stale.txt.Fresh1.stet-tmp "a save running right now"
+
+# A file this user may not write opens read-only, with the sudoedit hint.
+write $TMP/locked.txt "locked\n"
+chmod $TMP/locked.txt 0444
+open locked.txt
+assert-read-only true
+assert-banner "You may not write “locked.txt”, so it is open read-only."
+assert-banner "SUDO_EDITOR=\"stet --wait\" sudoedit $TMP/locked.txt"
+banner-click "Edit Anyway"
+assert-read-only false
+type "x"
+action save
+wait-idle
+assert-banner "You may not write “locked.txt”. Save a copy with Save As"
+assert-file $TMP/locked.txt "locked\n"
+assert-dirty true
+save-as $TMP/copy.txt
+assert-file $TMP/copy.txt "xlocked\n"
+assert-no-banner "You may not write"
+
+# Permissions taken away after opening: the save fails with the same banner.
+write $TMP/later.txt "a\n"
+open later.txt
+chmod $TMP/later.txt 0444
+type "b"
+action save
+wait-idle
+assert-banner "You may not write “later.txt”"
+assert-file $TMP/later.txt "a\n"
+chmod $TMP/later.txt 0644
+action save
+wait-idle
+assert-file $TMP/later.txt "ba\n"
+assert-no-banner "You may not write"

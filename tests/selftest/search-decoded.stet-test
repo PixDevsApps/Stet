@@ -1,0 +1,130 @@
+# Searching documents as the file pipeline (M3) loads them: text decoded from other encodings,
+# line endings normalized to LF, NUL shown as ␀ (Extended \0 finds it), and large-file mode,
+# whose flag on the document turns highlight-all and smart highlighting off. Find in Files
+# searches an open document from its decoded text when its file would read differently.
+
+# Windows-1252 with CRLF: the decoded text is found, \r\n finds the line breaks, and a
+# replacement is saved in Windows-1252 with CRLF.
+write-hex $TMP/cp1252.txt 436563692065737420756e206669636869657220656e206672616ee7616973203a2064e96ae02c206ce02c206ff92c20676172e76f6e2c209c757672652c20e76120636ffb746520352080209620ab206269656e2073fb7220bb2e0d0a4465757869e86d65206c69676e652c20617665632064657320616363656e7473203a20e96ce876652c20666f72ea742c204e6feb6c2c206e61ef662e0d0a
+open cp1252.txt
+assert-status "| CRLF | Windows-1252 |"
+find "garçon"
+wait-until assert-match-count "1 of 1"
+find "€"
+wait-until assert-match-count "1 of 1"
+find-mode extended
+cursor 1 1
+find "\\r\\n"
+wait-until assert-match-count "1 of 2"
+action replace
+find-mode normal
+find "œuvre"
+wait-until assert-match-count "1 of 1"
+replace-text "oeuvre"
+action replace-all
+wait-until assert-text-contains "garçon, oeuvre, ça coûte 5 €"
+action save
+wait-idle
+assert-file-hex $TMP/cp1252.txt 436563692065737420756e206669636869657220656e206672616ee7616973203a2064e96ae02c206ce02c206ff92c20676172e76f6e2c206f65757672652c20e76120636ffb746520352080209620ab206269656e2073fb7220bb2e0d0a4465757869e86d65206c69676e652c20617665632064657320616363656e7473203a20e96ce876652c20666f72ea742c204e6feb6c2c206e61ef662e0d0a
+
+# Shift_JIS with CRLF: words and a regex over the decoded text.
+write-hex $TMP/sjis.txt 93fa967b8cea82cc8365834c8358836782c582b7814282d082e782aa82c88141834a835e834a836981418abf8e9a82aa8adc82dc82ea82c482a282dc82b781420d0a93f18d7396da82e082a082e882dc82b781420d0a
+open sjis.txt
+assert-status "| CRLF | Shift_JIS |"
+find "カタカナ"
+wait-until assert-match-count "1 of 1"
+find-mode regex
+cursor 1 1
+find "漢字|カタカナ"
+wait-until assert-match-count "1 of 2"
+assert-current-match "カタカナ"
+cursor 1 1
+find "\\r\\n"
+wait-until assert-match-count "1 of 2"
+
+# UTF-16 LE with a BOM: a NUL (␀) is found with Extended \0, a surrogate pair as one character.
+write-hex $TMP/utf16.txt fffe570069006400650020007400650078007400200077006900740068002000610020004e0055004c00200000002c0020006100200073007500720072006f0067006100740065002000700061006900720020003cd889df200061006e0064002000fc002e000d000a004e0065007800740020006c0069006e0065002e000d000a00
+open utf16.txt
+assert-status "| CRLF | UTF-16 LE BOM |"
+find-mode extended
+cursor 1 1
+find "\\0"
+wait-until assert-match-count "1 of 1"
+assert-current-match "␀"
+find-mode normal
+find "🎉 and ü"
+wait-until assert-match-count "1 of 1"
+
+# NUL bytes in a binary-looking file: Extended \0 and the ␀ itself find them; after Edit
+# Anyway they are replaced and the file saved without them.
+write-hex $TMP/nul.txt 616263006465660a676869000a
+open nul.txt
+assert-banner "looks binary (it has NUL bytes)"
+find-mode extended
+cursor 1 1
+find "\\0"
+wait-until assert-match-count "1 of 2"
+assert-current-match "␀"
+find-mode normal
+find "␀"
+wait-until assert-match-count "1 of 2"
+banner-click "Edit Anyway"
+action replace
+find-mode extended
+find "\\0"
+replace-text "-"
+action replace-all
+wait-until assert-text "abc-def\nghi-\n"
+action save
+wait-idle
+assert-file-hex $TMP/nul.txt 6162632d6465660a6768692d0a
+
+# Find in Files reads Windows-1252 as bytes, so the open Windows-1252 file is searched from
+# its decoded text, saved or not; a closed copy of it is searched as bytes and not found.
+write-hex $TMP/tree/open.txt 436563692065737420756e206669636869657220656e206672616ee7616973203a2064e96ae02c206ce02c206ff92c20676172e76f6e2c209c757672652c20e76120636ffb746520352080209620ab206269656e2073fb7220bb2e0d0a4465757869e86d65206c69676e652c20617665632064657320616363656e7473203a20e96ce876652c20666f72ea742c204e6feb6c2c206e61ef662e0d0a
+write-hex $TMP/tree/closed.txt 436563692065737420756e206669636869657220656e206672616ee7616973203a2064e96ae02c206ce02c206ff92c20676172e76f6e2c209c757672652c20e76120636ffb746520352080209620ab206269656e2073fb7220bb2e0d0a4465757869e86d65206c69676e652c20617665632064657320616363656e7473203a20e96ce876652c20666f72ea742c204e6feb6c2c206e61ef662e0d0a
+write $TMP/tree/utf8.txt "a garçon in UTF-8\n"
+open tree/open.txt
+assert-status "| CRLF | Windows-1252 |"
+action find-in-files
+fif-folder "$TMP/tree"
+find "garçon"
+fif-start
+wait-fif
+assert-fif searched 3
+assert-fif matched 2
+assert-results-contains "  $TMP/tree/open.txt (1 hit)\n    Line 1: Ceci est un fichier en français"
+assert-results-contains "  $TMP/tree/utf8.txt (1 hit)\n    Line 1: a garçon in UTF-8\n"
+cursor 2 1
+type "garçon, "
+assert-dirty true
+fif-start
+wait-fif
+assert-fif hits 3
+assert-results-contains "    Line 2: garçon, Deuxième ligne"
+key find Escape
+
+# Large-file mode follows the document's flag: with the bar open, a small file has
+# highlight-all and smart highlighting, a 50 MiB log neither.
+write $TMP/small.log "a INFO b\nc INFO d\n"
+open small.log
+find-mode normal
+find "INFO"
+wait-until assert-match-count "1 of 2"
+assert-search-highlight true
+select 1 3 1 7
+wait-until assert-smart-highlight 2
+find "items/99993 "
+write-generated $TMP/huge.log log 52428800
+open huge.log
+assert-large true
+assert-search-highlight false
+select 1 26 1 30
+sleep 300
+assert-smart-highlight 0
+find-mode regex
+find "^"
+assert-routed true
+wait-idle
+assert-own-tags 0
+action close-tab

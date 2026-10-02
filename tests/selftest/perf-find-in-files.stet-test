@@ -1,0 +1,57 @@
+# Not in CI. Find in Files over ~/Projects, read-only: the time to the first result and to the
+# end, with the defaults (subfolders, no hidden files, .gitignore respected) and with
+# everything, the 50,000-hit cap, and Stop in the middle of an ordinary and of a slow search.
+# The reports are TAP comments, with the slowest drain into the panel and the longest
+# main-loop stall from start to end.
+#
+#   cargo build --release
+#   STET_HEADLESS_TIMEOUT=3600 tools/headless.sh 42 target/release/stet --self-test tests/selftest/perf-find-in-files.stet-test
+
+action find-in-files
+fif-folder "~/Projects"
+find "fn main"
+fif-start
+wait-fif 900
+report-fif
+find-mode regex
+find "TODO|FIXME"
+fif-start
+wait-fif 900
+report-fif
+find "\\bimpl\\s+\\w+\\s+for\\b"
+fif-start
+wait-fif 900
+report-fif
+
+# Everything, hidden and ignored files too.
+find-option hidden true
+find-option gitignore false
+find-mode normal
+find "fn main"
+fif-start
+wait-fif 900
+report-fif
+find-mode regex
+find "TODO|FIXME"
+fif-start
+wait-fif 900
+assert-fif truncated true
+report-fif
+
+# Stop in the middle of an ordinary search and of a slow one.
+find-mode normal
+find "fn main"
+fif-start
+sleep 150
+fif-stop
+wait-fif 60
+assert-fif cancelled true
+report-fif
+find-mode regex
+find "(\\w+\\s+){3}\\d{7}"
+fif-start
+sleep 150
+fif-stop
+wait-fif 60
+assert-fif cancelled true
+report-fif

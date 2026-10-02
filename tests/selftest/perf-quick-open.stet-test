@@ -1,0 +1,49 @@
+# Not in CI. Quick open (M8) over a generated tree of 50,000 files in the run's temporary
+# folder, then over ~/Projects, read-only: how soon the first rows show (the open document),
+# how soon the first project files show, how long the walk takes, the slowest ranking on the
+# ranking thread, and how long a typed query over the whole list takes to its rows. The
+# reports are TAP comments.
+#
+#   cargo build --release
+#   STET_HEADLESS_TIMEOUT=900 tools/headless.sh 42 target/release/stet --self-test tests/selftest/perf-quick-open.stet-test
+
+mkdir $TMP/big/.git
+generate-tree $TMP/big/src 50000 1
+write $TMP/big/main.rs "fn main() {}\n"
+open big/main.rs
+
+quick-open
+wait-quick-open 120
+assert-quick-open-files 50000
+assert-quick-open-row 0 "$TMP/big/main.rs"
+report-quick-open
+
+# Typed queries over the whole list: a file name, a scattered one, and one that matches
+# nothing.
+quick-open-type "f49999"
+wait-quick-open 60
+assert-quick-open-row 0 "src/d19/f49999.txt"
+report-quick-open
+quick-open-type "d7f1"
+wait-quick-open 60
+assert-quick-open-count 50
+report-quick-open
+quick-open-type "zzzz"
+wait-quick-open 60
+assert-quick-open-count 0
+report-quick-open
+quick-open-close
+assert-focus editor
+
+# ~/Projects as the project: every repository's .gitignore is respected.
+quick-open-in "~/Projects"
+wait-quick-open 300
+report-quick-open
+quick-open-type "main.rs"
+wait-quick-open 60
+report-quick-open
+quick-open-type "readme"
+wait-quick-open 60
+report-quick-open
+quick-open-close
+assert-focus editor

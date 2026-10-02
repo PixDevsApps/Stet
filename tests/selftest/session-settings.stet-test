@@ -1,0 +1,37 @@
+# config.toml's backups and backup_interval (M2, with M5's settings file), hot reloaded: the
+# timer follows backup_interval, and backups = false keeps unsaved text nowhere: the backups
+# there are go at once, no new ones are written, and closing the window asks about unsaved
+# changes again.
+
+assert-session on
+unpace-frames
+
+# A 2 s interval: the draft is backed up long before the default 7 s tick. The config folder
+# does not exist when Stet starts, and GLib looks for a missing folder every 4 s.
+write $TMP/config/stet/config.toml "backup_interval = 2\n"
+sleep 4500
+action new-tab
+type "a draft"
+wait-backed-up 3500
+assert-backups $TMP/state/stet 1
+
+# Backups off: the backup goes at once, and more typing writes none.
+write $TMP/config/stet/config.toml "backups = false\n"
+wait-until assert-backups $TMP/state/stet 0
+type " and more"
+sleep 3000
+session-flush
+assert-backups $TMP/state/stet 0
+
+# Closing the window asks about the unsaved draft; Cancel keeps everything.
+action quit
+assert-focus dialog
+respond cancel
+assert-focus editor
+assert-tab-count 2
+assert-text "a draft and more"
+
+# Backups on again, at the default interval: the next commit backs the draft up.
+write $TMP/config/stet/config.toml ""
+wait-backed-up 8000
+assert-backups $TMP/state/stet 1

@@ -1,0 +1,42 @@
+# Exact tab stops (ADR-015): after a tab, the next character's iter_location x lies on the
+# character grid, also after a tab-width change and after the font size changes (zoom).
+# assert-tab-grid also checks that the stop is the tab width times the font's space advance
+# in Pango units.
+
+write $TMP/tabs.txt "\tx\nab\tx\nabc\tx\nabcdefgh\tx\n\t\tlast\nno tabs here\nx\ty\tz\n"
+open tabs.txt
+wait-frames 2
+assert-tab-grid
+
+set-tab-width 8
+wait-frames 2
+assert-tab-grid
+
+set-tab-width 3
+wait-frames 2
+assert-tab-grid
+
+action zoom-in
+action zoom-in
+wait-frames 2
+assert-zoom 2
+assert-font-size 13
+assert-tab-grid
+
+action zoom-out
+action zoom-out
+action zoom-out
+wait-frames 2
+assert-font-size 10
+assert-tab-grid
+
+action zoom-reset
+wait-frames 2
+assert-font-size 11
+assert-tab-grid
+
+# Another tab gets exact stops when it becomes visible.
+write $TMP/more.txt "a\tb\n\tc\n"
+open more.txt
+wait-frames 2
+assert-tab-grid

@@ -1,0 +1,65 @@
+# The M7 exit criterion: comparing two 10,000-line files takes under a second, end to end
+# (snapshots, the diff on a worker, and tagging and padding both documents), in a release
+# build; the first frame painted after that is reported too. Run by hand, from the
+# repository root:
+#   cargo build --release
+#   tools/headless.sh 61 target/release/stet --self-test tests/selftest/perf-compare.stet-test
+# A debug build gets 5 s.
+
+write-generated $TMP/old.txt lines-old 450000
+write-generated $TMP/new.txt lines-new 450000
+open old.txt new.txt
+unpace-frames
+heartbeat-start
+
+# 1. Right after both files opened, while GTK still measures their 23,738 lines: Compare moves
+# the other file to the second view and compares. The first frame is reported, with a bar of 5 s.
+action compare
+wait-compare
+assert-compare-under 1000 5000
+assert-compare-painted-under 5000
+assert-max-block 1000
+
+# 2. The usual case: both documents open in one view and laid out.
+action clear-compare
+select-tab 1
+action move-to-other-view
+select-tab 2
+assert-split false
+wait-idle-low
+action compare
+wait-compare
+assert-split true
+assert-compare-under 1000 5000
+assert-compare-painted-under 1000 5000
+wait-idle-low
+assert-compare-aligned
+
+# 3. Again after an edit, which compares the edited text.
+cursor 5000 1
+type "edited "
+wait-compare
+assert-compare-under 1000 5000
+assert-compare-painted-under 1000 5000
+
+# 4. Nearly every line changed a little (Replace All, one bulk edit) and compared again: one
+# large changed block, whose lines near its diagonal pair with their old versions, with the
+# characters that differ marked (the others show as removed and added).
+action replace
+find-mode normal
+find "gamma"
+replace-text "GAMMA"
+action replace-all
+wait-until assert-find-message "Replaced 11754 matches in the whole document"
+wait-compare
+assert-compare-under 1000 5000
+assert-compare-painted-under 1000 5000
+key find Escape
+
+# 5. Every line rewritten (upper-cased in one step) and compared again: nothing pairs, so every
+# line is removed on one side and added on the other.
+action select-all
+action uppercase
+wait-compare
+assert-compare-under 1000 5000
+assert-compare-painted-under 1000 5000

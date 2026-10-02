@@ -1,0 +1,72 @@
+# Large rectangles (M6 exit criteria, ADR-003 amendment): 10,000 lines of spike S5's shapes.
+# Inserting at column 0 on every line is one bulk edit and one undo step; undo and redo give
+# the text back and forth; a source mark on a rewritten line stays on its line; typing and
+# Backspace on a 10,000-line column caret are one bulk edit each and one undo step together;
+# copying and pasting a 10,000-row block; only the visible rows are painted. The limits here
+# are loose for the debug build CI runs; perf-column.stet-test holds a release build to the
+# 200 ms bars.
+unpace-frames
+write-column-lines $TMP/10k.txt 10000
+open 10k.txt
+# S5's shapes assume tabs four wide; pin that, since M5 detects a file's indentation.
+popup indentation
+indent-choose tabs
+indent-choose width:4
+popdown indentation
+assert-indentation "Tab Width: 4"
+column-checkpoint start
+add-source-mark 5000
+
+# Insert at column 0 on all 10,000 lines with the Column Editor.
+column-select 1 1 10000 1
+assert-status "Sel 10000×0"
+assert-column-painted <200
+column-editor open
+column-editor text "// "
+column-editor ok
+assert-column-op 3000 bulk
+assert-text-contains "// \n// \tfn item_1() {}\n// short\n// abcdefgh\t= 3;\n// héllo wörld"
+assert-text-contains "// short\n// abcdefgh\t= 9999;\n"
+assert-column 1 1 10000 4
+assert-source-marks 5000
+column-key Escape
+assert-undo-steps start 1
+bench-undo-redo start 3000
+action undo
+
+# Typing at column 11, inside the tab of every seventh line: one key, then Backspace.
+column-select 1 11 10000 11
+column-type "x"
+assert-column-op 3000 bulk
+assert-text-contains "abcdefgh  x  = 3;"
+assert-text-contains "    let vaxlue_6 = 6;"
+column-key BackSpace
+assert-column-op 3000 bulk
+assert-text-contains "abcdefgh    = 3;"
+column-key Escape
+assert-undo-steps start 1
+action undo
+
+# A bulk edit keeps the view where it was (replacing the lines collapses GtkTextView's own
+# mark for the top line).
+cursor 5000 1
+wait-until assert-visible-line 5000
+column-select 1 1 10000 1
+column-editor open
+column-editor text "# "
+column-editor ok
+wait-frames 3
+assert-visible-line 5000
+column-key Escape
+action undo
+
+# A 10,000-row block: copied, then pasted back at column 0.
+column-select 1 1 10000 6
+column-key "<Control>c"
+column-key Escape
+column-checkpoint before-paste
+column-select 1 1 1 1
+column-key "<Control>v"
+wait-until assert-text-contains "\tf\tfn item_1() {}"
+assert-column-op 3000 bulk
+assert-undo-steps before-paste 1

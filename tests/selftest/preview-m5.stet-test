@@ -1,0 +1,54 @@
+# Preview screenshots for the M5 gate, in real Omarchy themes: the full status bar with the
+# document map, the Insert Numbers dialog, the indentation popover, the editor's context menu
+# and the Keyboard Shortcuts overview. Needs Omarchy's themes in /usr/share/omarchy/themes, so
+# it is not part of tools/ci.sh; it writes into tools/progress/public/. Run from the
+# repository root:
+#   tools/headless.sh 72 target/debug/stet --self-test tests/selftest/preview-m5.stet-test
+
+write $TMP/config/stet/config.toml "word_count = true\ndocument_map = true\n"
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+
+# A Rust file indented with four spaces: the status bar's selection, length, words,
+# indentation; the document map beside the text.
+write-generated $TMP/items.rs rust 6000
+open items.rs
+wait-until assert-map true
+assert-indentation "Spaces: 4"
+select 3 1 5 1
+wait-until assert-status "words"
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m5-status-and-map-tokyo-night-2026-10-01.png
+
+# Insert Numbers in a light theme.
+theme-set /usr/share/omarchy/themes/catppuccin-latte catppuccin-latte
+wait-until assert-theme-source omarchy:catppuccin-latte
+cursor 1 1
+action insert-numbers
+wait-until assert-dialog true
+dialog-set "Fill to the widest" "Leading zeros"
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m5-insert-numbers-catppuccin-latte-2026-10-01.png
+respond cancel
+
+# The indentation popover, then the editor's context menu.
+theme-set /usr/share/omarchy/themes/gruvbox gruvbox
+wait-until assert-theme-source omarchy:gruvbox
+popup indentation
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m5-indentation-gruvbox-2026-10-01.png
+popdown indentation
+cursor 7 9
+editor-menu
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m5-context-menu-gruvbox-2026-10-01.png
+editor-menu-close
+
+# The Keyboard Shortcuts overview.
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+action keyboard-shortcuts
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m5-shortcuts-tokyo-night-2026-10-01.png
+close-shortcuts
+assert-focus editor

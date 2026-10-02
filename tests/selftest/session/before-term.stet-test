@@ -1,0 +1,10 @@
+# Child of session-restore.stet-test: typing, then the parent stops this process with SIGTERM,
+# as uwsm does at logout and reboot; the handler saves the session first. Tab 3 is a stub until
+# it is shown, and loads its text then.
+select-tab 3
+wait-idle
+assert-stub 3 false
+type "SAVED BY SIGTERM"
+tabs-digest $TMP/digest-term
+write $TMP/ready-term "1"
+sleep 120000

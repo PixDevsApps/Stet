@@ -1,0 +1,142 @@
+# Reinterpret, Convert, the unmappable dialog and line-ending conversion (M3, ADR-007,
+# ADR-008), from the Encoding menu, the palette and the status bar's menus.
+# Run: tools/headless.sh 30 target/debug/stet --self-test tests/selftest/convert.stet-test
+
+# The Encoding menu sits between View and Language.
+assert-menu-contains "Encode in UTF-8"
+assert-menu-contains "Encode in UTF-16 LE BOM"
+assert-menu-contains "Convert to ANSI (Windows-1252)"
+assert-menu-contains "Convert to UTF-16 BE BOM"
+assert-menu-contains "Windows-1251"
+assert-menu-contains "Windows (CR LF)"
+assert-menu-contains "Reload from Disk"
+assert-menu
+palette "convert to utf-8"
+assert-palette-first "Convert to UTF-8"
+palette-close
+
+# An untitled document can only be converted; Reinterpret needs a file.
+assert-action-enabled reinterpret false
+assert-action-enabled encode-utf8 false
+assert-action-enabled reload-from-disk false
+assert-action-enabled convert-to-ansi true
+type "Grüße €\n"
+action convert-to-ansi
+wait-idle
+assert-status "| LF | Windows-1252 |"
+save-as $TMP/ansi.txt
+assert-file-hex $TMP/ansi.txt 4772fcdf6520800a
+assert-action-enabled reinterpret true
+
+# Converting to an encoding that lacks characters lists them, with Go To buttons.
+write-hex $TMP/wide.txt fffee5652c672000a9032000ac200a00
+open wide.txt
+assert-status "| LF | UTF-16 LE BOM |"
+action convert-to-ansi
+wait-until assert-dialog true
+assert-dialog-text "“wide.txt” can't be converted to Windows-1252"
+assert-dialog-text "3 characters have no Windows-1252 equivalent"
+assert-dialog-text "Line 1, column 1: 日 (U+65E5)"
+assert-dialog-text "Line 1, column 4: Ω (U+03A9)"
+dialog-goto 2
+assert-dialog false
+assert-selection 本
+assert-status "| LF | UTF-16 LE BOM |"
+assert-dirty false
+
+# Convert to UTF-8 instead: every character exists there.
+action convert-to-ansi
+wait-until assert-dialog true
+respond utf8
+assert-status "| LF | UTF-8 |"
+assert-dirty true
+action save
+wait-idle
+assert-file-hex $TMP/wide.txt e697a5e69cac20cea920e282ac0a
+assert-dirty false
+
+# A save that meets a character the encoding lacks opens the same dialog.
+write-hex $TMP/cafe.txt 636166e90a
+open cafe.txt
+assert-status "| LF | Windows-1252 |"
+cursor 1 5
+type "日"
+action save
+wait-until assert-dialog true
+assert-dialog-text "“cafe.txt” can't be saved as Windows-1252"
+dialog-goto 1
+assert-selection 日
+assert-file-hex $TMP/cafe.txt 636166e90a
+action save
+wait-until assert-dialog true
+respond utf8
+wait-idle
+assert-status "| LF | UTF-8 |"
+assert-file-hex $TMP/cafe.txt 636166c3a9e697a50a
+
+# Convert to UTF-16 LE BOM, then line endings: the buffer keeps LF, the save writes CRLF.
+write $TMP/abc.txt "abc\n"
+open abc.txt
+action convert-to-utf16le-bom
+wait-idle
+assert-status "| LF | UTF-16 LE BOM |"
+assert-dirty true
+action eol-crlf
+assert-status "| CRLF | UTF-16 LE BOM |"
+assert-text "abc\n"
+action save
+wait-idle
+assert-file-hex $TMP/abc.txt fffe6100620063000d000a00
+action eol-cr
+action convert-to-utf8
+wait-idle
+assert-status "| CR | UTF-8 |"
+action save
+wait-idle
+assert-file-hex $TMP/abc.txt 6162630d
+action eol-lf
+action save
+wait-idle
+assert-file-hex $TMP/abc.txt 6162630a
+assert-dirty false
+
+# Reinterpret asks before it discards unsaved changes.
+write-hex $TMP/euro.txt 4c6520707269782065737420646520313020a40a
+open euro.txt
+assert-text "Le prix est de 10 ¤\n"
+type "X"
+action reinterpret ISO-8859-15
+wait-until assert-dialog true
+assert-dialog-text "Reinterpret “euro.txt” as ISO-8859-15?"
+respond cancel
+assert-text "XLe prix est de 10 ¤\n"
+action reinterpret ISO-8859-15
+wait-until assert-dialog true
+respond accept
+wait-idle
+assert-text "Le prix est de 10 €\n"
+assert-status "| LF | ISO-8859-15 |"
+assert-dirty false
+
+# Encode in UTF-16 LE BOM reads the bytes again as UTF-16 (here: nonsense, but no loss).
+action encode-utf16le-bom
+wait-idle
+assert-status "| LF | UTF-16 LE BOM |"
+action encode-utf8
+wait-idle
+assert-status "| LF | UTF-8 |"
+assert-banner "aren't valid UTF-8"
+
+# The status bar's encoding picker does the same: reinterpret, then convert.
+write-hex $TMP/picked.txt 4c6520707269782065737420646520313020a40a
+open picked.txt
+pick-encoding reinterpret ISO-8859-15
+assert-text "Le prix est de 10 €\n"
+assert-status "| LF | ISO-8859-15 |"
+assert-dirty false
+pick-encoding convert UTF-16BE+bom
+assert-status "| LF | UTF-16 BE BOM |"
+assert-dirty true
+action save
+wait-idle
+assert-file-hex $TMP/picked.txt feff004c0065002000700072006900780020006500730074002000640065002000310030002020ac000a

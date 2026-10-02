@@ -1,0 +1,28 @@
+# Child of preview-m2.stet-test: screenshots of what restoring found.
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+select-tab 1
+wait-idle
+assert-banner "The file “plan.md” changed on disk since your unsaved changes."
+assert-text-contains "and --wait"
+wait-frames 3
+screenshot $DIR/../../../tools/progress/public/m2-restored-conflict-tokyo-night-2026-10-01.png
+
+theme-set /usr/share/omarchy/themes/catppuccin-latte catppuccin-latte
+wait-until assert-theme-source omarchy:catppuccin-latte
+select-tab 2
+wait-idle
+assert-banner "The unsaved changes to “notes.txt” from the last session could not be restored."
+wait-frames 3
+screenshot $DIR/../../../tools/progress/public/m2-lost-changes-catppuccin-latte-2026-10-01.png
+
+theme-set /usr/share/omarchy/themes/gruvbox gruvbox
+wait-until assert-theme-source omarchy:gruvbox
+select-tab 3
+wait-idle
+action forget-drafts
+wait-until assert-dialog true
+wait-frames 3
+screenshot $DIR/../../../tools/progress/public/m2-forget-drafts-gruvbox-2026-10-01.png
+respond cancel
+assert-tab-count 3

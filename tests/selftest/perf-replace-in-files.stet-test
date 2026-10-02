@@ -1,0 +1,64 @@
+# Not in CI. Replace in Files (M8) over a generated tree of 10,000 files of 20 lines (about
+# 15 MiB) in the run's temporary folder only: every file changed (200,000 replacements), every
+# file changed back, then a search that changes nothing, and Stop in the middle of a run. The
+# reports give the time on the worker (walk, reads, plans and safe saves) and in all (until
+# the results panel lists the last file). Run the release build:
+#
+#   cargo build --release
+#   STET_HEADLESS_TIMEOUT=900 tools/headless.sh 42 target/release/stet --self-test tests/selftest/perf-replace-in-files.stet-test
+
+generate-tree $TMP/big 10000 20
+open big/d0/f0.txt
+action find-in-files
+fif-folder $TMP/big
+fif-filters "*.*"
+
+find "tempor"
+replace-text "TEMPOR"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+report-rif
+assert-rif files 10000
+assert-rif replacements 200000
+assert-rif failed 0
+assert-file-contains $TMP/big/d19/f9999.txt "TEMPOR"
+# The panel lists 50,000 changed lines, as Find in Files lists 50,000 hits; the other files
+# but the open document are listed with their counts only.
+assert-results-status "7499 files listed without their lines"
+
+find "TEMPOR"
+replace-text "tempor"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+report-rif
+assert-rif files 10000
+assert-file-contains $TMP/big/d19/f9999.txt "eiusmod tempor"
+
+# Nothing matches: the walk and the reads alone.
+find "absent"
+replace-text "x"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+report-rif
+assert-rif files 0
+assert-rif searched 10000
+
+# Stop part-way: the files written so far are listed (with their counts only once Stop is
+# pressed), the others are untouched.
+find-mode regex
+find "(\\w+) (ipsum)"
+replace-text "\$2 \$1"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+sleep 150
+action stop-find-in-files
+wait-rif
+assert-rif cancelled true
+report-rif

@@ -1,0 +1,37 @@
+# Started by activation.stet-test's private bus in place of `stet --gapplication-service`: this
+# Stet is the primary that the outer test's `stet --wait` command lines reach, and it plays the
+# user. Its scratch directory is the outer test's $TMP/activated. The outer test starts each
+# command line once the one before has its answer, and checks the exit statuses.
+
+# Saved and closed: the waiting command line gets status 0.
+wait-until assert-title "COMMIT_EDITMSG — $TMP/msg — Stet"
+wait-idle
+assert-waiting 1
+assert-focus editor
+cursor 1 1
+type "Activated message"
+action save
+wait-idle
+action close-tab
+
+# Closed with unsaved changes (Discard): status 1, so git aborts.
+wait-until assert-title "COMMIT_EDITMSG — $TMP/msg — Stet"
+wait-idle
+assert-waiting 1
+type "half a message "
+action close-tab
+assert-focus dialog
+respond discard
+assert-focus editor
+
+# Stet quits (closing the window) while the waited tab has unsaved changes: no prompt, status
+# 1. The tab is not in the session.
+wait-until assert-title "COMMIT_EDITMSG — $TMP/msg — Stet"
+wait-idle
+assert-waiting 1
+type "unsaved "
+assert-dirty true
+session-commit
+session-flush
+assert-session-lacks $TMP/state/stet "COMMIT_EDITMSG"
+quit

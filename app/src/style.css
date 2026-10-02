@@ -1,0 +1,213 @@
+/* Static chrome rules. Colours come from the theme provider's libadwaita variables; fonts
+   from the font provider (.stet-editor, .stet-mono). */
+
+/* Square chrome: no rounded corners and no drop shadows (DESIGN.md). */
+button,
+menubutton > button,
+entry,
+spinbutton,
+tab,
+tabbar tabbox > tabboxchild,
+tabbar tabbox > revealer > indicator,
+popover > contents,
+popover > arrow,
+popover.menu modelbutton,
+popover.menu list > row,
+popover.menu listview > row,
+list > row,
+list.boxed-list,
+toast,
+banner,
+tooltip,
+.card,
+dialog-host > dialog sheet,
+dialog.alert .response-area > button {
+  border-radius: 0;
+}
+
+popover > contents,
+popover > arrow,
+toast,
+dialog-host > dialog sheet {
+  box-shadow: none;
+}
+
+popover > contents,
+dialog-host > dialog sheet {
+  border: 1px solid var(--border-color);
+}
+
+toast {
+  margin-bottom: 36px;
+}
+
+.stet-statusbar {
+  padding: 0 6px;
+  min-height: 26px;
+  border-spacing: 2px;
+  font-size: 0.9em;
+}
+
+.stet-statusbar > label,
+.stet-statusbar > menubutton > button {
+  padding: 1px 8px;
+  min-height: 0;
+}
+
+.stet-statusbar > separator {
+  margin: 6px 0;
+}
+
+/* The find bar sits inside the content, under the editor, styled like the raised bars. */
+.stet-findbar {
+  padding: 4px 6px;
+  border-spacing: 4px;
+  background-color: var(--headerbar-bg-color);
+  color: var(--headerbar-fg-color);
+  border-top: 1px solid var(--headerbar-shade-color);
+}
+
+.stet-findbar .stet-find-field {
+  min-width: 220px;
+}
+
+.stet-findbar .stet-filters {
+  min-width: 150px;
+}
+
+.stet-findbar .stet-count {
+  min-width: 96px;
+}
+
+.stet-find-message {
+  opacity: 0.8;
+}
+
+.stet-find-message.error {
+  color: var(--error-color);
+  opacity: 1;
+}
+
+.stet-find-options {
+  padding: 6px;
+}
+
+.stet-history > contents {
+  padding: 0;
+  min-width: 260px;
+}
+
+.stet-history row {
+  padding: 3px 10px;
+}
+
+/* The search results panel (DESIGN.md: --sidebar-bg-color). */
+.stet-results {
+  background-color: var(--sidebar-bg-color);
+  color: var(--sidebar-fg-color);
+}
+
+.stet-results-header {
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.stet-results-list {
+  background: none;
+}
+
+.stet-results-search {
+  font-weight: bold;
+}
+
+.stet-results-line {
+  opacity: 0.7;
+}
+
+.stet-palette > contents {
+  padding: 0;
+  min-width: 560px;
+}
+
+.stet-palette entry {
+  margin: 6px;
+}
+
+.stet-palette list {
+  background: none;
+}
+
+.stet-palette row {
+  padding: 3px 12px;
+}
+
+.stet-palette .stet-detail,
+.stet-palette .stet-accel {
+  opacity: 0.65;
+}
+
+.stet-language > contents {
+  padding: 0;
+  min-width: 280px;
+}
+
+.stet-language entry {
+  margin: 6px;
+}
+
+.stet-language row {
+  padding: 3px 12px;
+}
+
+.stet-encodings > contents {
+  padding: 6px;
+  min-width: 300px;
+}
+
+.stet-encodings list {
+  background: none;
+}
+
+.stet-encodings row {
+  padding: 3px 12px;
+}
+
+.stet-encodings .caption-heading {
+  padding: 6px 12px 2px;
+}
+
+/* Quick open (M8): the palette's popover, with a note under the list. */
+.stet-quick-open > contents {
+  min-width: 640px;
+}
+
+.stet-quick-open-note {
+  padding: 4px 12px 6px;
+  font-size: 0.9em;
+}
+
+/* The Ctrl+Tab switcher (M8): floats over the window without taking the focus. */
+.stet-switcher {
+  background-color: var(--popover-bg-color);
+  color: var(--popover-fg-color);
+  border: 1px solid var(--border-color);
+  padding: 6px 0;
+  min-width: 360px;
+}
+
+.stet-switcher-heading {
+  padding: 2px 14px 6px;
+}
+
+.stet-switcher list {
+  background: none;
+}
+
+.stet-switcher row {
+  padding: 3px 14px;
+}
+
+/* Split view (M7): the active view's tab is underlined in the accent colour. */
+tabbar.stet-active-view tab:selected {
+  box-shadow: inset 0 -2px var(--accent-bg-color);
+}

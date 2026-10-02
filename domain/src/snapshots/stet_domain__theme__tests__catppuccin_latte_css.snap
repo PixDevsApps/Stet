@@ -1,0 +1,37 @@
+---
+source: domain/src/theme.rs
+expression: theme.adwaita_css()
+---
+:root {
+  --window-bg-color: #eff1f5;
+  --window-fg-color: #4c4f69;
+  --view-bg-color: #eff1f5;
+  --view-fg-color: #4c4f69;
+  --headerbar-bg-color: #e3e4e8;
+  --headerbar-fg-color: #4c4f69;
+  --headerbar-backdrop-color: #e3e4e8;
+  --headerbar-shade-color: #dce0e8;
+  --sidebar-bg-color: #e3e4e8;
+  --sidebar-fg-color: #4c4f69;
+  --sidebar-backdrop-color: #e3e4e8;
+  --popover-bg-color: #d7d8dc;
+  --popover-fg-color: #4c4f69;
+  --dialog-bg-color: #d7d8dc;
+  --dialog-fg-color: #4c4f69;
+  --card-bg-color: #dce0e8;
+  --card-fg-color: #4c4f69;
+  --border-color: #dce0e8;
+  --accent-bg-color: #1e66f5;
+  --accent-fg-color: #eff1f5;
+  --accent-color: #1e66f5;
+  --error-bg-color: #d20f39;
+  --error-fg-color: #eff1f5;
+  --error-color: #d20f39;
+  --warning-bg-color: #df8e1d;
+  --warning-fg-color: #4c4f69;
+  --warning-color: #df8e1d;
+  --success-bg-color: #40a02b;
+  --success-fg-color: #eff1f5;
+  --success-color: #40a02b;
+  --window-radius: 0px;
+}

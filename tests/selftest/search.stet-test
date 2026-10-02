@@ -1,0 +1,277 @@
+# Find and Replace (Ctrl+F, Ctrl+H): search modes and options, Count, Replace, Replace All as
+# one undo step (and as one bulk edit above 2,000 edits), In selection, Wrap around, Backward
+# direction, queries routed to our own matcher (\K, ^, $), pattern errors, histories and smart
+# highlighting. In quoted words, \$ is a literal $ and \\ a backslash.
+
+write $TMP/s.txt "alpha beta gamma\nBeta beta_x beta.\nfoo(1) foo(2)\ntab\there\nuser=alice id=7\nuser=bob id=42\n"
+open s.txt
+
+# Normal mode, case-insensitive: four matches, the first one current.
+find beta
+wait-until assert-match-count "1 of 4"
+assert-current-match beta
+assert-routed false
+action count
+wait-until assert-find-message "Count: 4 matches in the whole document"
+
+# Whole word (beta_x is one word), then match case too.
+find-option word true
+wait-until assert-match-count "1 of 3"
+find-option case true
+wait-until assert-match-count "1 of 2"
+find-option case false
+find-option word false
+wait-until assert-match-count "1 of 4"
+
+# Extended mode: \t is a tab.
+find-mode extended
+find "\\t"
+wait-until assert-match-count "1 of 1"
+assert-current-match "\t"
+
+# Regex mode: groups and escapes; whole word does not apply.
+find-mode regex
+cursor 1 1
+find "foo\\((\\d)\\)"
+wait-until assert-match-count "1 of 2"
+assert-current-match "foo(1)"
+find-option word true
+wait-until assert-match-count "1 of 2"
+find-option word false
+
+# A pattern error is shown at the character it is about, without taking the focus.
+find "foo(("
+assert-find-error 5 "missing closing parenthesis"
+assert-match-count "Invalid pattern"
+assert-find-message "missing closing parenthesis (at character 6)"
+find "foo"
+assert-find-error none
+
+# \K goes to our own matcher, which counts, highlights and navigates it.
+cursor 1 1
+find "user=\\K\\w+"
+assert-routed true
+wait-until assert-match-count "1 of 2"
+assert-own-matches 2
+assert-current-match alice
+wait-until assert-own-tags 2
+action find-next
+wait-until assert-match-count "2 of 2"
+assert-current-match bob
+action find-next
+wait-until assert-match-count "1 of 2"
+assert-find-message "Passed the end of the document; continued from the start"
+
+# ^ and $ match empty text: our matcher finds one per line (6 lines, and $ at the very end).
+find "^"
+assert-routed true
+wait-until assert-own-matches 6
+find "\$"
+wait-until assert-own-matches 7
+assert-own-tags 0
+
+# Lookbehind stays with GtkSourceView.
+cursor 1 1
+find "(?<=user=)\\w+"
+assert-routed false
+wait-until assert-match-count "1 of 2"
+key find Escape
+assert-find-open false
+
+# ----- Replace ---------------------------------------------------------------------------------
+
+write $TMP/r.txt "one two one\nthree one\n"
+open r.txt
+action replace
+assert-find-open true
+assert-bar-mode replace
+find-mode normal
+find one
+wait-until assert-match-count "1 of 3"
+replace-text 1
+
+# Replace All is one undo step; redo applies it again.
+action replace-all
+wait-until assert-find-message "Replaced 3 matches in the whole document"
+assert-text "1 two 1\nthree 1\n"
+assert-replace-stats 3 false
+assert-history replace 1
+assert-dirty true
+action undo
+assert-text "one two one\nthree one\n"
+assert-can-undo false
+assert-dirty false
+action redo
+assert-text "1 two 1\nthree 1\n"
+action undo
+assert-text "one two one\nthree one\n"
+
+# Replace: with no match selected it finds the next one; then it replaces it and moves on.
+cursor 1 1
+key replace Return
+wait-until assert-current-match one
+assert-cursor 1 4
+key replace Return
+wait-until assert-text "1 two one\nthree one\n"
+wait-until assert-current-match one
+assert-cursor 1 10
+# On a selection that is not a match, Replace only finds the next match.
+select 1 3 1 6
+key replace Return
+wait-until assert-current-match one
+assert-cursor 1 10
+assert-text "1 two one\nthree one\n"
+action undo
+assert-text "one two one\nthree one\n"
+
+# Boost-style templates through our own engine: \U…\E, \1, $&.
+find-mode regex
+cursor 1 1
+find "(t)(\\w+)"
+wait-until assert-match-count "1 of 2"
+replace-text "\\U\\1\\E\\2"
+action replace-all
+wait-until assert-text "one Two one\nThree one\n"
+assert-history replace "\\U\\1\\E\\2|1"
+action undo
+replace-text "[\$&]"
+assert-replace-hint none
+action replace-all
+wait-until assert-text "one [two] one\n[three] one\n"
+action undo
+# Templates that are easy to get wrong are pointed out on the replace field.
+replace-text "a)b"
+assert-replace-hint "The ) at character 2 closes nothing"
+replace-text "f(\\1)"
+assert-replace-hint "Parentheses group the replacement"
+find-mode extended
+assert-replace-hint none
+find-mode regex
+replace-text "[\$&]"
+
+# In selection: Replace All stays inside the selected line.
+find-mode normal
+cursor 1 1
+find one
+wait-until assert-match-count "1 of 3"
+replace-text 1
+select 2 1 2 10
+find-option selection true
+action replace-all
+wait-until assert-find-message "Replaced 1 match in the selection"
+assert-text "one two one\nthree 1\n"
+action undo
+cursor 1 1
+action count
+wait-until assert-find-message "Count: 3 matches in the whole document"
+find-option selection false
+
+# Without Wrap around, Count and Replace All start at the caret; Backward goes the other way.
+find-option wrap false
+cursor 2 1
+action count
+wait-until assert-find-message "Count: 1 match from the caret to the end"
+find-option backward true
+action count
+wait-until assert-find-message "Count: 2 matches from the start to the caret"
+action find-next
+wait-until assert-current-match one
+assert-cursor 1 9
+action find-next
+wait-until assert-cursor 1 1
+action find-next
+wait-until assert-find-message "No match from the start to the caret"
+find-option wrap true
+action find-next
+wait-until assert-find-message "Passed the start of the document; continued from the end"
+assert-cursor 2 7
+find-option backward false
+cursor 1 1
+
+# Patterns that match empty text replace through our own engine too.
+find-mode regex
+find "^"
+wait-until assert-own-matches 2
+replace-text "> "
+action replace-all
+wait-until assert-text "> one two one\n> three one\n"
+assert-find-message "Replaced 2 matches in the whole document"
+action undo
+find "\$"
+replace-text ";"
+action replace-all
+wait-until assert-text "one two one;\nthree one;\n;"
+action undo
+find "t\\Kwo"
+replace-text "WO"
+action replace-all
+wait-until assert-text "one tWO one\nthree one\n"
+action undo
+assert-text "one two one\nthree one\n"
+
+# More than 2,000 replacements are one bulk edit, and still one undo step.
+write $TMP/many.txt ""
+open many.txt
+type "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+find "(a{100})"
+replace-text "\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1\$1"
+action replace-all
+wait-until assert-find-message "Replaced 1 match in the whole document"
+assert-replace-stats 1 false
+find "a"
+replace-text "<\$&>"
+action replace-all
+wait-until assert-find-message "Replaced 2500 matches in the whole document"
+assert-replace-stats 2500 true
+assert-text-contains "<a><a><a>"
+action undo
+assert-can-undo true
+action undo
+assert-text "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+key replace Escape
+
+# ----- Histories -----------------------------------------------------------------------------
+
+open s.txt
+set-history find "alpha|beta"
+assert-history find "alpha|beta"
+action find
+assert-bar-mode find
+find-mode normal
+find gamma
+action find-next
+assert-history find "gamma|alpha|beta"
+key find Up
+assert-field find alpha
+key find Up
+assert-field find beta
+key find Up
+assert-field find beta
+key find Down
+assert-field find alpha
+key find Down
+assert-field find gamma
+key find Down
+assert-field find gamma
+# The drop-down next to the field lists the same history.
+pick-history find 2
+assert-field find beta
+pick-history find 0
+assert-field find gamma
+key find Escape
+
+# ----- Smart highlighting -------------------------------------------------------------------
+
+# A whole word on one line: its occurrences, matching case and whole word.
+select 1 7 1 11
+wait-until assert-smart-highlight 2
+select 1 7 1 10
+wait-until assert-smart-highlight 0
+select 2 1 2 5
+wait-until assert-smart-highlight 1
+select 1 1 2 3
+wait-until assert-smart-highlight 0
+select 2 1 2 5
+wait-until assert-smart-highlight 1
+cursor 1 1
+wait-until assert-smart-highlight 0

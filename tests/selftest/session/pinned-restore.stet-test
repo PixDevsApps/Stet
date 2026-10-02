@@ -1,0 +1,30 @@
+# Child of pinned.stet-test: the pinned tabs come back pinned and first, in their order; the
+# untitled draft shows its first-line name before its text is loaded.
+assert-tab-count 4
+assert-title "one.txt — $TMP/files — Stet"
+assert-pinned 1 true
+assert-pinned 2 true
+assert-pinned 3 false
+assert-pinned 4 false
+assert-tab-title 1 "three.txt"
+assert-tab-title 2 "two.txt"
+assert-tab-title 3 "one.txt"
+assert-tab-title 4 "● restored draft"
+assert-stub 1 true
+assert-stub 4 true
+assert-tab-icon 1 "text-plain-symbolic"
+# Written again while they are stubs, they stay pinned.
+session-commit
+session-flush
+assert-session-contains $TMP/state/stet "\"display_name\": \"restored draft\""
+assert-session-contains $TMP/state/stet "\"pinned\": true"
+select-tab 4
+wait-idle
+assert-stub 4 false
+assert-text "restored draft\n"
+assert-tab-title 4 "● restored draft"
+assert-title "*restored draft — Stet"
+select-tab 1
+wait-idle
+assert-text "three\n"
+assert-pinned 1 true

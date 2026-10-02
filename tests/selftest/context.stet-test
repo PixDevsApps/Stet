@@ -1,0 +1,175 @@
+# The tab strip's context menu and its commands (M5): copy the path, name and folder; open
+# the folder and a terminal (recorded, not started); close others and to the right; save and
+# save as (after 1.0); rename; move to the trash. And the editor's context menu. The run has
+# its own home and XDG directories (sandbox-home), so the trash is $TMP/home/.local/share/Trash.
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/context.stet-test
+
+sandbox-home
+unpace-frames
+record-launches
+
+write $TMP/home/notes/a.txt "alpha\n"
+write $TMP/home/notes/b.txt "beta\n"
+write $TMP/home/notes/c.txt "gamma\n"
+write $TMP/home/notes/taken.txt "taken\n"
+open $TMP/home/notes/a.txt $TMP/home/notes/b.txt $TMP/home/notes/c.txt
+assert-tab-count 3
+assert-title "c.txt — ~/notes — Stet"
+
+# The menu comes from the registry.
+assert-tab-menu "Close"
+assert-tab-menu "Close Others"
+assert-tab-menu "Close to the Right"
+assert-tab-menu "Save"
+assert-tab-menu "Save As…"
+assert-tab-menu "Copy Full Path"
+assert-tab-menu "Copy File Name"
+assert-tab-menu "Copy Directory Path"
+assert-tab-menu "Open Containing Folder"
+assert-tab-menu "Open Terminal Here"
+assert-tab-menu "Rename…"
+assert-tab-menu "Move to Trash…"
+
+# Commands from a tab's menu act on that tab, not the current one.
+tab-menu 1
+action copy-full-path
+assert-clipboard-contains "$TMP/home/notes/a.txt"
+assert-toast "Copied"
+action copy-file-name
+assert-clipboard-contains "a.txt"
+action copy-directory-path
+assert-clipboard-contains "$TMP/home/notes"
+action open-containing-folder
+wait-idle
+assert-launched "xdg-open $TMP/home/notes"
+action open-terminal-here
+wait-idle
+assert-launched "xdg-terminal-exec --dir=$TMP/home/notes"
+tab-menu-close
+assert-focus editor
+assert-title "c.txt — ~/notes — Stet"
+
+# Save and Save As… from a tab's menu save that tab, not the current one.
+select-tab 1
+type "saved "
+select-tab 3
+tab-menu 1
+action save
+wait-idle
+assert-file $TMP/home/notes/a.txt "saved alpha\n"
+assert-title "c.txt — ~/notes — Stet"
+tab-menu-close
+action new-tab
+type "draft"
+select-tab 1
+tab-menu 4
+action save-as
+choose-file $TMP/home/notes/draft.txt
+wait-until assert-file $TMP/home/notes/draft.txt "draft"
+wait-until assert-tab-title 4 "draft.txt"
+assert-title "a.txt — ~/notes — Stet"
+tab-menu-close
+select-tab 4
+action close-tab
+assert-tab-count 3
+select-tab 3
+
+# An untitled tab has no file to copy, open or trash.
+action new-tab
+assert-action-enabled copy-full-path false
+assert-action-enabled open-terminal-here false
+assert-action-enabled move-to-trash false
+assert-action-enabled copy-file-name true
+action copy-file-name
+assert-clipboard-contains "Untitled"
+action close-tab
+assert-tab-count 3
+
+# Close to the Right and Close Others ask once about unsaved changes.
+select-tab 3
+type "unsaved "
+tab-menu 2
+assert-action-enabled close-to-the-right true
+action close-to-the-right
+assert-dialog-text "Save changes to “c.txt”?"
+respond cancel
+assert-tab-count 3
+tab-menu 2
+action close-to-the-right
+respond discard
+assert-tab-count 2
+assert-file $TMP/home/notes/c.txt "gamma\n"
+assert-title "b.txt — ~/notes — Stet"
+assert-focus editor
+tab-menu 2
+assert-action-enabled close-to-the-right false
+action close-others
+assert-tab-count 1
+assert-title "b.txt — ~/notes — Stet"
+tab-menu-close
+assert-focus editor
+
+# Rename… on a file: in its folder; the tab follows; an existing name is refused. The name without
+# its extension is selected, so typing replaces it.
+action rename-file
+assert-dialog true
+assert-focus dialog
+wait-until assert-dialog-selection "New name" "b"
+dialog-set "New name" "taken.txt"
+respond rename
+assert-dialog-text "“taken.txt” already exists in that folder."
+respond close
+assert-file $TMP/home/notes/b.txt "beta\n"
+action rename-file
+dialog-set "New name" "renamed.md"
+dialog-enter "New name"
+wait-idle
+assert-missing $TMP/home/notes/b.txt
+assert-file $TMP/home/notes/renamed.md "beta\n"
+assert-title "renamed.md — ~/notes — Stet"
+assert-language markdown
+assert-focus editor
+# The file is still watched under its new name: an outside change reloads it.
+write $TMP/home/notes/renamed.md "beta from outside\n"
+wait-until assert-text "beta from outside\n"
+assert-banner none
+
+# Move to Trash…: asks first; the tab closes and the file is in the trash.
+action move-to-trash
+assert-dialog-text "Move “renamed.md” to the trash?"
+assert-focus dialog
+respond cancel
+assert-file $TMP/home/notes/renamed.md "beta from outside\n"
+action move-to-trash
+respond accept
+wait-idle
+assert-missing $TMP/home/notes/renamed.md
+assert-file $TMP/home/.local/share/Trash/files/renamed.md "beta from outside\n"
+assert-toast "Moved “renamed.md” to the trash"
+assert-tab-count 1
+assert-focus editor
+
+# A name with letters outside ASCII: the selection counts characters.
+write $TMP/home/notes/blåbærsyltetøy.txt "jam\n"
+open $TMP/home/notes/blåbærsyltetøy.txt
+action rename-file
+wait-until assert-dialog-selection "New name" "blåbærsyltetøy"
+respond cancel
+assert-file $TMP/home/notes/blåbærsyltetøy.txt "jam\n"
+assert-focus editor
+action close-tab
+assert-tab-count 1
+
+# The editor's context menu adds the text tools to GtkTextView's own items.
+assert-editor-menu "Convert Case to"
+assert-editor-menu "UPPERCASE"
+assert-editor-menu "Comment/Uncomment"
+assert-editor-menu "Toggle Single Line Comment"
+assert-editor-menu "Line Operations"
+assert-editor-menu "Duplicate Current Line"
+assert-editor-menu "Select and Find Next"
+assert-editor-menu "Go to Matching Brace"
+set-text "a word here"
+editor-menu
+editor-menu-close
+assert-focus editor

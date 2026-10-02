@@ -1,0 +1,70 @@
+# D-Bus activation and --wait when Stet is not running (ADR-011). Each part runs on a private
+# dbus-daemon whose only service directory, $TMP/testbus/services, holds nothing but Stet's own
+# test service file, or nothing at all, so no other service can start. The Stet that starts
+# there has the id <self-test id>.Activated and directories of its own under $TMP/activated.
+
+write $TMP/msg/COMMIT_EDITMSG "\n# Please enter the commit message\n"
+write $TMP/msg/other.txt "other\n"
+
+# With the service file, as installed: `stet --wait` asks the bus to start
+# `stet --gapplication-service`, then waits as its remote. A second command line reaches the
+# same Stet and returns once its file is open; the first keeps waiting for its own tab.
+test-bus-start service
+assert-bus-owner false
+test-bus-spawn w1 --wait $TMP/msg/COMMIT_EDITMSG
+wait-until assert-bus-owner true
+test-bus-spawn w2 $TMP/msg/other.txt
+spawn-wait w2 0
+assert-running w1 true
+# That Stet keeps a session of its own, with other.txt and without the waited message.
+wait-until assert-session-contains $TMP/activated/state/stet "other.txt"
+assert-session-lacks $TMP/activated/state/stet "COMMIT_EDITMSG"
+assert-running w1 true
+# Quitting Stet lets the waiting command line go; its message is unchanged: status 0.
+bus-action app.quit
+spawn-wait w1 0
+wait-until assert-bus-owner false
+test-bus-stop
+
+# Without a service file (a development build): `stet --wait` starts
+# `stet --gapplication-service` itself, in the background, and waits as its remote.
+test-bus-start none
+test-bus-spawn w3 --wait $TMP/msg/COMMIT_EDITMSG
+wait-until assert-bus-owner true
+test-bus-spawn w4 $TMP/msg/other.txt
+spawn-wait w4 0
+assert-running w3 true
+bus-action app.quit
+spawn-wait w3 0
+wait-until assert-bus-owner false
+test-bus-stop
+
+# Without a service file and without --wait, the command line simply becomes the editor; with
+# --no-session it neither restores nor keeps a session.
+test-bus-start none
+test-bus-spawn w5 --no-session $TMP/msg/new.txt
+wait-until assert-bus-owner true
+wait-until assert-file-contains $TMP/w5.err "first-frame"
+bus-action app.quit
+spawn-wait w5 0
+wait-until assert-bus-owner false
+assert-session-lacks $TMP/activated/state/stet "new.txt"
+test-bus-stop
+
+# The editing itself: the bus starts a self-test in place of the service
+# (tests/selftest/session/activated.stet-test), which plays the user. Saved and closed: status
+# 0; closed with Discard: 1; Stet quit while the waited tab has unsaved changes: 1.
+remove $TMP/activated
+write $TMP/activated/msg/COMMIT_EDITMSG "\n# Please enter the commit message\n"
+test-bus-start selftest $DIR/session/activated.stet-test
+test-bus-spawn w6 --wait $TMP/activated/msg/COMMIT_EDITMSG
+spawn-wait w6 0
+assert-file $TMP/activated/msg/COMMIT_EDITMSG "Activated message\n# Please enter the commit message\n"
+test-bus-spawn w7 --wait $TMP/activated/msg/COMMIT_EDITMSG
+spawn-wait w7 1
+test-bus-spawn w8 --wait $TMP/activated/msg/COMMIT_EDITMSG
+spawn-wait w8 1
+wait-until assert-bus-owner false
+assert-file $TMP/activated/msg/COMMIT_EDITMSG "Activated message\n# Please enter the commit message\n"
+assert-file-contains $TMP/testbus/activated.out "# 26 of 26 steps passed"
+test-bus-stop

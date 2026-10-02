@@ -1,0 +1,4 @@
+# Child of session-restore.stet-test, after SIGTERM: the typing just before the signal is back.
+assert-tabs-digest $TMP/digest-term
+select-tab 3
+assert-text-contains "SAVED BY SIGTERM"

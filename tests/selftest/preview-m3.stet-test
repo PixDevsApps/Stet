@@ -1,0 +1,61 @@
+# Preview screenshots for the M3 gate, in real Omarchy themes: stacked banners, the encoding
+# picker, the unmappable dialog, a file changed on disk, and the long-line dialog. Needs
+# Omarchy's themes in /usr/share/omarchy/themes, so it is not part of tools/ci.sh; it writes
+# into tools/progress/public/. Run from the repository root:
+#   tools/headless.sh 30 target/debug/stet --self-test tests/selftest/preview-m3.stet-test
+
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+
+# Shift_JIS with mixed line endings and a character it can't write back: two banners, and
+# the status bar's line ending and encoding.
+write-hex $TMP/memo.txt 93fa967b8cea82cc8365834c8358836782c582b781420d0a82d082e782aa82c88141834a835e834a836981420a93faed400d0a
+open memo.txt
+assert-status "| Mixed | Shift_JIS |"
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m3-banners-tokyo-night-2026-10-01.png
+
+# The encoding picker in a light theme.
+theme-set /usr/share/omarchy/themes/catppuccin-latte catppuccin-latte
+wait-until assert-theme-source omarchy:catppuccin-latte
+write-hex $TMP/prix.txt 4c6520707269782065737420646520313020a40a
+open prix.txt
+action choose-encoding
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m3-encoding-picker-catppuccin-latte-2026-10-01.png
+pick-encoding reinterpret ISO-8859-15
+assert-text "Le prix est de 10 €\n"
+
+# Converting to an encoding that lacks characters.
+theme-set /usr/share/omarchy/themes/gruvbox gruvbox
+wait-until assert-theme-source omarchy:gruvbox
+write $TMP/greek.txt "Ωμέγα, € and 日本 in one line.\nSecond line: ✓\n"
+open greek.txt
+action convert-to-ansi
+wait-until assert-dialog true
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m3-unmappable-gruvbox-2026-10-01.png
+respond cancel
+
+# A file with unsaved changes changed on disk.
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+write $TMP/config.toml "[editor]\nwrap = false\n"
+open config.toml
+cursor 3 1
+type "theme = \"auto\"\n"
+write $TMP/config.toml "[editor]\nwrap = true\n"
+wait-until assert-banner "changed on disk"
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m3-changed-on-disk-tokyo-night-2026-10-01.png
+
+# The long-line dialog.
+write-generated $TMP/export.json json-line 200000
+open export.json
+assert-dialog true
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m3-long-lines-tokyo-night-2026-10-01.png
+respond formatted
+wait-idle
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m3-formatted-tokyo-night-2026-10-01.png

@@ -1,0 +1,24 @@
+[package]
+name = "stet"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "stet"
+path = "src/main.rs"
+
+[dependencies]
+stet-domain.workspace = true
+stet-infrastructure.workspace = true
+gtk4.workspace = true
+libadwaita.workspace = true
+sourceview5.workspace = true
+gio.workspace = true
+glib-unix.workspace = true
+async-channel.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+tracing.workspace = true

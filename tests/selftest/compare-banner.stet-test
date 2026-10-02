@@ -1,0 +1,48 @@
+# The changed-on-disk banner's Compare (M3, M7), and Compare with Saved Version (Ctrl+Alt+D):
+# the unsaved text beside the file as it is on disk, read-only in the other view; the banner
+# stays until Reload or Keep Mine settles it. (The restored-conflict banner's Compare is in
+# tests/selftest/session/after-damage.stet-test.)
+
+write $TMP/doc.txt "one\ntwo\nthree\n"
+open doc.txt
+cursor 2 1
+type "TWO "
+assert-dirty true
+write $TMP/doc.txt "one\ntwo\nthree\nfour\n"
+wait-until assert-banner "changed on disk"
+banner-click "Compare"
+wait-compare
+assert-split true
+assert-active-view 1
+assert-view-shows 1 "doc.txt"
+assert-view-shows 2 "doc.txt (saved)"
+assert-compare-stats 0 1 1 0
+assert-compare-line new 2 changed
+assert-compare-line old 4 removed
+assert-compare-inline new 2 "0..4"
+assert-banner "changed on disk"
+assert-focus editor
+view-focus 2
+assert-read-only true
+assert-dirty false
+assert-text "one\ntwo\nthree\nfour\n"
+view-focus 1
+action clear-compare
+assert-split false
+assert-tab-count 1
+assert-banner "changed on disk"
+banner-click "Keep Mine"
+assert-no-banner "changed on disk"
+
+# Compare with Saved Version: the same, from the menu.
+action compare-with-saved
+wait-compare
+assert-view-shows 2 "doc.txt (saved)"
+assert-compare-stats 0 1 1 0
+# Closing the copy ends the comparison.
+view-focus 2
+action close-tab
+assert-comparing false
+assert-split false
+assert-focus editor
+assert-compare-clean

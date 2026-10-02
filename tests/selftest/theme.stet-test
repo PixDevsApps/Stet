@@ -1,0 +1,105 @@
+# The live Omarchy theme (ADR-004 and its amendment), in a fake Omarchy state directory
+# ($TMP/omarchy) that has no current/ when the app starts. `theme-set` swaps themes the way
+# omarchy-theme-set does: build next-theme, remove theme, rename next-theme to theme, write
+# theme.name. The themes are synthetic fixtures in $DIR/themes.
+
+# No current/: the built-in palette, following libadwaita's dark preference (light here).
+assert-theme-source builtin:light
+assert-reloads 1
+assert-dark false
+assert-scheme-files 1
+
+# current/ appears after start: the parent watch sees it and reloads once.
+theme-set $DIR/themes/stet-dark stet-dark
+wait-until assert-theme-source omarchy:stet-dark
+sleep 500
+assert-reloads 2
+assert-dark true
+assert-theme text background #101820
+assert-theme text foreground #d0d8e0
+assert-theme def:keyword foreground #c678dd
+assert-theme current-line background #1a2530
+assert-scheme-files 1
+wait-frames 2
+assert-chrome-fg #d0d8e0
+
+# A live switch to a light theme: one reload, light mode, the new colours.
+theme-set $DIR/themes/stet-light stet-light
+wait-until assert-theme-source omarchy:stet-light
+sleep 500
+assert-reloads 3
+assert-dark false
+assert-theme text background #f4f1ea
+assert-theme def:string foreground #3a7a30
+assert-scheme-files 1
+wait-frames 2
+assert-chrome-fg #2a2a33
+
+# omarchy-theme-refresh repeats the swap with the same theme: one reload, nothing changes.
+theme-set $DIR/themes/stet-light stet-light
+sleep 600
+assert-reloads 4
+assert-theme-source omarchy:stet-light
+
+# A burst of swaps collapses into one reload with the last theme.
+theme-set $DIR/themes/stet-dark stet-dark
+theme-set $DIR/themes/stet-light stet-light
+theme-set $DIR/themes/stet-dark stet-dark
+sleep 600
+assert-reloads 5
+assert-theme-source omarchy:stet-dark
+
+# Buffers opened later get the current scheme.
+write $TMP/later.rs "fn later() {}\n"
+open later.rs
+assert-theme text background #101820
+
+# current/ renamed away: the built-in palette; renamed back: the theme again.
+rename $TMP/omarchy/current $TMP/omarchy/current.away
+wait-until assert-theme-source builtin:light
+rename $TMP/omarchy/current.away $TMP/omarchy/current
+wait-until assert-theme-source omarchy:stet-dark
+assert-theme text background #101820
+
+# The font follows fontconfig: its directory appearing re-resolves the family.
+assert-font-reloads 1
+mkdir $TMP/fontconfig
+write $TMP/fontconfig/fonts.conf "<fontconfig/>\n"
+wait-until assert-font-reloads 2
+
+# M7: the Find Mark Style, a style token, smart highlighting and a comparison's lines (an empty
+# one too) take the theme's colours, as the view paints them, and follow a switch.
+write $TMP/m7.txt "alpha zeta gamma\nzeta alpha\ngamma\n"
+open m7.txt
+action mark
+find "alpha"
+action mark-all
+key find Escape
+cursor 1 8
+action style-token-1
+select 1 12 1 17
+wait-until assert-smart-highlight 2
+wait-frames 2
+assert-text-background 2 6 stet:mark
+assert-text-background 2 1 stet:token-1
+assert-text-background 3 1 stet:smart-highlight
+write $TMP/m7-old.txt "one\ntwo\n"
+write $TMP/m7-new.txt "one\ntwo\nthree\n\n"
+open m7-old.txt m7-new.txt
+action compare
+wait-compare
+wait-frames 2
+assert-compare-paint new 3 added
+assert-compare-paint new 4 added
+theme-set $DIR/themes/stet-light stet-light
+wait-until assert-theme-source omarchy:stet-light
+wait-frames 2
+assert-compare-paint new 3 added
+assert-compare-paint new 4 added
+action clear-compare
+select-tab 2
+assert-title "m7.txt — $TMP — Stet"
+wait-frames 2
+assert-text-background 2 6 stet:mark
+assert-text-background 2 1 stet:token-1
+assert-text-background 3 1 stet:smart-highlight

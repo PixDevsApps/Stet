@@ -1,0 +1,10 @@
+# Child of session-restore.stet-test: 50 tabs restored. The window's first frame already shows
+# the active tab's text (the M2 bar: interactive within 500 ms in a release build; a debug build
+# gets 3 s here).
+report-restore
+assert-restore-time 500 3000
+assert-tab-count 50
+assert-stub 1 false
+assert-stub 2 true
+assert-stub 50 true
+assert-text "file 0\nsecond line 0\nedited 0\n"

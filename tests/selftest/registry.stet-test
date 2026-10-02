@@ -1,0 +1,45 @@
+# The action registry drives the accelerators, the menu and the palette.
+# Run: tools/headless.sh 20 target/debug/stet --self-test tests/selftest/registry.stet-test
+
+# Every registry accelerator is installed and parses in GTK itself.
+assert-accels
+# The editing keys the menu shows are real GtkTextView bindings.
+assert-widget-keys
+# Every language id the detection hints return is installed in GtkSourceView.
+assert-language-hints
+# The hamburger menu holds every registry action with a menu place, each wired to an
+# installed action, and nothing else.
+assert-menu
+# Every buffer gets the explicit undo cap (ADR-003 amendment).
+assert-undo-levels 1000
+
+# Insert toggles overwrite mode; the status bar follows.
+assert-status "INS"
+toggle-overwrite
+assert-status "OVR"
+toggle-overwrite
+assert-status "INS"
+
+# The window starts with one untitled tab; nothing to restore or clear yet.
+assert-tab-count 1
+assert-title "Untitled 1 — Stet"
+assert-action-enabled restore-closed-tab false
+assert-action-enabled clear-recent false
+
+# The palette lists registry actions with their menu path, and filters.
+palette "save all"
+assert-palette-first "Save All"
+palette "zoom in"
+assert-palette-first "Zoom In"
+palette-activate
+assert-zoom 1
+action zoom-reset
+assert-zoom 0
+palette "wrap"
+assert-palette-first "Word Wrap"
+palette-activate
+assert-action-state word-wrap true
+palette "wrap"
+assert-palette-first "Word Wrap (on)"
+action word-wrap
+assert-action-state word-wrap false

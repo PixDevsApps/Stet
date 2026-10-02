@@ -1,0 +1,14 @@
+# Not in CI: the control for ADR-014's limits. A 10 MB Rust file with highlighting forced on
+# (Highlight Anyway) stalls frames while GtkSourceView analyses it; large.stet-test types into
+# the same file with the default policy. The step is expected to fail; read the numbers.
+# Run: tools/headless.sh 30 target/release/stet --self-test tests/selftest/perf-typing-control.stet-test
+
+unpace-frames
+write-generated $TMP/ten.rs rust 10485760
+open ten.rs
+assert-highlight false
+cursor 20 1
+type-burst 30 100 100
+banner-click "Highlight Anyway"
+assert-highlight true
+type-burst 30 100 100

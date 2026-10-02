@@ -1,0 +1,51 @@
+# Preview screenshots for the M4 gate (search), in real Omarchy themes. Needs Omarchy's themes
+# in /usr/share/omarchy/themes, so it is not part of tools/ci.sh; it writes into
+# tools/progress/public/. Run from the repository root:
+#   tools/headless.sh 42 target/debug/stet --self-test tests/selftest/preview-search.stet-test
+
+write $TMP/stet/src/main.rs "use std::io;\n\n/// Reads a name and greets it.\nfn main() -> io::Result<()> {\n\tlet mut name = String::new();\n\tio::stdin().read_line(&mut name)?;\n\tlet name = name.trim();\n\tif name.is_empty() {\n\t\treturn Ok(());\n\t}\n\tprintln!(\"Hello, {name}!\");\n\tOk(())\n}\n"
+write $TMP/stet/src/greet.rs "/// Greets someone by name.\npub fn greet(name: &str) -> String {\n\tformat!(\"Hello, {name}!\")\n}\n\n// TODO: greet in more languages\npub fn shout(name: &str) -> String {\n\tgreet(name).to_uppercase()\n}\n"
+write $TMP/stet/notes.md "# Notes\n\n- TODO: find in files\n- smart highlighting of a selected name\n"
+write $TMP/stet/Cargo.toml "[package]\nname = \"hello\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+
+# Replace with a regex and Find All in the current document, in a dark theme.
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+open stet/src/main.rs
+action replace
+find-mode regex
+find "\\bname\\b"
+replace-text "\\U\$&"
+action find-all-in-document
+wait-until assert-results-heading "Search “\\bname\\b” (7 hits in 1 file)"
+action next-search-result
+action next-search-result
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m4-replace-tokyo-night-2026-10-01.png
+
+# Find in Files streaming into the results panel, in a light theme.
+key replace Escape
+theme-set /usr/share/omarchy/themes/catppuccin-latte catppuccin-latte
+wait-until assert-theme-source omarchy:catppuccin-latte
+action find-in-files
+find-mode normal
+find "TODO"
+fif-folder "$TMP/stet"
+fif-start
+wait-fif
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m4-find-in-files-catppuccin-latte-2026-10-01.png
+
+# A pattern error shown in place, and smart highlighting, in gruvbox.
+theme-set /usr/share/omarchy/themes/gruvbox gruvbox
+wait-until assert-theme-source omarchy:gruvbox
+action close-search-results
+action find
+find-mode regex
+find "greet(("
+assert-find-error 7 "missing closing parenthesis"
+open stet/src/greet.rs
+select 2 8 2 13
+wait-until assert-smart-highlight 3
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m4-error-and-smart-highlight-gruvbox-2026-10-01.png

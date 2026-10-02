@@ -1,0 +1,43 @@
+# Preview screenshots for the M6 gate (column mode), in real Omarchy themes. Needs Omarchy's
+# themes in /usr/share/omarchy/themes, so it is not part of tools/ci.sh; it writes into
+# tools/progress/public/. Run from the repository root:
+#   tools/headless.sh 83 target/debug/stet --self-test tests/selftest/preview-column.stet-test
+
+write $TMP/table.rs "const COLORS: [(&str, u32); 6] = [\n\t(\"black\",\t0x000000),\n\t(\"red\",\t0xff0000),\n\t(\"green\",\t0x00ff00),\n\t(\"blue\",\t0x0000ff),\n\t(\"white\",\t0xffffff),\n\t(\"x\",\t0x123456),\n];\n\nfn shade(value: u32) -> u32 {\n\tvalue / 2\n}\n"
+
+# A block across tabs and into virtual space, in a dark theme: the status bar shows rows×columns.
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+open table.rs
+unpace-frames
+wait-frames 3
+assert-tab-grid
+column-drag 2 6 7 22
+assert-status "Sel 6×16"
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m6-block-tokyo-night-2026-10-01.png
+
+# A column caret after typing on six lines, in a light theme.
+theme-set /usr/share/omarchy/themes/catppuccin-latte catppuccin-latte
+wait-until assert-theme-source omarchy:catppuccin-latte
+column-select 2 5 7 5
+column-type "pub "
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m6-caret-catppuccin-latte-2026-10-01.png
+column-key Escape
+
+# The Column Editor writing numbers, in gruvbox.
+theme-set /usr/share/omarchy/themes/gruvbox gruvbox
+wait-until assert-theme-source omarchy:gruvbox
+column-select 2 5 7 5
+column-editor open
+column-editor numbers 1 1 1 zeros dec
+sleep 600
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m6-column-editor-gruvbox-2026-10-01.png
+column-editor ok
+wait-until assert-column-editor closed
+# The dialog's closing animation.
+sleep 600
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m6-numbers-gruvbox-2026-10-01.png

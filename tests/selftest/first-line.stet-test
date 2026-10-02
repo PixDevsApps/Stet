@@ -1,0 +1,65 @@
+# First-line tab names (M8): an untitled tab shows its first line with text, trimmed, white
+# space folded, cut at 30 characters with an ellipsis; without text it is "Untitled N". The
+# window title, the close prompt, Save As and the session use the same name.
+
+assert-tab-title 1 "Untitled 1"
+assert-title "Untitled 1 — Stet"
+type "Shopping list\nmilk\n"
+assert-tab-title 1 "● Shopping list"
+assert-title "*Shopping list — Stet"
+assert-save-name "Shopping list.txt"
+
+# Emptied, it is Untitled 1 again; blank lines before the first text are skipped.
+action select-all
+action delete
+assert-tab-title 1 "● Untitled 1"
+type "\n   \n\tThe quick  brown fox jumps over the lazy dog\n"
+assert-tab-title 1 "● The quick brown fox jumps over…"
+assert-title "*The quick brown fox jumps over… — Stet"
+
+# Typing in the first line renames the tab; typing below it doesn't.
+cursor 3 5
+type " very"
+assert-tab-title 1 "● The very quick brown fox jumps…"
+cursor 4 1
+type "second line\n"
+assert-tab-title 1 "● The very quick brown fox jumps…"
+
+# Save As proposes the name as a file name: no ellipsis, reserved characters as spaces, and
+# the language's extension when a language is set.
+assert-save-name "The very quick brown fox jumps.txt"
+action select-all
+action delete
+type "TODO: a/b?\n"
+assert-tab-title 1 "● TODO: a/b?"
+assert-save-name "TODO a b.txt"
+action select-all
+action delete
+type "fn main() {}\n"
+choose-language rust
+assert-save-name "fn main() {}.rs"
+
+# Saved, the tab shows the file's name.
+save-as $TMP/notes.rs
+assert-tab-title 1 "notes.rs"
+assert-title "notes.rs — $TMP — Stet"
+assert-save-name "notes.rs"
+
+# A new untitled tab, and the close prompt names it by its first line.
+action new-tab
+assert-tab-title 2 "Untitled 1"
+type "draft idea\n"
+assert-tab-title 2 "● draft idea"
+action close-tab
+assert-dialog true
+assert-dialog-text "draft idea"
+respond cancel
+assert-tab-count 2
+
+# The session keeps the name.
+session-commit
+session-flush
+assert-session-contains $TMP/state/stet "\"display_name\": \"draft idea\""
+assert-session-contains $TMP/state/stet "\"untitled_number\": 1"
+
+# A restored untitled tab shows its name before its text loads: tests/selftest/pinned.stet-test.

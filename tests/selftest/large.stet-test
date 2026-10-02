@@ -1,0 +1,133 @@
+# Large files and long lines (M3): the highlighting limits of ADR-014, chunked loading of
+# 100 and 200 MB files with the first screen and the longest main-loop block reported,
+# large-file mode, the refusal from 256 MiB, and the long-line path. Frames are unpaced (a
+# Broadway web client), so the timings are what the app does, not Broadway's 1 fps.
+# Run: tools/headless.sh 30 target/debug/stet --self-test tests/selftest/large.stet-test
+
+unpace-frames
+heartbeat-start
+
+# ADR-014: highlighting up to 2 MiB and 100,000 lines; above, a banner turns it on.
+write-generated $TMP/small.rs rust 1000000
+open small.rs
+assert-language rust
+assert-highlight true
+assert-banner none
+write-generated $TMP/medium.rs rust 3000000
+open medium.rs
+assert-language rust
+assert-highlight false
+assert-large false
+assert-banner "Syntax highlighting is off for files over 2 MiB or 100,000 lines"
+assert-status "Rust"
+banner-click "Highlight Anyway"
+assert-highlight true
+assert-no-banner "Syntax highlighting is off"
+action close-tab
+action close-tab
+
+# Typing right after opening a 10 MB Rust file: over the limits, so no highlighting pass
+# holds off frames (perf-typing-control.stet-test shows the stall with highlighting forced on).
+write-generated $TMP/ten.rs rust 10485760
+open ten.rs
+assert-highlight false
+cursor 20 1
+type-burst 30 100 100
+action close-tab
+respond discard
+
+# A 100 MB log: the first screen within 1.5 s; large-file mode.
+write-generated $TMP/hundred.log log 104857600
+report-memory "before opening 100 MB"
+heartbeat-start
+open hundred.log
+report-load
+report-memory "after opening 100 MB"
+assert-first-screen 1500 3000
+assert-max-block 400
+assert-large true
+assert-highlight false
+assert-banner "Large file (100.0 MiB): syntax highlighting, word wrap, whitespace and bracket matching are off."
+assert-dirty false
+assert-read-only false
+action close-tab
+
+# A 200 MB log opens in large-file mode without freezing; word wrap stays off in it; typing
+# works and makes it dirty.
+write-generated $TMP/huge.log log 209715200
+action word-wrap
+heartbeat-start
+open huge.log
+report-load
+assert-max-block 400
+assert-large true
+assert-highlight false
+assert-wrap false
+assert-dirty false
+cursor 2 1
+type "typed "
+assert-dirty true
+assert-max-block 400
+action word-wrap
+action undo
+assert-dirty false
+action close-tab
+
+# From 256 MiB a file is refused, with the reason, before anything is read.
+truncate $TMP/too-large.log 300000000
+open too-large.log
+assert-toast "“too-large.log” is too large to open (286.1 MiB): Stet opens files smaller than 256.0 MiB"
+assert-tab-count 1
+
+# A 10 MB single-line JSON file: the long-line dialog, then the formatted text, without
+# freezing. The formatted view falls under the highlighting limits too.
+write-generated $TMP/single.json json-line 10485760
+heartbeat-start
+open single.json
+assert-dialog true
+assert-dialog-text "“single.json” has very long lines"
+assert-dialog-text "Open Formatted"
+respond formatted
+wait-idle
+report-load
+assert-max-block 400
+assert-banner "was opened formatted as JSON: the text differs from the file's bytes"
+assert-text-contains "\"items\": [\n    {\n      \"id\": 0,"
+assert-language json
+assert-highlight false
+assert-read-only false
+action save
+assert-dialog-text "Save the formatted JSON to “single.json”?"
+respond cancel
+action close-tab
+
+# Read-only with display breaks: every line is cut to 1,000 characters, and saving is off.
+write-generated $TMP/breaks.json json-line 300000
+open breaks.json
+respond breaks
+wait-idle
+assert-read-only true
+assert-banner "broken every 1,000 characters for display"
+action save
+wait-idle
+assert-toast "can't be saved"
+action close-tab
+
+# JSON that doesn't parse falls back to display breaks, and says why.
+write-generated $TMP/broken.json json-line-unclosed 300000
+open broken.json
+respond formatted
+wait-idle
+assert-toast "“broken.json” isn't valid JSON"
+assert-read-only true
+assert-banner "broken every 1,000 characters"
+action close-tab
+
+# XML on one line opens formatted as XML.
+write-generated $TMP/single.xml xml-line 300000
+open single.xml
+respond formatted
+wait-idle
+assert-banner "was opened formatted as XML"
+assert-language xml
+assert-text-contains "<items>\n  <item id=\"0\">"

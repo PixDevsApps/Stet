@@ -1,0 +1,42 @@
+# The M7 exit criterion on 105,613 lines (1.1 MB, over the 512 KiB the toolbox changes at once):
+# Mark finds a regex's 10,562 matches on a worker and bookmarks their lines; Remove
+# Non-Bookmarked Lines computes its 10,563 deletions on a worker and applies them as one bulk
+# edit; that is one undo step, and Undo and Redo bring the bookmarks back. The main loop is
+# never blocked for long meanwhile.
+
+write-generated $TMP/numbers.txt numbers 1150000
+open numbers.txt
+wait-idle
+unpace-frames
+heartbeat-start
+action mark
+mark-option bookmark true
+find-mode regex
+find "7  \$"
+action mark-all
+wait-idle
+report-mark
+assert-mark-stats true
+assert-marks mark 10562
+assert-find-message "Mark: 10562 matches"
+key find Escape
+column-checkpoint marked
+action remove-unbookmarked-lines
+wait-idle
+assert-line-op true true
+assert-max-block 500
+assert-line 1 "  23757  "
+assert-line 2 "  102947  "
+assert-bookmark-count 10562
+assert-undo-steps marked 1
+assert-bookmark-count 10562
+action undo
+assert-line 1 "  0  "
+assert-line 4 "  23757  "
+assert-bookmark-count 10562
+assert-marks mark 10562
+action redo
+assert-line 1 "  23757  "
+assert-bookmark-count 10562
+action undo
+assert-focus editor

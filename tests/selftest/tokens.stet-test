@@ -1,0 +1,53 @@
+# Style tokens (M7): Search › Style All Occurrences of Token › Using 1st–5th Style marks every
+# occurrence of the selection (on one line), or of the word at the caret as a whole word,
+# case-sensitively, in the whole document; Clear Style › 1st–5th and All Styles; Jump Down
+# (Ctrl+1–5) and Jump Up (Ctrl+Alt+1–5) to the next and previous text in a style.
+
+set-text "let alpha = beta + alpha;\nalpha.beta(Alpha)\nalphabet beta\n"
+cursor 1 7
+action style-token-1
+assert-marks 1 3
+assert-marked-text 1 1 "alpha"
+assert-mark-tags 1 3
+assert-focus editor
+
+# A selection is styled as it is, inside words too.
+select 3 1 3 6
+action style-token-2
+assert-marks 2 4
+cursor 2 7
+action style-token-3
+assert-marks 3 3
+assert-marks 1 3
+
+# Jumps select the next and previous text in a style, around the ends.
+cursor 1 1
+action jump-down-1
+assert-selection "alpha"
+assert-cursor 1 10
+action jump-down-1
+assert-cursor 1 25
+action jump-down-1
+assert-cursor 2 6
+action jump-down-1
+assert-cursor 1 10
+action jump-up-1
+assert-cursor 2 6
+action jump-up-3
+assert-selection "beta"
+assert-cursor 1 17
+assert-focus editor
+
+# Styles follow edits; clearing one style keeps the others.
+cursor 1 1
+type "// "
+assert-marked-text 1 1 "alpha"
+action clear-style-2
+assert-marks 2 0
+assert-marks 1 3
+action clear-all-styles
+assert-marks 1 0
+assert-marks 3 0
+assert-mark-tags 1 0
+action undo
+assert-text "let alpha = beta + alpha;\nalpha.beta(Alpha)\nalphabet beta\n"

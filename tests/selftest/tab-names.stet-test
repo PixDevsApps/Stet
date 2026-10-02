@@ -1,0 +1,111 @@
+# Rename… on an untitled tab names the tab without saving anything (1.2): from the tab menu,
+# the menu or the palette, and with a double-click (tab-double-click.stet-test). The name stays
+# as the first line changes; Save As… proposes it; an empty name follows the first line again;
+# a clone shows it; Restore Closed Tab and the session keep it
+# (children in tests/selftest/session/).
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/tab-names.stet-test
+
+unpace-frames
+
+type "first line\nsecond\n"
+assert-tab-count 1
+assert-tab-title 1 "● first line"
+
+# From the tab's menu: only the tab's name changes.
+tab-menu 1
+assert-tab-menu "Rename…"
+assert-action-enabled rename-file true
+action rename-file
+assert-dialog-text "Rename “first line”"
+assert-dialog-text "nothing is saved"
+assert-focus dialog
+dialog-set "New name" "Shopping list"
+dialog-enter "New name"
+wait-idle
+tab-menu-close
+assert-tab-title 1 "● Shopping list"
+assert-title "*Shopping list — Stet"
+assert-focus editor
+
+# The first line no longer names it.
+cursor 1 1
+type "new top "
+assert-text "new top first line\nsecond\n"
+assert-tab-title 1 "● Shopping list"
+
+# Save As… proposes the name; saved, the tab takes the file's name.
+action save-as
+assert-chooser-name "Shopping list.txt"
+choose-file "$TMP/Shopping list.txt"
+wait-until assert-file "$TMP/Shopping list.txt" "new top first line\nsecond\n"
+wait-until assert-tab-title 1 "Shopping list.txt"
+
+# An empty name follows the first line again; so does the unchanged first-line name.
+action new-tab
+type "alpha\n"
+assert-tab-title 2 "● alpha"
+action rename-file
+assert-dialog-text "Rename “alpha”"
+dialog-enter "New name"
+wait-idle
+cursor 1 1
+type "beta "
+assert-tab-title 2 "● beta alpha"
+action rename-file
+dialog-set "New name" "  Groceries  "
+dialog-enter "New name"
+wait-idle
+assert-tab-title 2 "● Groceries"
+action rename-file
+assert-dialog-text "Rename “Groceries”"
+dialog-set "New name" ""
+dialog-enter "New name"
+wait-idle
+assert-tab-title 2 "● beta alpha"
+
+# Cancel keeps the name.
+action rename-file
+dialog-set "New name" "Groceries"
+dialog-enter "New name"
+wait-idle
+action rename-file
+dialog-set "New name" "Not this"
+respond cancel
+assert-tab-title 2 "● Groceries"
+
+# A clone in the other view shows the name; renamed there, both tabs follow.
+action clone-to-other-view
+assert-split true
+assert-tab-count 3
+assert-tab-title 3 "● Groceries"
+action rename-file
+dialog-set "New name" "Groceries for Sunday"
+dialog-enter "New name"
+wait-idle
+assert-tab-title 2 "● Groceries for Sunday"
+assert-tab-title 3 "● Groceries for Sunday"
+action close-tab
+assert-tab-count 2
+
+# Restore Closed Tab brings the name back with the text.
+select-tab 2
+action close-tab
+assert-dialog-text "Save changes to “Groceries for Sunday”?"
+respond discard
+assert-tab-count 1
+action restore-closed-tab
+assert-tab-count 2
+assert-tab-title 2 "● Groceries for Sunday"
+assert-text "beta alpha\n"
+
+# A file's Rename… still renames the file (context.stet-test has the details).
+select-tab 1
+action rename-file
+assert-dialog-text "The file is renamed in its folder"
+respond cancel
+
+# The session keeps the names, also of tabs whose text isn't loaded yet.
+child-run $TMP/c $DIR/session/tab-names-make.stet-test 0
+assert-session-contains $TMP/c/state/stet "\"custom_name\": \"Packing list\""
+assert-session-contains $TMP/c/state/stet "\"custom_name\": \"Ideas\""
+child-run $TMP/c $DIR/session/tab-names-restore.stet-test 0

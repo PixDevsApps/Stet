@@ -1,0 +1,19 @@
+# Child of tab-names.stet-test: names two of three untitled tabs and quits by closing the
+# window, so tab-names-restore.stet-test restores them.
+type "socks\nshoes\n"
+action rename-file
+dialog-set "New name" "Packing list"
+dialog-enter "New name"
+wait-idle
+assert-tab-title 1 "● Packing list"
+action new-tab
+type "unnamed draft\n"
+action new-tab
+type "second named\n"
+action rename-file
+dialog-set "New name" "Ideas"
+dialog-enter "New name"
+wait-idle
+assert-tab-title 3 "● Ideas"
+select-tab 2
+quit window

@@ -1,0 +1,7 @@
+# Child of replace-in-files.stet-test: two files open, the second in front, then quit, so that
+# rif-restore.stet-test has the first as a restored tab that hasn't loaded its text.
+write $TMP/tree/stub.txt "TODO in a restored tab\n"
+write $TMP/tree/front.txt "front\n"
+open tree/stub.txt tree/front.txt
+select-tab 2
+quit window

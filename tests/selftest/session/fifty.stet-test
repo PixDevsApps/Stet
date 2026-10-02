@@ -1,0 +1,5 @@
+# Child of session-restore.stet-test: 50 tabs with unsaved changes, then quit.
+generate-tabs $TMP/files 25 25
+select-tab 1
+assert-tab-count 50
+quit

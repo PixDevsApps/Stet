@@ -1,0 +1,14 @@
+# Child of preview-m2.stet-test: a session with unsaved changes to restore, then quit.
+write $TMP/files/plan.md "# Plan\n\n- Ship the session\n- Then the toolbox\n"
+write $TMP/files/notes.txt "Meeting notes\n"
+open files/plan.md
+cursor 3 19
+type " and --wait"
+open files/notes.txt
+cursor 2 1
+type "Unsaved thoughts about the restore\n"
+action new-tab
+type "An untitled draft\n"
+select-tab 1
+assert-tab-count 3
+quit

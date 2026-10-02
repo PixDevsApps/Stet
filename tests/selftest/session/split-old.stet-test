@@ -1,0 +1,10 @@
+# Child of split-session.stet-test: a session written before M7 restores as one view.
+assert-tab-count 1
+assert-split false
+assert-active-view 1
+assert-view-tabs 1 1
+wait-idle
+assert-text "old\nsession\n"
+assert-cursor 2 1
+assert-bookmarks none
+assert-focus editor

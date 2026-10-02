@@ -1,0 +1,104 @@
+# Find All in the current and in all open documents, Replace All in all open documents, and
+# the search results panel: headings, hit lines, Next/Previous Search Result, activating a row,
+# focus (Search Results Window), copy, clear and close.
+
+write $TMP/a.txt "needle one\nhay\nneedle two needle\n"
+write $TMP/b.txt "hay\nneedle three\n"
+write $TMP/c.txt "nothing here\n"
+open a.txt b.txt c.txt
+open a.txt
+assert-title "a.txt — $TMP — Stet"
+
+# Find All in Current Document.
+find needle
+wait-until assert-match-count "1 of 3"
+assert-results-shown false
+action find-all-in-document
+wait-until assert-results-heading "Search “needle” (3 hits in 1 file)"
+assert-results-shown true
+assert-results-contains "  $TMP/a.txt (3 hits)\n    Line 1: needle one\n    Line 3: needle two needle\n"
+assert-find-message "Search “needle” (3 hits in 1 file)"
+
+# Next and Previous Search Result step through every match, wrapping around.
+action next-search-result
+assert-selection needle
+assert-cursor 1 7
+action next-search-result
+assert-cursor 3 7
+action next-search-result
+assert-cursor 3 18
+assert-selection needle
+action next-search-result
+assert-cursor 1 7
+action previous-search-result
+assert-cursor 3 18
+
+# Find All in Open Documents: a new search on top, files in tab order.
+action find-all-in-open-documents
+wait-until assert-results-heading "Search “needle” (4 hits in 2 files of 3 searched)"
+assert-results-searches 2
+assert-results-contains "  $TMP/b.txt (1 hit)\n    Line 2: needle three\n"
+# Rows: 0 the search, 1 a.txt, 2-3 its lines, 4 b.txt, 5 its line, 6 the older search.
+results-activate 5
+assert-title "b.txt — $TMP — Stet"
+assert-cursor 2 7
+assert-selection needle
+# Next goes on from the activated line.
+action next-search-result
+assert-title "a.txt — $TMP — Stet"
+assert-cursor 1 7
+action previous-search-result
+assert-title "b.txt — $TMP — Stet"
+# A closed document's hits reopen its file.
+action close-tab
+assert-tab-count 2
+results-activate 5
+wait-until assert-title "b.txt — $TMP — Stet"
+wait-until assert-selection needle
+assert-cursor 2 7
+
+# Search Results Window (F7, Ctrl+Alt+R) moves the focus into the panel and back.
+action search-results
+assert-results-focused true
+action search-results
+assert-results-focused false
+action search-results
+key results Escape
+assert-results-shown false
+action search-results
+assert-results-shown true
+
+# Copy, then clear and close.
+action copy-search-results
+assert-clipboard-contains "Search “needle” (4 hits in 2 files of 3 searched)\n  $TMP/a.txt (3 hits)\n    Line 1: needle one\n"
+action clear-search-results
+assert-results-searches 0
+action next-search-result
+action close-search-results
+assert-results-shown false
+
+# Replace All in Open Documents asks first; Cancel changes nothing.
+open a.txt
+action replace
+find needle
+replace-text pin
+action replace-all-in-open-documents
+wait-until assert-dialog true
+respond cancel
+assert-text "needle one\nhay\nneedle two needle\n"
+action replace-all-in-open-documents
+wait-until assert-dialog true
+respond replace
+wait-until assert-find-message "Replaced 4 matches in 2 documents"
+assert-text "pin one\nhay\npin two pin\n"
+assert-dirty true
+# Each document has its own undo step.
+action undo
+assert-text "needle one\nhay\nneedle two needle\n"
+open b.txt
+assert-text "hay\npin three\n"
+action undo
+assert-text "hay\nneedle three\n"
+open c.txt
+assert-text "nothing here\n"
+assert-dirty false

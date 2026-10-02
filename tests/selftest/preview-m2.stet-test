@@ -1,0 +1,14 @@
+# Preview screenshots for the M2 gate, in real Omarchy themes: a restored file that changed on
+# disk after its unsaved changes were backed up, unsaved changes that could not be restored,
+# and the Forget Unsaved Drafts dialog. Child self-tests (tests/selftest/session/preview-*)
+# make a session and quit, then show what restoring found. Needs Omarchy's themes in
+# /usr/share/omarchy/themes, so it is not part of tools/ci.sh; it writes into
+# tools/progress/public/. Run from the repository root:
+#   tools/headless.sh 30 target/debug/stet --self-test tests/selftest/preview-m2.stet-test
+
+child-run $TMP/p $DIR/session/preview-fill.stet-test 0
+# While no Stet runs: plan.md is rewritten by another program, and the backup of notes.txt is
+# lost.
+write $TMP/p/files/plan.md "# Plan\n\nRewritten by another program while Stet was closed.\n"
+drop-backup $TMP/p/state/stet 2
+child-run $TMP/p $DIR/session/preview-shots.stet-test 0

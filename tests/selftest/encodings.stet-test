@@ -1,0 +1,224 @@
+# Encodings and line endings (M3, ADR-007, ADR-008): every fixture opens with the right
+# encoding and line ending in the status bar and saves without edits byte for byte, or is
+# flagged as lossy when it opens. The fixtures mirror infrastructure/src/encoding/fixtures.rs.
+# Run: tools/headless.sh 30 target/debug/stet --self-test tests/selftest/encodings.stet-test
+
+# UTF-8 without a BOM, LF.
+write-hex $TMP/utf8.txt 48656c6c6f2c2077c3b6726c6420e2809420e29c9320e6bca2e5ad9720f09f8e890a7365636f6e64206c696e650a
+open utf8.txt
+assert-status "| LF | UTF-8 |"
+assert-text "Hello, wörld — ✓ 漢字 🎉\nsecond line\n"
+assert-banner none
+action save
+wait-idle
+assert-file-hex $TMP/utf8.txt 48656c6c6f2c2077c3b6726c6420e2809420e29c9320e6bca2e5ad9720f09f8e890a7365636f6e64206c696e650a
+assert-files-like $TMP .stet-tmp 0
+
+# UTF-8 with a BOM, CRLF: the buffer holds LF, the save writes CRLF and the BOM back.
+write-hex $TMP/utf8-bom.txt efbbbf424f4d20746578740d0a776974682043524c460d0a
+open utf8-bom.txt
+assert-status "| CRLF | UTF-8 BOM |"
+assert-text "BOM text\nwith CRLF\n"
+action save
+wait-idle
+assert-file-hex $TMP/utf8-bom.txt efbbbf424f4d20746578740d0a776974682043524c460d0a
+
+# UTF-16 with BOMs, a NUL (shown as the placeholder) and a surrogate pair.
+write-hex $TMP/utf16le-bom.txt fffe570069006400650020007400650078007400200077006900740068002000610020004e0055004c00200000002c0020006100200073007500720072006f0067006100740065002000700061006900720020003cd889df200061006e0064002000fc002e000d000a004e0065007800740020006c0069006e0065002e000d000a00
+open utf16le-bom.txt
+assert-status "| CRLF | UTF-16 LE BOM |"
+assert-text "Wide text with a NUL ␀, a surrogate pair 🎉 and ü.\nNext line.\n"
+assert-banner none
+assert-read-only false
+action save
+wait-idle
+assert-file-hex $TMP/utf16le-bom.txt fffe570069006400650020007400650078007400200077006900740068002000610020004e0055004c00200000002c0020006100200073007500720072006f0067006100740065002000700061006900720020003cd889df200061006e0064002000fc002e000d000a004e0065007800740020006c0069006e0065002e000d000a00
+
+write-hex $TMP/utf16be-bom.txt feff00570069006400650020007400650078007400200077006900740068002000610020004e0055004c00200000002c0020006100200073007500720072006f0067006100740065002000700061006900720020d83cdf8900200061006e0064002000fc002e000d000a004e0065007800740020006c0069006e0065002e000d000a
+open utf16be-bom.txt
+assert-status "| CRLF | UTF-16 BE BOM |"
+assert-text-contains "a NUL ␀, a surrogate pair 🎉"
+action save
+wait-idle
+assert-file-hex $TMP/utf16be-bom.txt feff00570069006400650020007400650078007400200077006900740068002000610020004e0055004c00200000002c0020006100200073007500720072006f0067006100740065002000700061006900720020d83cdf8900200061006e0064002000fc002e000d000a004e0065007800740020006c0069006e0065002e000d000a
+
+# UTF-16 without a BOM, recognized by where its zero bytes sit.
+write-hex $TMP/utf16le.txt 5500540046002d0031003600200077006900740068006f0075007400200061002000620079007400650020006f00720064006500720020006d00610072006b002c002000610020004e0055004c0020000000200061006e00640020003cd889df2e000a005300650063006f006e00640020006c0069006e0065002e000a00
+open utf16le.txt
+assert-status "| LF | UTF-16 LE |"
+assert-text-contains "a NUL ␀ and 🎉."
+action save
+wait-idle
+assert-file-hex $TMP/utf16le.txt 5500540046002d0031003600200077006900740068006f0075007400200061002000620079007400650020006f00720064006500720020006d00610072006b002c002000610020004e0055004c0020000000200061006e00640020003cd889df2e000a005300650063006f006e00640020006c0069006e0065002e000a00
+
+write-hex $TMP/utf16be.txt 005500540046002d0031003600200077006900740068006f0075007400200061002000620079007400650020006f00720064006500720020006d00610072006b002c002000610020004e0055004c0020000000200061006e00640020d83cdf89002e000a005300650063006f006e00640020006c0069006e0065002e000a
+open utf16be.txt
+assert-status "| LF | UTF-16 BE |"
+action save
+wait-idle
+assert-file-hex $TMP/utf16be.txt 005500540046002d0031003600200077006900740068006f0075007400200061002000620079007400650020006f00720064006500720020006d00610072006b002c002000610020004e0055004c0020000000200061006e00640020d83cdf89002e000a005300650063006f006e00640020006c0069006e0065002e000a
+
+# Windows-1252, CRLF: editable now, and an edit keeps the encoding.
+write-hex $TMP/windows-1252.txt 436563692065737420756e206669636869657220656e206672616ee7616973203a2064e96ae02c206ce02c206ff92c20676172e76f6e2c209c757672652c20e76120636ffb746520352080209620ab206269656e2073fb7220bb2e0d0a4465757869e86d65206c69676e652c20617665632064657320616363656e7473203a20e96ce876652c20666f72ea742c204e6feb6c2c206e61ef662e0d0a
+open windows-1252.txt
+assert-status "| CRLF | Windows-1252 |"
+assert-text-contains "œuvre, ça coûte 5 € – « bien sûr »."
+assert-read-only false
+action save
+wait-idle
+assert-file-hex $TMP/windows-1252.txt 436563692065737420756e206669636869657220656e206672616ee7616973203a2064e96ae02c206ce02c206ff92c20676172e76f6e2c209c757672652c20e76120636ffb746520352080209620ab206269656e2073fb7220bb2e0d0a4465757869e86d65206c69676e652c20617665632064657320616363656e7473203a20e96ce876652c20666f72ea742c204e6feb6c2c206e61ef662e0d0a
+cursor 1 1
+type "É"
+action save
+wait-idle
+assert-file-hex $TMP/windows-1252.txt c9436563692065737420756e206669636869657220656e206672616ee7616973203a2064e96ae02c206ce02c206ff92c20676172e76f6e2c209c757672652c20e76120636ffb746520352080209620ab206269656e2073fb7220bb2e0d0a4465757869e86d65206c69676e652c20617665632064657320616363656e7473203a20e96ce876652c20666f72ea742c204e6feb6c2c206e61ef662e0d0a
+
+# ISO-8859-15 reads as Windows-1252 (the euro sign shows as ¤) and round-trips; Reinterpret
+# reads it again as ISO-8859-15.
+write-hex $TMP/iso-8859-15.txt 4c6520707269782065737420646520313020a420706f7572206c27bd75767265203b2064e96ae02076752c20676172e76f6e2c2066656eea7472652c206ff92e0a
+open iso-8859-15.txt
+assert-status "| LF | Windows-1252 |"
+assert-text-contains "10 ¤ pour l'½uvre"
+action reinterpret iso-8859-15
+wait-idle
+assert-status "| LF | ISO-8859-15 |"
+assert-text-contains "10 € pour l'œuvre"
+assert-dirty false
+action save
+wait-idle
+assert-file-hex $TMP/iso-8859-15.txt 4c6520707269782065737420646520313020a420706f7572206c27bd75767265203b2064e96ae02076752c20676172e76f6e2c2066656eea7472652c206ff92e0a
+
+# Shift_JIS round-trips; with an NEC-selected IBM extension it can't, and says so when it
+# opens. Saving it asks first, and writes the character's other code.
+write-hex $TMP/shift-jis.txt 93fa967b8cea82cc8365834c8358836782c582b7814282d082e782aa82c88141834a835e834a836981418abf8e9a82aa8adc82dc82ea82c482a282dc82b781420d0a93f18d7396da82e082a082e882dc82b781420d0a
+open shift-jis.txt
+assert-status "| CRLF | Shift_JIS |"
+assert-text-contains "日本語のテキストです。"
+assert-banner none
+action save
+wait-idle
+assert-file-hex $TMP/shift-jis.txt 93fa967b8cea82cc8365834c8358836782c582b7814282d082e782aa82c88141834a835e834a836981418abf8e9a82aa8adc82dc82ea82c482a282dc82b781420d0a93f18d7396da82e082a082e882dc82b781420d0a
+
+write-hex $TMP/shift-jis-lossy.txt 93fa967b8cea82cc8365834c8358836782c582b7814282d082e782aa82c88141834a835e834a836981418abf8e9a82aa8adc82dc82ea82c482a282dc82b781420d0a93f18d7396da82e082a082e882dc82b781420d0a93faed400d0a
+open shift-jis-lossy.txt
+assert-status "| CRLF | Shift_JIS |"
+assert-banner "can't be saved exactly as it was"
+assert-text-contains "日纊"
+action save
+assert-dialog true
+assert-dialog-text "Save “shift-jis-lossy.txt” anyway?"
+respond cancel
+assert-file-hex $TMP/shift-jis-lossy.txt 93fa967b8cea82cc8365834c8358836782c582b7814282d082e782aa82c88141834a835e834a836981418abf8e9a82aa8adc82dc82ea82c482a282dc82b781420d0a93f18d7396da82e082a082e882dc82b781420d0a93faed400d0a
+action save
+respond accept
+wait-idle
+assert-file-hex $TMP/shift-jis-lossy.txt 93fa967b8cea82cc8365834c8358836782c582b7814282d082e782aa82c88141834a835e834a836981418abf8e9a82aa8adc82dc82ea82c482a282dc82b781420d0a93f18d7396da82e082a082e882dc82b781420d0a93fafa5c0d0a
+assert-no-banner "can't be saved exactly"
+
+# GB18030 with a four-byte character and the two-byte euro sign.
+write-hex $TMP/gb18030.txt d5e2cac7d2bbb6ced3c3bcf2cce5d6d0cec4d0b4b3c9b5c4cec4d7d6a3acd3c3c0b4b2e2cad4b1e0c2ebbcecb2e2a1a30d0ab5dab6fed0d0d2b2d4dad5e2c0efa1a30d0abab1bcfbd7d6a3ba95328236a3acc5b7d4aaa3baa2e3a1a30d0a
+open gb18030.txt
+assert-status "| CRLF | GB18030 |"
+assert-text-contains "罕见字：𠀀，欧元：€。"
+action save
+wait-idle
+assert-file-hex $TMP/gb18030.txt d5e2cac7d2bbb6ced3c3bcf2cce5d6d0cec4d0b4b3c9b5c4cec4d7d6a3acd3c3c0b4b2e2cad4b1e0c2ebbcecb2e2a1a30d0ab5dab6fed0d0d2b2d4dad5e2c0efa1a30d0abab1bcfbd7d6a3ba95328236a3acc5b7d4aaa3baa2e3a1a30d0a
+
+# CR-only and CRLF line endings.
+write-hex $TMP/cr-only.txt 6c696e65206f6e650d6c696e652074776f0d6c696e652074687265650d
+open cr-only.txt
+assert-status "| CR | UTF-8 |"
+assert-text "line one\nline two\nline three\n"
+action save
+wait-idle
+assert-file-hex $TMP/cr-only.txt 6c696e65206f6e650d6c696e652074776f0d6c696e652074687265650d
+
+write-hex $TMP/crlf.txt 610d0a620d0a
+open crlf.txt
+assert-status "| CRLF | UTF-8 |"
+cursor 1 2
+type "!"
+action save
+wait-idle
+assert-file-hex $TMP/crlf.txt 61210d0a620d0a
+
+# Mixed line endings: the banner counts them; saving asks, then writes the dominant one.
+write-hex $TMP/mixed.txt 6f6e650d0a74776f0a74687265650d0a666f75720d
+open mixed.txt
+assert-status "| Mixed | UTF-8 |"
+assert-banner "Mixed line endings (1 LF, 2 CRLF, 1 CR): saving writes CRLF everywhere."
+assert-dirty false
+action save
+assert-dialog-text "Save “mixed.txt” with CRLF line endings?"
+respond accept
+wait-idle
+assert-file-hex $TMP/mixed.txt 6f6e650d0a74776f0d0a74687265650d0a666f75720d0a
+assert-status "| CRLF | UTF-8 |"
+assert-no-banner "Mixed line endings"
+
+# Normalize on the banner makes the document dirty, and the save asks nothing.
+write-hex $TMP/mixed2.txt 610a620d0a630d0a
+open mixed2.txt
+banner-click "Normalize to CRLF"
+assert-status "| CRLF | UTF-8 |"
+assert-dirty true
+assert-no-banner "Mixed line endings"
+action save
+wait-idle
+assert-dialog false
+assert-file-hex $TMP/mixed2.txt 610d0a620d0a630d0a
+assert-dirty false
+
+# Keep hides the banner; the save still warns.
+write-hex $TMP/mixed3.txt 610a620d0a630d0a
+open mixed3.txt
+banner-click Keep
+assert-no-banner "Mixed line endings"
+assert-status "| Mixed | UTF-8 |"
+action save
+assert-dialog true
+respond cancel
+assert-file-hex $TMP/mixed3.txt 610a620d0a630d0a
+
+# NUL bytes in text: read-only until Edit Anyway, then NUL is saved back as NUL.
+write-hex $TMP/nul-text.txt 616263006465660a676869000a
+open nul-text.txt
+assert-read-only true
+assert-banner "looks binary (it has NUL bytes)"
+assert-text "abc␀def\nghi␀\n"
+banner-click "Edit Anyway"
+assert-read-only false
+assert-no-banner "looks binary"
+action save
+wait-idle
+assert-file-hex $TMP/nul-text.txt 616263006465660a676869000a
+
+# Binary data that can't round-trip (its CR and LF bytes would be normalized) stays read-only.
+write-hex $TMP/image.png 89504e470d0a1a0a0000000d4948445200000100fffe80
+open image.png
+assert-read-only true
+assert-banner "looks binary and can't be saved exactly as it was"
+action save
+wait-idle
+assert-file-hex $TMP/image.png 89504e470d0a1a0a0000000d4948445200000100fffe80
+
+# A file that already has the placeholder character keeps it as it is.
+write-hex $TMP/placeholder.txt 61e29080620a
+open placeholder.txt
+assert-banner none
+action save
+wait-idle
+assert-file-hex $TMP/placeholder.txt 61e29080620a
+
+# Broken UTF-8 is detected as a legacy encoding; reinterpreted as UTF-8 it shows the
+# replacement character, and the banner says it can't be saved exactly.
+write-hex $TMP/invalid-utf8.txt 4d6f73746c79205554462d383a2064c3a96ac3a02076752c20627574206f6e6520627974652069732062726f6b656e3a20ff20686572652e0a
+open invalid-utf8.txt
+assert-no-banner "can't be saved exactly"
+action encode-utf8
+wait-idle
+assert-status "| LF | UTF-8 |"
+assert-text-contains "déjà vu"
+assert-text-contains "broken: � here"
+assert-banner "some bytes aren't valid UTF-8 and show as �"
+assert-files-like $TMP .stet-tmp 0

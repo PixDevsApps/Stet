@@ -1,0 +1,155 @@
+# Compare (M7): the document in front against the other view's (without a split, the tab used
+# before moves there), a file chosen in a dialog, the clipboard, or the file as last saved
+# (also the changed-on-disk banner's Compare). Added, removed, changed (with the characters
+# that differ) and moved lines get their backgrounds; padding keeps equal lines level; Next
+# and Previous Difference (Alt+PgDn, Alt+PgUp) wrap around; Ignore Whitespace and Ignore Case
+# compare again; edits compare again; Clear Compare (Ctrl+Alt+X) ends it.
+
+write $TMP/old.txt "header line one\nkeep line one\nthis line is removed\nkeep line two\nthe quick brown fox jumps\nkeep line three\nmoved block alpha\nmoved block beta\nkeep line four\nkeep line five\nkeep line six\nkeep line seven\nthe tail line\n"
+write $TMP/new.txt "header line one\nkeep line one\nkeep line two\nthe quick red fox jumps\nkeep line three\nkeep line four\nkeep line five\nthis line is added\nkeep line six\nkeep line seven\nmoved block alpha\nmoved block beta\nthe tail line\n"
+open old.txt new.txt
+assert-split false
+assert-action-enabled next-difference false
+assert-action-enabled clear-compare false
+action compare
+wait-compare
+assert-split true
+assert-comparing true
+assert-view-shows 1 "new.txt"
+assert-view-shows 2 "old.txt"
+assert-active-view 1
+assert-compare-stats 1 1 1 2
+assert-status "1 line added, 1 removed, 1 changed, 2 moved"
+assert-toast "1 line added, 1 removed, 1 changed, 2 moved"
+assert-action-enabled next-difference true
+assert-action-enabled clear-compare true
+assert-focus editor
+
+# Every kind of difference, on its side.
+assert-compare-line old 1 none
+assert-compare-line old 3 removed
+assert-compare-line old 5 changed
+assert-compare-line new 4 changed
+assert-compare-inline old 5 "10..15"
+assert-compare-inline new 4 "10..13"
+assert-compare-inline new 1 none
+assert-compare-line old 7 moved
+assert-compare-line old 8 moved
+assert-compare-line new 11 moved
+assert-compare-line new 8 added
+assert-compare-line new 9 none
+# As the views paint them: each kind's colour to the right end of the line, none on equal lines.
+assert-compare-paint old 3 removed
+assert-compare-paint old 5 changed
+assert-compare-paint old 7 moved
+assert-compare-paint new 8 added
+assert-compare-paint new 9 none
+
+# Padding: each side has two gaps where the other has lines, and equal lines are level.
+assert-compare-pads old 2
+assert-compare-pads new 2
+assert-compare-aligned
+assert-wrap false
+view-focus 2
+assert-wrap false
+view-focus 1
+
+# The first difference is in front; Next and Previous Difference step between them and wrap.
+assert-cursor 3 1
+action next-difference
+assert-cursor 4 1
+action next-difference
+assert-cursor 6 1
+action next-difference
+assert-cursor 8 1
+action next-difference
+assert-cursor 11 1
+action next-difference
+assert-cursor 3 1
+action previous-difference
+assert-cursor 11 1
+assert-focus editor
+# In the old document's view they step through its lines.
+view-focus 2
+cursor 1 1
+action next-difference
+assert-cursor 3 1
+action next-difference
+assert-cursor 5 1
+
+# An edit compares again shortly after.
+view-focus 1
+cursor 13 1
+type "changed "
+wait-until assert-compare-stats 1 1 2 2
+assert-compare-line new 13 changed
+action undo
+wait-until assert-compare-stats 1 1 1 2
+assert-compare-aligned
+
+# Clear Compare: the backgrounds, padding and summary go; word wrap comes back.
+action clear-compare
+assert-comparing false
+assert-compare-clean
+assert-status-lacks "moved"
+assert-split true
+assert-action-enabled next-difference false
+assert-focus editor
+
+# Compare with Clipboard, and the options: a version with a case and a spacing difference.
+clipboard-text "header line one\nKEEP line one\nkeep line two\nthe quick red fox jumps\nkeep line three\nkeep  line four\nkeep line five\nthis line is added\nkeep line six\nkeep line seven\nmoved block alpha\nmoved block beta\nthe tail line\n"
+action compare-with-clipboard
+wait-compare
+assert-view-shows 2 "Clipboard"
+assert-tab-count 3
+assert-compare-stats 0 0 2 0
+view-focus 2
+assert-read-only true
+view-focus 1
+action compare-ignore-case
+assert-action-state compare-ignore-case true
+wait-compare
+assert-compare-stats 0 0 1 0
+action compare-ignore-whitespace
+wait-compare
+assert-compare-stats 0 0 0 0
+assert-status "No differences"
+action compare-ignore-case
+action compare-ignore-whitespace
+wait-compare
+assert-compare-stats 0 0 2 0
+# Clear Compare closes the text the comparison opened.
+action clear-compare
+assert-tab-count 2
+assert-view-shows 2 "old.txt"
+assert-focus editor
+
+# Compare with File…: a file chosen in a dialog, opened read-only beside the document.
+action compare-with-file
+choose-file $TMP/old.txt
+wait-compare
+assert-tab-count 3
+assert-compare-stats 1 1 1 2
+action clear-compare
+assert-tab-count 2
+assert-focus editor
+
+# Empty lines get their colour too: GTK paints no paragraph background on a line without
+# characters, so the view paints it.
+write $TMP/blank-old.txt "one\n\ntwo\nthree\n"
+write $TMP/blank-new.txt "one\ntwo\n\nthree\n"
+open blank-new.txt
+action compare-with-file
+choose-file $TMP/blank-old.txt
+wait-compare
+wait-frames 2
+assert-compare-stats 1 1 0 0
+assert-compare-line old 2 removed
+assert-compare-paint old 2 removed
+assert-compare-line new 3 added
+assert-compare-paint new 3 added
+assert-compare-paint old 3 none
+assert-compare-paint new 2 none
+action clear-compare
+assert-compare-clean
+assert-focus editor

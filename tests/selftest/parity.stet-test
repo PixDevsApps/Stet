@@ -1,0 +1,7 @@
+# The M4 parity table (infrastructure/src/search/parity.rs, 122 rows) against the real
+# GtkSourceView SearchContext: every row the translation leaves to the widget must give the
+# same match spans and count as our own matcher, and invalid patterns must fail in both.
+# Rows routed to our own matcher (\K, empty matches, \G) are skipped; the core's unit test
+# checks them, and those against the Find in Files matcher.
+
+assert-widget-parity

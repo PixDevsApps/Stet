@@ -1,0 +1,203 @@
+# The Column Editor (M6; Alt+C, Edit › Column Editor…): text or numbers down a column, on the
+# rectangle's lines or, with only a caret, from the caret's line to the end of the text at its
+# column. Numbers: initial, increase by, repeat, leading none/zeros/spaces, Dec, Hex (upper or
+# lower case), Oct and Bin, the fields read in the chosen format. Errors show in the dialog,
+# which stays open. Each insert is one undo step; the editor has the keyboard focus again when
+# the dialog closes.
+unpace-frames
+assert-key-route "<Alt>c" app:column-editor
+type "a = 1;\nbb = 2;\nccc = 3;\n"
+column-checkpoint start
+
+# Text on a column caret, opened with Alt+C; the written column stays selected.
+column-select 1 1 3 1
+column-key "<Alt>c"
+assert-column-editor open
+wait-until assert-column-editor focused
+# Alt+C again while it is open changes nothing.
+column-key "<Alt>c"
+assert-column-editor open
+column-editor text "// "
+column-editor ok
+assert-column-editor closed
+assert-text "// a = 1;\n// bb = 2;\n// ccc = 3;\n"
+assert-column 1 1 3 4
+assert-focus editor
+assert-undo-steps start 1
+column-key Escape
+action undo
+
+# Text in place of a block, from the palette, accepted with Enter in the field.
+column-select 1 3 3 4
+palette "column editor"
+assert-palette-first "Column Editor…"
+palette-activate
+assert-column-editor open
+column-editor text ":"
+column-editor enter
+wait-until assert-column-editor closed
+assert-text "a : 1;\nbb:= 2;\ncc: = 3;\n"
+assert-focus editor
+column-key Escape
+action undo
+
+# Numbers: 1, 2, 3 by default, in decimal; the values are kept between uses.
+column-select 1 1 3 1
+action column-editor
+assert-column-editor text=:
+column-editor numbers 1 1 1 none dec
+column-editor ok
+assert-text "1a = 1;\n2bb = 2;\n3ccc = 3;\n"
+assert-undo-steps start 1
+column-key Escape
+action undo
+column-select 1 1 3 1
+action column-editor
+assert-column-editor initial=1
+column-editor cancel
+assert-column-editor closed
+assert-focus editor
+assert-text "a = 1;\nbb = 2;\nccc = 3;\n"
+
+# Every number is as wide as the widest: none pads after (where the line goes on), zeros and
+# spaces before.
+column-select 1 1 3 1
+column-editor open
+column-editor numbers 8 1 1 none dec
+column-editor ok
+assert-text "8 a = 1;\n9 bb = 2;\n10ccc = 3;\n"
+column-key Escape
+action undo
+column-select 1 1 3 1
+column-editor open
+column-editor numbers 8 1 1 zeros dec
+column-editor ok
+assert-text "08a = 1;\n09bb = 2;\n10ccc = 3;\n"
+column-key Escape
+action undo
+column-select 1 1 3 1
+column-editor open
+column-editor numbers 9 1 1 spaces dec
+column-editor ok
+assert-text " 9a = 1;\n10bb = 2;\n11ccc = 3;\n"
+column-key Escape
+action undo
+# Counting down past zero, and repeating each number.
+column-select 1 1 3 1
+column-editor open
+column-editor numbers 1 -1 1 zeros dec
+column-editor ok
+assert-text "01a = 1;\n00bb = 2;\n-1ccc = 3;\n"
+column-key Escape
+action undo
+column-select 1 1 3 1
+column-editor open
+column-editor numbers 5 10 2 none dec
+column-editor ok
+assert-text "5 a = 1;\n5 bb = 2;\n15ccc = 3;\n"
+column-key Escape
+action undo
+
+# Hex, upper and lower case, with the fields read in hex; octal; binary.
+column-select 1 1 3 1
+column-editor open
+column-editor numbers F 1 1 none hex true
+column-editor ok
+assert-text "F a = 1;\n10bb = 2;\n11ccc = 3;\n"
+column-key Escape
+action undo
+column-select 1 1 3 1
+column-editor open
+column-editor numbers fe 1 1 zeros hex false
+column-editor ok
+assert-text "0fea = 1;\n0ffbb = 2;\n100ccc = 3;\n"
+column-key Escape
+action undo
+column-select 1 1 3 1
+column-editor open
+column-editor numbers 7 1 1 none oct
+column-editor ok
+assert-text "7 a = 1;\n10bb = 2;\n11ccc = 3;\n"
+column-key Escape
+action undo
+column-select 1 1 3 1
+column-editor open
+column-editor numbers 1 1 1 zeros bin
+column-editor ok
+assert-text "01a = 1;\n10bb = 2;\n11ccc = 3;\n"
+column-key Escape
+action undo
+
+# A block is replaced by the numbers.
+column-select 1 3 3 4
+column-editor open
+column-editor numbers 1 1 1 none dec
+column-editor ok
+assert-text "a 1 1;\nbb2= 2;\ncc3 = 3;\n"
+column-key Escape
+action undo
+
+# Errors: the dialog stays open and says why; nothing changes.
+column-select 1 1 3 1
+column-editor open
+column-editor numbers x 1 1 none dec
+column-editor ok
+assert-column-editor open
+assert-column-editor "error:“Initial number” must be a decimal number."
+column-editor numbers 1 G 1 none hex
+column-editor ok
+assert-column-editor "error:“Increase by” must be a hexadecimal number."
+column-editor numbers 1 1 two none dec
+column-editor ok
+assert-column-editor "error:“Repeat” must be a whole number."
+column-editor numbers 9223372036854775807 1 1 none dec
+column-editor ok
+assert-column-editor "error:The numbers do not fit in 64 bits."
+column-editor text ""
+column-editor ok
+assert-column-editor "error:Type the text to insert."
+column-editor text "a\nb"
+column-editor ok
+assert-column-editor "error:The text must fit on one line."
+assert-text "a = 1;\nbb = 2;\nccc = 3;\n"
+# Fixed, it goes in and the message goes.
+column-editor numbers 0 1 1 none dec
+column-editor ok
+assert-column-editor closed
+assert-text "0a = 1;\n1bb = 2;\n2ccc = 3;\n"
+column-key Escape
+action undo
+
+# With only a caret: from its line to the end of the text, at its column; the caret stays.
+action select-all
+column-commit "abc\nabc\nabc\nabc"
+cursor 2 2
+column-editor open
+column-editor numbers 1 1 1 none dec
+column-editor ok
+assert-text "abc\na1bc\na2bc\na3bc"
+assert-column none
+assert-cursor 2 2
+assert-focus editor
+action undo
+# The empty last line after a final line break counts too, padded to the column.
+action select-all
+column-commit "ab\nab\n"
+cursor 1 3
+column-editor open
+column-editor text "|"
+column-editor ok
+assert-text "ab|\nab|\n  |"
+
+# A read-only document refuses.
+write $TMP/ro.txt "abc\nabc\n"
+chmod $TMP/ro.txt 444
+open ro.txt
+column-select 1 1 2 1
+column-editor open
+column-editor text "x"
+column-editor ok
+assert-column-editor "error:This document is read-only."
+column-editor cancel
+assert-text "abc\nabc\n"
+assert-focus editor

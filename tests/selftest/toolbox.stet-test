@@ -1,0 +1,334 @@
+# M5's text toolbox: Edit › Line Operations, Convert Case to, Comment/Uncomment and Blank
+# Operations, Add Prefix/Suffix and Insert Numbers, Tools › JSON and XML, the brace jumps and
+# Select and Find, each on a small text and through its registry action or its key in the
+# editor (the editor's shortcut controller, as GTK runs it when the key reaches the editor).
+# Large inputs through the worker and the bulk path are in toolbox-large.stet-test.
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/toolbox.stet-test
+
+unpace-frames
+
+# The text tools' keys are the editor's own shortcuts, in the capture phase; the GtkSourceView
+# and GtkTextView bindings ADR-009 overrides are real bindings, and the editor takes them.
+assert-editor-keys
+assert-editor-key "<Control>d" duplicate-line
+assert-editor-key "<Control><Shift>x" copy-line
+assert-editor-key "<Alt><Shift>u" uppercase
+assert-editor-key "<Control>b" go-to-matching-brace
+assert-editor-key "<Control><Shift>a" swallow
+assert-editor-key "<Alt>Left" swallow
+assert-editor-key "<Alt><Shift>Down" swallow
+assert-editor-key "<Control>slash" swallow
+assert-editor-key "<Control>backslash" swallow
+
+# Duplicate Current Line (Ctrl+D): the caret's line, or the selection after itself.
+set-text "one\ntwo\nthree"
+cursor 2 2
+editor-key "<Control>d"
+assert-text "one\ntwo\ntwo\nthree"
+assert-cursor 2 2
+assert-can-undo true
+action undo
+assert-text "one\ntwo\nthree"
+select 1 1 1 4
+action duplicate-line
+assert-text "oneone\ntwo\nthree"
+assert-selection "one"
+
+# Delete Current Line (Ctrl+Shift+L); Cut Current Line (Ctrl+L) and Copy Current Line
+# (Ctrl+Shift+X) put the whole line on the clipboard.
+set-text "one\ntwo\nthree"
+cursor 2 3
+editor-key "<Control><Shift>l"
+assert-text "one\nthree"
+assert-cursor 2 1
+set-text "one\ntwo\nthree"
+cursor 2 1
+editor-key "<Control><Shift>x"
+assert-text "one\ntwo\nthree"
+assert-clipboard-contains "two\n"
+cursor 3 2
+editor-key "<Control>l"
+assert-text "one\ntwo"
+assert-clipboard-contains "three\n"
+# Ctrl+C and Ctrl+X without a selection copy and cut the caret's line.
+set-text "alpha\nbeta\ngamma"
+cursor 2 2
+action copy
+assert-text "alpha\nbeta\ngamma"
+assert-clipboard-contains "beta\n"
+cursor 1 3
+action cut
+assert-text "beta\ngamma"
+assert-clipboard-contains "alpha\n"
+# With a selection they stay GtkTextView's own.
+select 1 1 1 3
+action copy
+assert-clipboard-contains "be"
+assert-text "beta\ngamma"
+
+# Transpose Current Line (Ctrl+T): the line swaps with the one above.
+set-text "one\ntwo\nthree"
+cursor 2 2
+editor-key "<Control>t"
+assert-text "two\none\nthree"
+assert-cursor 2 1
+
+# Move Up and Move Down Current Line (Ctrl+Shift+Up and Down), Join Lines (Ctrl+J), and the
+# blank lines (Ctrl+Alt+Enter, Ctrl+Alt+Shift+Enter).
+set-text "one\ntwo\nthree"
+cursor 2 2
+editor-key "<Control><Shift>Up"
+assert-text "two\none\nthree"
+assert-cursor 1 2
+editor-key "<Control><Shift>Down"
+editor-key "<Control><Shift>Down"
+assert-text "one\nthree\ntwo"
+assert-cursor 3 2
+set-text "first\n    second\nthird"
+cursor 1 2
+editor-key "<Control>j"
+assert-text "first second\nthird"
+set-text "a\nb"
+cursor 2 1
+editor-key "<Control><Alt>Return"
+assert-text "a\n\nb"
+assert-cursor 2 1
+editor-key "<Control><Alt><Shift>Return"
+assert-text "a\n\n\nb"
+assert-cursor 3 1
+
+# With nothing selected, the line removals, Reverse and the sorts work on the whole document.
+set-text "b\na\nb\n\n  \na\nc\n"
+action remove-duplicate-lines
+assert-text "b\na\n\n  \nc\n"
+set-text "a\na\nb\na\n"
+action remove-consecutive-duplicate-lines
+assert-text "a\nb\na\n"
+set-text "a\n\n  \nb\n"
+action remove-empty-lines
+assert-text "a\n  \nb\n"
+action remove-blank-lines
+assert-text "a\nb\n"
+set-text "one\ntwo\nthree\n"
+action reverse-lines
+assert-text "three\ntwo\none\n"
+set-text "b\nC\na\n"
+action sort-lexical-ascending
+assert-text "C\na\nb\n"
+action sort-lexical-descending
+assert-text "b\na\nC\n"
+action sort-ignore-case-ascending
+assert-text "a\nb\nC\n"
+action sort-ignore-case-descending
+assert-text "C\nb\na\n"
+set-text "item10\nitem9\nitem100\n"
+action sort-integer-ascending
+assert-text "item9\nitem10\nitem100\n"
+action sort-integer-descending
+assert-text "item100\nitem10\nitem9\n"
+set-text "1.5\n-2\n1.25\n"
+action sort-decimal-dot-ascending
+assert-text "-2\n1.25\n1.5\n"
+action sort-decimal-dot-descending
+assert-text "1.5\n1.25\n-2\n"
+set-text "1,5\n1,25\n"
+action sort-decimal-comma-ascending
+assert-text "1,25\n1,5\n"
+action sort-decimal-comma-descending
+assert-text "1,5\n1,25\n"
+set-text "ccc\na\nbb\n"
+action sort-length-ascending
+assert-text "a\nbb\nccc\n"
+action sort-length-descending
+assert-text "ccc\nbb\na\n"
+# A sort is one undo step.
+action undo
+assert-text "a\nbb\nccc\n"
+# A selection limits a sort to its lines.
+set-text "d\nc\nb\na\n"
+select 2 1 4 1
+action sort-lexical-ascending
+assert-text "d\nb\nc\na\n"
+
+# Convert Case to: the word at the caret, or the selection, which stays selected.
+set-text "hello world. second one"
+cursor 1 2
+editor-key "<Alt><Shift>u"
+assert-text "HELLO world. second one"
+assert-cursor 1 2
+select 1 1 1 12
+editor-key "<Control>u"
+assert-text "hello world. second one"
+assert-selection "hello world"
+select 1 1 1 24
+editor-key "<Alt>u"
+assert-text "Hello World. Second One"
+editor-key "<Control><Alt>u"
+assert-text "Hello world. Second one"
+action invert-case
+assert-text "hELLO WORLD. sECOND ONE"
+set-text "mIxed WoRd"
+select 1 1 1 11
+action proper-case-blend
+assert-text "MIxed WoRd"
+action sentence-case-blend
+assert-text "MIxed WoRd"
+
+# Comments follow the document's language; plain text has none.
+set-text "fn main() {\n    run();\n}"
+cursor 2 5
+editor-key "<Control>q"
+assert-toast "Plain text has no comments"
+assert-text "fn main() {\n    run();\n}"
+action set-language rust
+editor-key "<Control>q"
+assert-text "fn main() {\n    // run();\n}"
+editor-key "<Control>q"
+assert-text "fn main() {\n    run();\n}"
+select 1 1 3 2
+editor-key "<Control>k"
+assert-text "// fn main() {\n//     run();\n// }"
+editor-key "<Control><Shift>k"
+assert-text "fn main() {\n    run();\n}"
+select 2 5 2 11
+editor-key "<Control><Shift>q"
+assert-text "fn main() {\n    /* run(); */\n}"
+editor-key "<Control><Shift>q"
+assert-text "fn main() {\n    run();\n}"
+
+# Blank Operations: trims and TAB/space conversion, on the whole document.
+set-text "  a  \n\tb\t\n"
+action trim-trailing
+assert-text "  a\n\tb\n"
+action trim-leading
+assert-text "a\nb\n"
+set-text "  a  \n\tb\t\n"
+action trim-both
+assert-text "a\nb\n"
+set-text "\tx\ty\n"
+action tabs-to-spaces
+assert-text "    x   y\n"
+action spaces-to-tabs
+assert-text "\tx\ty\n"
+set-text "        x       y\n"
+action spaces-to-tabs-leading
+assert-text "\t\tx       y\n"
+
+# Add Prefix/Suffix: a dialog; Enter applies, the values are remembered.
+set-text "a\nb\n\nc"
+action add-prefix-suffix
+assert-dialog true
+assert-focus dialog
+dialog-set Prefix "- "
+dialog-set Suffix ";"
+respond apply
+assert-text "- a;\n- b;\n- ;\n- c;"
+assert-focus editor
+action add-prefix-suffix
+respond cancel
+assert-text "- a;\n- b;\n- ;\n- c;"
+assert-focus editor
+# Enter in a field applies, with the remembered values.
+set-text "x"
+action add-prefix-suffix
+dialog-enter Suffix
+assert-dialog false
+assert-text "- x;"
+assert-focus editor
+
+# Insert Numbers: from the caret's line to the end, at the caret's column.
+set-text "a\nb\nc\nd"
+cursor 2 2
+action insert-numbers
+dialog-set Start 8
+dialog-set Step 2
+dialog-set "Fill to the widest" "Leading zeros"
+dialog-enter Step
+assert-dialog false
+assert-text "a\nb08\nc10\nd12"
+assert-focus editor
+# On the lines of a selection, in hex with uppercase digits, two lines per number.
+set-text "x\nx\nx\nx\n"
+select 1 1 5 1
+action insert-numbers
+dialog-set Start 10
+dialog-set Step 1
+dialog-set "Repeat each number" 2
+dialog-set Base Hexadecimal
+dialog-set "Uppercase hex digits" true
+dialog-set "Fill to the widest" "None (left-aligned)"
+respond apply
+assert-text "Ax\nAx\nBx\nBx\n"
+# A mistake in a number is reported, and nothing changes.
+action insert-numbers
+dialog-set Start x
+respond apply
+assert-dialog-text "Start must be a whole number"
+respond close
+assert-text "Ax\nAx\nBx\nBx\n"
+assert-focus editor
+
+# Tools › JSON: format with the document's indentation (JSON gets two spaces), minify,
+# validate; an error moves the caret to it.
+set-text "{\"a\":[1,2],\"b\":{}}"
+action set-language json
+assert-indentation "Spaces: 2"
+editor-key "<Control><Alt><Shift>m"
+assert-text "{\n  \"a\": [\n    1,\n    2\n  ],\n  \"b\": {}\n}"
+editor-key "<Control><Alt><Shift>c"
+assert-text "{\"a\":[1,2],\"b\":{}}"
+editor-key "<Control><Alt><Shift>j"
+wait-until assert-toast "Valid JSON"
+set-text "{\"a\": [1, 2,]}"
+editor-key "<Control><Alt><Shift>j"
+wait-until assert-toast "Invalid JSON: expected value at line 1, column 13"
+assert-cursor 1 13
+action format-json
+assert-toast "Format JSON: expected value at line 1, column 13"
+assert-text "{\"a\": [1, 2,]}"
+# Tools › XML.
+set-text "<a><b>text</b><c/></a>"
+action set-language xml
+editor-key "<Control><Alt><Shift>b"
+assert-text "<a>\n  <b>text</b>\n  <c/>\n</a>"
+editor-key "<Control><Alt><Shift>x"
+wait-until assert-toast "Well-formed XML"
+set-text "<a><b></a>"
+action validate-xml
+wait-until assert-toast "Invalid XML"
+
+# Go to and Select to Matching Brace (Ctrl+B, Ctrl+Alt+B): GtkSourceView's own jump.
+set-text "f(a, (b)) end"
+action set-language rust
+cursor 1 2
+editor-key "<Control>b"
+assert-cursor 1 9
+editor-key "<Control>b"
+assert-cursor 1 2
+editor-key "<Control><Alt>b"
+assert-selection "(a, (b))"
+
+# Select and Find Next and Previous (Ctrl+Alt+F, Ctrl+F3): the word at the caret, in Normal
+# mode, and the editor keeps the focus.
+set-text "two one two (two)"
+find-mode regex
+cursor 1 2
+editor-key "<Control><Alt>f"
+wait-until assert-cursor 1 12
+assert-selection "two"
+editor-key "<Control><Alt>f"
+wait-until assert-cursor 1 17
+editor-key "<Control><Alt><Shift>f"
+wait-until assert-cursor 1 9
+assert-selection "two"
+assert-bar-mode find
+assert-focus editor
+
+# A read-only document refuses the tools with a toast.
+write $TMP/locked.txt "locked\n"
+chmod $TMP/locked.txt 444
+open locked.txt
+assert-read-only true
+action duplicate-line
+assert-toast "You may not write this file"
+assert-text "locked\n"

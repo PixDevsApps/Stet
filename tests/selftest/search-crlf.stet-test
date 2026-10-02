@@ -1,0 +1,43 @@
+# Extended \r\n in a document loaded from a CRLF file: the buffer holds LF line breaks
+# (ADR-008), so \r\n finds every line break, and a replacement with \r\n inserts one. M4 skipped
+# everything after the status-bar check until M3's LF normalization was merged; now it all runs.
+
+write-hex $TMP/crlf.txt "6f6e650d0a74776f0d0a7468726565"
+open crlf.txt
+assert-status "CRLF"
+assert-text "one\ntwo\nthree"
+
+action replace
+find-mode extended
+find "\\r\\n"
+wait-until assert-match-count "1 of 2"
+replace-text ", "
+action replace-all
+wait-until assert-text "one, two, three"
+action undo
+assert-text "one\ntwo\nthree"
+
+# The same line break written \n, as a regex \r\n or \R. The count says which match is the
+# current one, counted from the caret, so the caret goes back to the start first.
+cursor 1 1
+find "\\n"
+wait-until assert-match-count "1 of 2"
+find-mode regex
+find "o\\r\\nt"
+wait-until assert-match-count "1 of 1"
+cursor 1 1
+find "\\R"
+wait-until assert-match-count "1 of 2"
+
+# A replacement's \r\n inserts a line break in Extended mode, and the file keeps CRLF.
+find-mode extended
+find ", "
+write-hex $TMP/list.txt "612c20622c20630d0a"
+open list.txt
+assert-status "CRLF"
+replace-text "\\r\\n"
+action replace-all
+wait-until assert-text "a\nb\nc\n"
+action save
+wait-idle
+assert-file-hex $TMP/list.txt "610d0a620d0a630d0a"

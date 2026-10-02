@@ -1,0 +1,61 @@
+# Maintainer: Stet contributors
+# Generated from packaging/PKGBUILD.in by tools/package-source.py, which fills in the version,
+# the source checksum and SOURCE_DATE_EPOCH (the time of the packaged commit).
+pkgname=stet
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc='Fast, keyboard-first text and code editor for Omarchy'
+arch=('x86_64')
+url='https://github.com/PixDevsApps/Stet'
+license=('MIT')
+depends=('gtk4' 'libadwaita' 'gtksourceview5' 'glib2' 'pcre2' 'fontconfig' 'gcc-libs' 'glibc')
+makedepends=('rust' 'cargo' 'pkgconf')
+# The release profile carries no debug info, so a -debug package would be empty.
+options=('!debug')
+source=("stet-${pkgver}.tar.gz")
+sha256sums=('@SHA256@')
+export SOURCE_DATE_EPOCH=@SOURCE_DATE_EPOCH@
+
+prepare() {
+  cd "$srcdir/stet-$pkgver"
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/^host: //p')"
+}
+
+build() {
+  cd "$srcdir/stet-$pkgver"
+  cargo build --release --locked --offline
+}
+
+check() {
+  cd "$srcdir/stet-$pkgver"
+  # Only the crates without GTK: a clean build has no display for the app's self-tests.
+  cargo test --locked --offline -p stet-domain -p stet-infrastructure
+}
+
+package() {
+  cd "$srcdir/stet-$pkgver"
+  install -Dm755 target/release/stet "$pkgdir/usr/bin/stet"
+  install -Dm644 packaging/io.github.pixdevsapps.Stet.desktop \
+    "$pkgdir/usr/share/applications/io.github.pixdevsapps.Stet.desktop"
+  # D-Bus activation (ADR-011): a command line always reaches a running Stet as a remote.
+  install -Dm644 packaging/io.github.pixdevsapps.Stet.service \
+    "$pkgdir/usr/share/dbus-1/services/io.github.pixdevsapps.Stet.service"
+  install -Dm644 assets/brand/io.github.pixdevsapps.Stet.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.pixdevsapps.Stet.svg"
+  install -Dm644 assets/brand/io.github.pixdevsapps.Stet-symbolic.svg \
+    "$pkgdir/usr/share/icons/hicolor/symbolic/apps/io.github.pixdevsapps.Stet-symbolic.svg"
+  for size in 16 24 32 48 64 128 256; do
+    install -Dm644 "assets/icons/io.github.pixdevsapps.Stet-$size.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/io.github.pixdevsapps.Stet.png"
+  done
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/stet/LICENSE"
+  install -Dm644 THIRD_PARTY.md "$pkgdir/usr/share/licenses/stet/THIRD_PARTY.md"
+  install -Dm644 packaging/dependency-licenses.json \
+    "$pkgdir/usr/share/licenses/stet/dependency-licenses.json"
+  cp -r packaging/licenses "$pkgdir/usr/share/licenses/stet/dependencies"
+  chmod -R u=rwX,go=rX "$pkgdir/usr/share/licenses/stet/dependencies"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/stet/README.md"
+  install -Dm644 docs/INTEGRATIONS.md "$pkgdir/usr/share/doc/stet/INTEGRATIONS.md"
+  install -Dm644 docs/INSTALL.md "$pkgdir/usr/share/doc/stet/INSTALL.md"
+  install -Dm644 docs/USER_GUIDE.md "$pkgdir/usr/share/doc/stet/USER_GUIDE.md"
+}

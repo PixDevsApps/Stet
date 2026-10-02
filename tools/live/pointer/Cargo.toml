@@ -1,0 +1,14 @@
+[package]
+name = "stet-live-pointer"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Virtual pointer for Stet's live Hyprland checks (clicks and drag-and-drop)"
+
+# Standalone: not part of the Stet workspace.
+[workspace]
+
+[dependencies]
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }

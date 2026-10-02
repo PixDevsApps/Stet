@@ -1,0 +1,90 @@
+# Pinned tabs (M8): Pin Tab moves a tab to the end of the pinned ones at the start of the
+# strip, where it shows an icon (a dot while it has unsaved changes). Close All skips pinned
+# tabs and asks about none of them; closing a pinned tab itself still works and asks. The tab
+# menu shows Pin Tab or Unpin Tab, whichever applies; so does the palette. The session keeps
+# them (children in tests/selftest/session/).
+
+write $TMP/a.txt "a\n"
+write $TMP/b.txt "b\n"
+write $TMP/c.txt "c\n"
+write $TMP/d.txt "d\n"
+open a.txt b.txt c.txt d.txt
+assert-tab-count 4
+assert-action-enabled pin-tab true
+assert-action-enabled unpin-tab false
+
+# Pinning c moves it to the start; pinning a puts it after c.
+select-tab 3
+assert-title "c.txt — $TMP — Stet"
+action pin-tab
+assert-pinned 1 true
+assert-tab-title 1 "c.txt"
+assert-tab-title 2 "a.txt"
+assert-title "c.txt — $TMP — Stet"
+assert-action-enabled pin-tab false
+assert-action-enabled unpin-tab true
+assert-tab-icon 1 "text-plain-symbolic"
+assert-tab-icon 2 none
+
+# The tab menu acts on the clicked tab and shows only the command that applies.
+tab-menu 1
+assert-tab-menu-shown "Unpin Tab" true
+assert-tab-menu-shown "Pin Tab" false
+assert-tab-menu-shown "Close" true
+tab-menu-close
+tab-menu 2
+assert-tab-menu-shown "Pin Tab" true
+assert-tab-menu-shown "Unpin Tab" false
+action pin-tab
+tab-menu-close
+assert-pinned 2 true
+assert-tab-title 2 "a.txt"
+assert-title "c.txt — $TMP — Stet"
+assert-focus editor
+
+# The palette offers only what applies to the current tab.
+palette "pin tab"
+assert-palette-first "Unpin Tab"
+palette-close
+
+# A pinned tab with unsaved changes shows a dot; Close All leaves pinned tabs and doesn't ask
+# about them.
+type "edited "
+assert-tab-icon 1 "media-record-symbolic"
+select-tab 3
+type "also edited "
+action close-all
+assert-dialog true
+assert-dialog-text "b.txt"
+respond discard
+assert-tab-count 2
+assert-tab-title 1 "● c.txt"
+assert-tab-title 2 "a.txt"
+action close-all
+assert-dialog false
+assert-tab-count 2
+
+# Closing a pinned tab directly works, and asks about unsaved changes.
+select-tab 1
+action close-tab
+assert-dialog true
+respond discard
+assert-tab-count 1
+assert-tab-title 1 "a.txt"
+assert-pinned 1 true
+
+# Unpinning: the icon goes; new tabs come after the pinned ones.
+action unpin-tab
+assert-pinned 1 false
+assert-tab-icon 1 none
+action pin-tab
+action new-tab
+assert-tab-title 2 "Untitled 1"
+assert-pinned 2 false
+action move-tab-backward
+assert-tab-title 2 "Untitled 1"
+
+# The session keeps pinned tabs, their order, and an untitled tab's first-line name.
+child-run $TMP/c $DIR/session/pinned-make.stet-test 0
+assert-session-tabs $TMP/c/state/stet 4
+child-run $TMP/c $DIR/session/pinned-restore.stet-test 0

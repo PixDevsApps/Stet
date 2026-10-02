@@ -1,0 +1,27 @@
+# Child of split-session.stet-test: one.txt in the main view with a bookmark, two.txt and a
+# clone of one.txt in the second view, the divider moved; quits by closing the window, so
+# split-restore.stet-test restores it.
+write $TMP/files/one.txt "one\ntwo\nthree\nfour\n"
+write $TMP/files/two.txt "2\n"
+open files/one.txt files/two.txt
+action move-to-other-view
+assert-split true
+view-focus 1
+assert-view-shows 1 "one.txt"
+cursor 3 1
+action toggle-bookmark
+action clone-to-other-view
+assert-active-view 2
+cursor 4 2
+set-split-position 400
+view-focus 1
+assert-active-view 1
+assert-cursor 3 1
+assert-view-cursor 2 4 2
+assert-split-position 400
+session-commit
+session-flush
+assert-session-contains $TMP/state/stet "\"clone_of\""
+assert-session-contains $TMP/state/stet "\"split_position\": 400"
+assert-session-contains $TMP/state/stet "\"other_tab\": 2"
+quit window

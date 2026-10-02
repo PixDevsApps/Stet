@@ -1,0 +1,41 @@
+# Restoring the session (M2, ADR-006) in new processes. The child self-tests in
+# tests/selftest/session/ share the scratch directory $TMP/c (STET_SELFTEST_ROOT), so one can be
+# killed with SIGKILL, quit, or stopped with SIGTERM, and the next one restores what it left.
+
+# M1's recent.json comes into the session once, and is deleted afterwards.
+write $TMP/c/state/stet/recent.json "{\"schema_version\": 1, \"files\": [\"/tmp/stet-m1-recent.txt\"]}\n"
+
+# The M2 exit criterion: 40 dirty and untitled tabs (43 here), backed up within 7 s, then
+# SIGKILL: everything comes back but the typing of the last moment.
+child-start fill $TMP/c $DIR/session/fill.stet-test
+wait-exists $TMP/c/ready
+child-signal fill KILL
+child-wait fill killed
+assert-session-tabs $TMP/c/state/stet 43
+assert-backups $TMP/c/state/stet 43
+child-run $TMP/c $DIR/session/after-kill.stet-test 0
+
+# Closing the window quits without asking and keeps everything (after-kill ended that way).
+assert-backups $TMP/c/state/stet 43
+child-run $TMP/c $DIR/session/after-quit.stet-test 0
+
+# SIGTERM, as uwsm sends at logout and reboot: the session is saved before the process ends.
+child-start term $TMP/c $DIR/session/before-term.stet-test
+wait-exists $TMP/c/ready-term
+child-signal term TERM
+child-wait term any
+child-run $TMP/c $DIR/session/after-term.stet-test 0
+
+# While no Stet runs: two files change on disk after their unsaved changes were backed up, a
+# backup is deleted, and a stray file appears in the backup folder.
+write $TMP/c/files/file00.txt "changed while Stet was closed\n"
+write $TMP/c/files/file03.txt "also changed\n"
+drop-backup $TMP/c/state/stet 2
+write $TMP/c/state/stet/backup/stray.txt "recovered text\n"
+child-run $TMP/c $DIR/session/after-damage.stet-test 0
+assert-orphans $TMP/c/state/stet 0
+
+# Fifty tabs restore interactive within 500 ms (release build; 3 s for the debug build).
+child-run $TMP/d $DIR/session/fifty.stet-test 0
+assert-session-tabs $TMP/d/state/stet 50
+child-run $TMP/d $DIR/session/fifty-restore.stet-test 0

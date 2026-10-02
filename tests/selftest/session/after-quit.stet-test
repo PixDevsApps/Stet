@@ -1,0 +1,8 @@
+# Child of session-restore.stet-test, after quitting by closing the window: every tab exactly
+# as it was, the typing of the last seconds included; untitled numbers continue.
+assert-tabs-digest $TMP/digest-quit
+select-tab 2
+assert-text-contains "KEPT BY QUIT"
+action new-tab
+assert-title "Untitled 22 — Stet"
+action close-tab

@@ -1,0 +1,25 @@
+# Synthetic Omarchy theme for Stet's self-tests (original colours, not an Omarchy theme).
+mode = "dark"
+
+accent = "#4fa3d9"
+selection = "#2c3e50"
+muted = "#5a6878"
+
+background = "#101820"
+dark_background = "#0c1218"
+darker_background = "#080c10"
+lighter_background = "#1a2530"
+
+foreground = "#d0d8e0"
+dark_foreground = "#7a8896"
+light_foreground = "#dfe6ed"
+bright_foreground = "#f0f4f8"
+
+red = "#e06c75"
+yellow = "#e5c07b"
+orange = "#d19a66"
+green = "#98c379"
+cyan = "#56b6c2"
+blue = "#61afef"
+magenta = "#c678dd"
+brown = "#7a5230"

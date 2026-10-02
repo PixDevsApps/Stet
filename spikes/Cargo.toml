@@ -1,0 +1,17 @@
+[package]
+name = "stet-spikes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+stet-domain.workspace = true
+stet-infrastructure.workspace = true
+gtk4.workspace = true
+libadwaita.workspace = true
+sourceview5.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

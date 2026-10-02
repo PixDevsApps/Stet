@@ -1,0 +1,113 @@
+# Find (Ctrl+F), go to line (Ctrl+G), the view toggles, zoom, full screen and the language
+# picker.
+
+write $TMP/find.txt "alpha beta\nBeta gamma\nbeta beta\n"
+open find.txt
+
+# Typing in the find bar highlights the first match from the cursor as the current match
+# (with the theme's current-match style) and counts the matches.
+find beta
+assert-find-open true
+wait-until assert-match-count "1 of 4"
+assert-current-match beta
+assert-cursor 1 11
+assert-theme stet:search-current background #9c6e03
+
+# Enter and Shift+Enter in the find bar, and the Find Next / Previous actions (F3, Alt+Down).
+key find Return
+wait-until assert-match-count "2 of 4"
+assert-cursor 2 5
+key find <Shift>Return
+wait-until assert-match-count "1 of 4"
+action find-next
+wait-until assert-match-count "2 of 4"
+action find-next
+action find-next
+action find-next
+wait-until assert-match-count "1 of 4"
+action find-previous
+wait-until assert-match-count "4 of 4"
+
+# Match case: the selected "beta" is the last of three lowercase matches.
+find-case true
+wait-until assert-match-count "3 of 3"
+action find-next
+wait-until assert-match-count "1 of 3"
+assert-cursor 1 11
+find-case false
+
+# Escape closes the bar and selects the current match.
+key find Escape
+assert-find-open false
+assert-selection beta
+assert-current-match ""
+
+# With the bar closed, Find Next selects the match (F3 or Alt+Down in the editor).
+action find-next
+wait-idle
+assert-selection Beta
+assert-cursor 2 5
+
+# No match.
+find zeta
+wait-until assert-match-count "No matches"
+key find Escape
+
+# Go to line takes line or line:column (Ctrl+G opens the palette with ":").
+action go-to-line
+palette ":3:6"
+palette-activate
+assert-cursor 3 6
+palette ":2"
+palette-activate
+assert-cursor 2 1
+
+# View toggles.
+assert-action-state word-wrap false
+action word-wrap
+assert-action-state word-wrap true
+action word-wrap
+assert-action-state word-wrap false
+action show-whitespace
+assert-action-state show-whitespace true
+action show-whitespace
+assert-action-state show-whitespace false
+
+# Zoom (Ctrl++, Ctrl+-, Ctrl+0).
+action zoom-in
+assert-zoom 1
+action zoom-out
+action zoom-out
+assert-zoom -1
+action zoom-reset
+assert-zoom 0
+
+# Full screen: its check mark follows the window's real state, which Broadway never reports,
+# so only the wiring is checked here (the live acceptance list checks F11, Alt+Enter, SUPER+F).
+assert-action-enabled full-screen true
+assert-action-state full-screen false
+action full-screen
+action full-screen
+
+# The language picker (status bar, Set Language…) and the set-language action.
+assert-language none
+choose-language python
+assert-language python3
+assert-status "Python"
+action set-language rust
+assert-language rust
+action set-language ""
+assert-language none
+assert-status "Plain Text"
+
+# Tabs: next, previous (wrapping) and moving.
+action new-tab
+assert-title "Untitled 1 — Stet"
+action next-tab
+assert-title "find.txt — $TMP — Stet"
+action previous-tab
+assert-title "Untitled 1 — Stet"
+action move-tab-backward
+assert-tab-title 1 "Untitled 1"
+action move-tab-forward
+assert-tab-title 2 "Untitled 1"

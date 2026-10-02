@@ -1,0 +1,136 @@
+# config.toml and keys.toml (ADR-017) in the run's $XDG_CONFIG_HOME/stet: overrides of the
+# keymap, conflicts and mistakes reported with their line and column (the previous settings
+# stay), hot reload when a file changes or is saved from Stet itself, Open Settings and Open
+# Keyboard Shortcuts, and the Keyboard Shortcuts overview.
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/settings.stet-test
+
+unpace-frames
+
+# The defaults: the registry's keys.
+assert-editor-key "<Control>d" duplicate-line
+assert-editor-key "<Alt><Shift>u" uppercase
+assert-editor-key "<Control><Shift>u" none
+assert-accels
+assert-preferences-error keys none
+assert-preferences-error config none
+
+# keys.toml: Ctrl+Shift+U for UPPERCASE as well (for a user who freed it from fcitx5),
+# Duplicate on Alt+D, Quit unbound. Applied without a restart.
+write $TMP/config/stet/keys.toml "uppercase = [\"<Control><Shift>u\", \"<Alt><Shift>u\"]\nduplicate-line = [\"<Alt>d\"]\nquit = []\n"
+wait-until assert-editor-key "<Alt>d" duplicate-line
+assert-editor-key "<Control><Shift>u" uppercase
+assert-editor-key "<Control>d" none
+assert-accels
+set-text "one\ntwo"
+editor-key "<Alt>d"
+assert-text "one\none\ntwo"
+palette "duplicate current line"
+assert-palette-first "Duplicate Current Line"
+palette-close
+
+# A conflict with a default key: the file is not applied, the toast and the error say where,
+# and the keys stay.
+write $TMP/config/stet/keys.toml "toggle-comment = [\"<Control>q\", \"<Control>d\"]\n"
+wait-until assert-preferences-error keys "line 1, column 33: “<Control>d” is already Duplicate Current Line's key (duplicate-line)"
+assert-toast "keys.toml not applied: line 1, column 33"
+assert-editor-key "<Alt>d" duplicate-line
+# Syntax errors, unknown actions and bad keys too.
+write $TMP/config/stet/keys.toml "quit = [\n"
+wait-until assert-preferences-error keys "line 1, column 9: unclosed array"
+write $TMP/config/stet/keys.toml "dupliate-line = []\n"
+wait-until assert-preferences-error keys "did you mean duplicate-line?"
+write $TMP/config/stet/keys.toml "save = [\"<Ctrl>notakey\"]\n"
+wait-until assert-preferences-error keys "line 1, column 9: “<Ctrl>notakey” is not a key"
+assert-editor-key "<Alt>d" duplicate-line
+# Freeing a key and giving it to another action in one file.
+write $TMP/config/stet/keys.toml "toggle-comment = [\"<Control>d\"]\nduplicate-line = []\n"
+wait-until assert-editor-key "<Control>d" toggle-comment
+assert-preferences-error keys none
+assert-editor-key "<Alt>d" none
+# Without the file, the defaults come back.
+remove $TMP/config/stet/keys.toml
+wait-until assert-editor-key "<Control>d" duplicate-line
+assert-editor-key "<Control><Shift>u" none
+assert-accels
+
+# config.toml: indentation, view defaults, the font and the word count, hot reloaded.
+set-text "one two three"
+cursor 1 14
+write $TMP/config/stet/config.toml "tab_width = 2\ninsert_spaces = true\nword_wrap = true\nfont = \"Monospace\"\nfont_size = 14\nword_count = true\n"
+wait-until assert-indentation "Spaces: 2"
+assert-action-state word-wrap true
+assert-wrap true
+assert-editor-font Monospace
+wait-until assert-font-size 14
+wait-until assert-status "3 words"
+type " four"
+wait-until assert-status "4 words"
+# The View menu's toggle lasts until the setting itself changes.
+action word-wrap
+assert-wrap false
+write $TMP/config/stet/config.toml "tab_width = 2\ninsert_spaces = true\nword_wrap = true\nfont = \"Monospace\"\nfont_size = 13\nword_count = true\n"
+wait-until assert-font-size 13
+assert-wrap false
+# A mistake: not applied, and the place is reported.
+write $TMP/config/stet/config.toml "tab_width = 0\n"
+wait-until assert-preferences-error config "line 1, column 13: tab_width must be from 1 to 16"
+assert-toast "config.toml not applied: line 1, column 13"
+assert-indentation "Spaces: 2"
+# Per language: Stet's defaults (a Makefile keeps tabs) and [language.<id>] tables.
+write $TMP/config/stet/config.toml "insert_spaces = true\n\n[language.python3]\ntab_width = 3\n"
+wait-until assert-preferences-error config none
+assert-indentation "Spaces: 4"
+assert-status "| Spaces: 4 |"
+action set-language makefile
+assert-indentation "Tab Width: 4"
+action set-language python3
+assert-indentation "Spaces: 3"
+action set-language ""
+assert-indentation "Spaces: 4"
+# Smart highlighting can be switched off.
+set-text "word other word"
+select 1 1 1 5
+wait-until assert-smart-highlight 2
+write $TMP/config/stet/config.toml "smart_highlight = false\n"
+wait-until assert-smart-highlight 0
+assert-indentation "Tab Width: 4"
+select 1 12 1 16
+sleep 300
+assert-smart-highlight 0
+remove $TMP/config/stet/config.toml
+wait-until assert-preferences-error config none
+select 1 1 1 5
+wait-until assert-smart-highlight 2
+assert-font-size 11
+
+# Open Settings and Open Keyboard Shortcuts create the files with every default commented
+# out, open them, and saving one from Stet applies it at once.
+action open-settings
+wait-until assert-title "config.toml — $TMP/config/stet — Stet"
+assert-toast "Created config.toml"
+assert-text-contains "# tab_width = 4"
+assert-text-contains "# [language.makefile]"
+assert-dirty false
+assert-focus editor
+action open-keyboard-shortcuts
+wait-until assert-title "keys.toml — $TMP/config/stet — Stet"
+assert-text-contains "# duplicate-line = [\"<Control>d\"]"
+assert-text-contains "# uppercase = [\"<Alt><Shift>u\"]"
+set-text "join-lines = [\"<Control><Alt>w\"]\n"
+action save
+wait-until assert-editor-key "<Control><Alt>w" join-lines
+assert-editor-key "<Control>j" none
+assert-preferences-error keys none
+# Opening an existing file leaves it alone.
+action open-keyboard-shortcuts
+wait-idle
+assert-file $TMP/config/stet/keys.toml "join-lines = [\"<Control><Alt>w\"]\n"
+
+# The read-only overview of every key, from the registry and keys.toml.
+action keyboard-shortcuts
+assert-shortcuts "Duplicate Current Line"
+assert-shortcuts "Join Lines"
+assert-shortcuts "<Control><Alt>w"
+assert-shortcuts "in the editor"
+close-shortcuts
+assert-focus editor

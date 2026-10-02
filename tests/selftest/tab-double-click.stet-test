@@ -1,0 +1,89 @@
+# A double-click on a tab opens Rename…: a file's tab renames the file (1.1); an untitled tab
+# gets a name for the tab, without saving (1.2). Both asked for by the user after 1.0.
+# Only a second press on the same tab counts: not a single press, not presses on the strip
+# beside the tabs, not a press that follows one on a close button, and not a double-click on
+# a text a comparison opened. `tab-press` runs Stet's handling of a press, not the strip's.
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/tab-double-click.stet-test
+
+sandbox-home
+unpace-frames
+
+write $TMP/home/notes/a.txt "alpha\n"
+write $TMP/home/notes/b.txt "beta\n"
+open $TMP/home/notes/a.txt $TMP/home/notes/b.txt
+assert-tab-count 2
+assert-title "b.txt — ~/notes — Stet"
+
+# What isn't a double-click on a tab opens nothing.
+tab-press 1 title 1
+wait-idle
+assert-dialog false
+tab-press 2 after 1
+tab-press 2 after 2
+wait-idle
+assert-dialog false
+tab-press 2 close 1
+tab-press 2 title 2
+wait-idle
+assert-dialog false
+
+# A double-click on a tab that isn't the current one renames that tab's file, with the name
+# without its extension selected.
+tab-press 1 title 1
+tab-press 1 title 2
+wait-until assert-dialog true
+assert-dialog-text "Rename “a.txt”"
+assert-focus dialog
+wait-until assert-dialog-selection "New name" "a"
+dialog-set "New name" "renamed.txt"
+dialog-enter "New name"
+wait-idle
+assert-missing $TMP/home/notes/a.txt
+assert-file $TMP/home/notes/renamed.txt "alpha\n"
+assert-tab-title 1 "renamed.txt"
+assert-title "b.txt — ~/notes — Stet"
+assert-focus editor
+
+# Cancelled, nothing changes.
+tab-press 2 title 1
+tab-press 2 title 2
+wait-until assert-dialog true
+respond cancel
+assert-file $TMP/home/notes/b.txt "beta\n"
+assert-tab-title 2 "b.txt"
+assert-focus editor
+
+# On an untitled tab: Rename… for the tab's name (1.2); nothing is saved.
+action new-tab
+type "draft text"
+assert-tab-count 3
+select-tab 1
+tab-press 3 title 1
+tab-press 3 title 2
+wait-until assert-dialog true
+assert-dialog-text "Rename “draft text”"
+assert-dialog-text "nothing is saved"
+assert-focus dialog
+dialog-set "New name" "Meeting notes"
+dialog-enter "New name"
+wait-idle
+assert-tab-title 3 "● Meeting notes"
+assert-title "renamed.txt — ~/notes — Stet"
+assert-missing "$TMP/home/notes/Meeting notes.txt"
+assert-focus editor
+
+# A text a comparison opened has no file and no name to give.
+clipboard-text "beta\ngamma\n"
+select-tab 2
+action compare-with-clipboard
+wait-compare
+assert-view-shows 2 "Clipboard"
+assert-tab-count 4
+tab-press 4 title 1
+tab-press 4 title 2
+wait-idle
+assert-dialog false
+assert-tab-count 4
+action clear-compare
+assert-tab-count 3
+assert-focus editor

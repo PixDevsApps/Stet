@@ -1,0 +1,177 @@
+# Keyboard focus (fixed when M3 and M4 were merged): the current tab's editor has the focus
+# after every way of opening a file, switching tabs, a load that ends, and closing the find
+# bar, the palette, a popover or a dialog or pressing a banner button; but a load that ends
+# leaves it where the user put it (the find field). assert-focus waits for two painted frames
+# (GTK moves a focus whose widget went away after a frame) and for idle work, then checks the
+# window's focus widget. Frames are unpaced (a Broadway web client), so that is quick.
+
+# Started with a file, as `stet start.txt`. The window is shown only after the file opened,
+# the order of a live start, which left the focus on the status bar's language button.
+launch-file $TMP/start.txt "hello\nworld\n"
+assert-title "start.txt — $TMP — Stet"
+assert-tab-count 1
+assert-focus editor
+unpace-frames
+assert-focus editor
+
+# The command line into the running window, even from the find field.
+action find
+assert-focus find
+write $TMP/cli.txt "from the command line\n"
+spawn-stet cli.txt
+wait-until assert-tab-count 2
+wait-idle
+assert-title "cli.txt — $TMP — Stet"
+assert-focus editor
+
+# The Open dialog (GTK's own chooser headless; the portal's in a live session).
+write $TMP/dialog.txt "from the Open dialog\n"
+action find
+action open
+choose-file $TMP/dialog.txt
+wait-until assert-title "dialog.txt — $TMP — Stet"
+wait-idle
+assert-focus editor
+
+# A drop, and recent files (one open already, one not).
+write $TMP/dropped.txt "dropped\n"
+action find
+drop $TMP/dropped.txt
+assert-title "dropped.txt — $TMP — Stet"
+assert-focus editor
+action find
+action open-recent $TMP/start.txt
+assert-title "start.txt — $TMP — Stet"
+assert-focus editor
+select-tab 3
+action close-tab
+assert-tab-count 3
+action open-recent $TMP/dialog.txt
+wait-idle
+assert-title "dialog.txt — $TMP — Stet"
+assert-focus editor
+
+# Switching tabs: with the keyboard and with a click on a tab.
+action next-tab
+assert-focus editor
+action previous-tab
+assert-focus editor
+click-tab 2
+assert-focus editor
+# Ctrl+PgDn from the find field keeps it there (Ctrl+Tab too: switcher.stet-test); a click on a
+# tab goes to that document.
+action find
+action next-tab
+assert-focus find
+click-tab 1
+assert-focus editor
+
+# A file that finishes loading takes the focus, unless the user went to the find field.
+write-generated $TMP/big.log log 30000000
+open-start big.log
+wait-idle
+assert-title "big.log — $TMP — Stet"
+assert-focus editor
+write-generated $TMP/other.log log 30000000
+open-start other.log
+action find
+wait-idle
+assert-title "other.log — $TMP — Stet"
+assert-focus find
+
+# Closing the find bar.
+key find Escape
+assert-focus editor
+action replace
+assert-focus find
+key find Escape
+assert-focus editor
+
+# The results panel: Search Results Window moves the focus in, Escape back out.
+find "hello"
+action find-all-in-open-documents
+action search-results
+assert-focus results
+key results Escape
+assert-focus editor
+
+# The palette: closed, running a command, and one that opens the find bar.
+palette
+assert-focus palette
+palette-close
+assert-focus editor
+palette ":2"
+palette-activate
+assert-focus editor
+palette "replace…"
+assert-palette-first "Replace…"
+palette-activate
+assert-focus find
+key find Escape
+assert-focus editor
+
+# The status bar's pickers and menu, and the hamburger menu, closed without a choice.
+action choose-language
+assert-focus language
+popdown language
+assert-focus editor
+action choose-language
+choose-language rust
+assert-focus editor
+action choose-encoding
+assert-focus encoding
+popdown encoding
+assert-focus editor
+popup eol
+popdown eol
+assert-focus editor
+popup menu
+popdown menu
+assert-focus editor
+
+# Dialogs: the save prompt (Cancel, then Discard), the unmappable dialog (Cancel, Go To) and
+# the long-line dialog.
+select-tab 1
+type "dirty "
+action close-tab
+assert-focus dialog
+respond cancel
+assert-focus editor
+action close-tab
+respond discard
+assert-focus editor
+action new-tab
+type "漢字"
+action convert-to-ansi
+wait-until assert-dialog true
+assert-focus dialog
+respond cancel
+assert-focus editor
+action convert-to-ansi
+wait-until assert-dialog true
+dialog-goto 1
+assert-focus editor
+assert-selection "漢"
+write-generated $TMP/long.json json-line 300000
+open long.json
+wait-until assert-dialog true
+assert-focus dialog
+respond breaks
+wait-idle
+assert-focus editor
+
+# Banner buttons, pressed with the focus on them: one whose banner goes away, one whose
+# banner stays.
+write-generated $TMP/medium.rs rust 3000000
+open medium.rs
+assert-banner "Syntax highlighting is off"
+banner-click "Highlight Anyway"
+assert-focus editor
+write $TMP/locked.txt "locked\n"
+chmod $TMP/locked.txt 0444
+open locked.txt
+assert-banner "You may not write “locked.txt”, so it is open read-only."
+banner-click "Copy Command"
+assert-focus editor
+banner-click "Edit Anyway"
+assert-focus editor

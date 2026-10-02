@@ -1,0 +1,88 @@
+---
+source: domain/src/theme.rs
+expression: "theme.style_scheme_xml(\"stet-snapshot\", name)"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<style-scheme id="stet-snapshot" name="legacy_ansi" version="1.0">
+  <author>Stet</author>
+  <description>Generated from the Omarchy palette.</description>
+  <metadata>
+    <property name="variant">dark</property>
+  </metadata>
+  <style name="text" foreground="#ebdbb2" background="#282828"/>
+  <style name="selection" foreground="#fbf1c7" background="#928374"/>
+  <style name="selection-unfocused" foreground="#fbf1c7" background="#685f56"/>
+  <style name="cursor" foreground="#fbf1c7"/>
+  <style name="secondary-cursor" foreground="#928374"/>
+  <style name="current-line" background="#383633"/>
+  <style name="line-numbers" foreground="#928374" background="#282828"/>
+  <style name="current-line-number" foreground="#ebdbb2" background="#383633"/>
+  <style name="bracket-match" foreground="#d79921" bold="true"/>
+  <style name="bracket-mismatch" foreground="#ebdbb2" background="#cc241d"/>
+  <style name="right-margin" foreground="#282828" background="#282828"/>
+  <style name="draw-spaces" foreground="#928374"/>
+  <style name="background-pattern" background="#282828"/>
+  <style name="search-match" background="#655026"/>
+  <style name="snippet-focus" background="#2e3b3b"/>
+  <style name="map-overlay" background="#928374"/>
+  <style name="stet:search-current" foreground="#282828" background="#d79921"/>
+  <style name="stet:smart-highlight" background="#314445"/>
+  <style name="stet:mark" background="#6a2624"/>
+  <style name="stet:token-1" background="#425742"/>
+  <style name="stet:token-2" background="#6e5525"/>
+  <style name="stet:token-3" background="#6e5525"/>
+  <style name="stet:token-4" background="#5f3f4e"/>
+  <style name="stet:token-5" background="#555422"/>
+  <style name="stet:bookmark" foreground="#458588"/>
+  <style name="stet:compare-added" background="#3e3e25"/>
+  <style name="stet:compare-removed" background="#492726"/>
+  <style name="stet:compare-changed" background="#2e3b3b"/>
+  <style name="stet:compare-moved" background="#43343b"/>
+  <style name="stet:compare-changed-text" background="#355253"/>
+  <style name="stet:compare-padding" background="#433f3b"/>
+  <style name="def:comment" foreground="#928374" italic="true"/>
+  <style name="def:doc-comment" foreground="#928374" italic="true"/>
+  <style name="def:shebang" foreground="#928374" bold="true"/>
+  <style name="def:doc-comment-element" foreground="#928374" bold="true" italic="true"/>
+  <style name="def:constant" foreground="#d79921"/>
+  <style name="def:number" foreground="#d79921"/>
+  <style name="def:floating-point" foreground="#d79921"/>
+  <style name="def:decimal" foreground="#d79921"/>
+  <style name="def:base-n-integer" foreground="#d79921"/>
+  <style name="def:boolean" foreground="#d79921"/>
+  <style name="def:special-constant" foreground="#d79921"/>
+  <style name="def:string" foreground="#98971a"/>
+  <style name="def:character" foreground="#98971a"/>
+  <style name="def:special-char" foreground="#689d6a"/>
+  <style name="def:keyword" foreground="#b16286"/>
+  <style name="def:statement" foreground="#b16286"/>
+  <style name="def:operator" foreground="#689d6a"/>
+  <style name="def:function" foreground="#458588"/>
+  <style name="def:builtin" foreground="#458588"/>
+  <style name="def:type" foreground="#d79921"/>
+  <style name="def:preprocessor" foreground="#b16286"/>
+  <style name="def:error" foreground="#cc241d" underline="error" underline-color="#cc241d"/>
+  <style name="def:warning" underline="error" underline-color="#d79921"/>
+  <style name="def:note" foreground="#282828" background="#d79921" bold="true"/>
+  <style name="def:net-address" foreground="#458588" underline="low"/>
+  <style name="def:underlined" underline="single"/>
+  <style name="def:emphasis" italic="true"/>
+  <style name="def:strong-emphasis" bold="true"/>
+  <style name="def:inline-code" foreground="#98971a"/>
+  <style name="def:preformatted-section" foreground="#98971a"/>
+  <style name="def:insertion" foreground="#98971a"/>
+  <style name="def:deletion" foreground="#cc241d" strikethrough="true"/>
+  <style name="def:link-text" foreground="#458588"/>
+  <style name="def:link-symbol" foreground="#928374"/>
+  <style name="def:link-destination" foreground="#458588" italic="true" underline="low"/>
+  <style name="def:list-marker" foreground="#689d6a" bold="true"/>
+  <style name="def:thematic-break" foreground="#928374"/>
+  <style name="def:heading" foreground="#cc241d" bold="true"/>
+  <style name="def:heading0" foreground="#cc241d" bold="true"/>
+  <style name="def:heading1" foreground="#cc241d" bold="true"/>
+  <style name="def:heading2" foreground="#d79921" bold="true"/>
+  <style name="def:heading3" foreground="#d79921" bold="true"/>
+  <style name="def:heading4" foreground="#98971a" bold="true"/>
+  <style name="def:heading5" foreground="#458588" bold="true"/>
+  <style name="def:heading6" foreground="#b16286" bold="true"/>
+</style-scheme>

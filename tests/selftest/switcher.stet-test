@@ -1,0 +1,115 @@
+# The Ctrl+Tab switcher (M8): tabs in most-recently-used order. Ctrl held and released goes
+# through the window's key controller (`hold-ctrl`, `release-ctrl`), as real keys do; the
+# Tab presses are the registry's accelerators (`next-recent-tab`, `previous-recent-tab`).
+# Real key presses reach the app only in the live session (PLAN.md's M8 live checks).
+
+write $TMP/a.txt "alpha\n"
+write $TMP/b.txt "beta\n"
+write $TMP/c.txt "gamma\n"
+open a.txt
+open b.txt
+open c.txt
+assert-tab-count 3
+assert-title "c.txt — $TMP — Stet"
+assert-recent-order "c.txt|b.txt|a.txt"
+assert-accels
+
+# A quick tap (Ctrl down, Tab, Ctrl up) switches to the previous tab, without the switcher.
+hold-ctrl
+action next-recent-tab
+assert-switching true
+release-ctrl
+assert-switching false
+assert-switcher false
+assert-title "b.txt — $TMP — Stet"
+assert-recent-order "b.txt|c.txt|a.txt"
+assert-focus editor
+hold-ctrl
+action next-recent-tab
+release-ctrl
+assert-title "c.txt — $TMP — Stet"
+assert-recent-order "c.txt|b.txt|a.txt"
+
+# Held: the switcher shows after a moment, Tab moves on (wrapping), Shift+Tab back, and
+# releasing Ctrl switches. Previews don't reorder the tabs.
+hold-ctrl
+action next-recent-tab
+assert-switcher false
+sleep 400
+assert-switcher true b.txt
+action next-recent-tab
+assert-switcher true a.txt
+action next-recent-tab
+assert-switcher true c.txt
+action previous-recent-tab
+assert-switcher true a.txt
+assert-title "c.txt — $TMP — Stet"
+release-ctrl
+assert-switcher false
+assert-title "a.txt — $TMP — Stet"
+assert-recent-order "a.txt|c.txt|b.txt"
+assert-focus editor
+
+# Escape cancels; Enter switches at once.
+hold-ctrl
+action next-recent-tab
+action next-recent-tab
+sleep 300
+assert-switcher true b.txt
+switcher-key Escape
+assert-switching false
+assert-switcher false
+release-ctrl
+assert-title "a.txt — $TMP — Stet"
+assert-recent-order "a.txt|c.txt|b.txt"
+hold-ctrl
+action previous-recent-tab
+switcher-key Return
+assert-switching false
+assert-title "b.txt — $TMP — Stet"
+release-ctrl
+assert-title "b.txt — $TMP — Stet"
+assert-recent-order "b.txt|a.txt|c.txt"
+
+# Without Ctrl held (the palette, the menu) the switch happens at once.
+action next-recent-tab
+assert-title "a.txt — $TMP — Stet"
+palette "next recent tab"
+palette-activate
+assert-title "b.txt — $TMP — Stet"
+assert-focus editor
+
+# Tab order stays on Ctrl+PgDn and Ctrl+PgUp.
+action next-tab
+assert-title "c.txt — $TMP — Stet"
+action previous-tab
+assert-title "b.txt — $TMP — Stet"
+assert-recent-order "b.txt|c.txt|a.txt"
+
+# The selected tab closed during a switch leaves it, and the selection moves on.
+hold-ctrl
+action next-recent-tab
+sleep 300
+assert-switcher true c.txt
+select-tab 3
+action close-tab
+assert-tab-count 2
+assert-switching true
+assert-switcher true a.txt
+release-ctrl
+assert-switching false
+assert-title "a.txt — $TMP — Stet"
+assert-recent-order "a.txt|b.txt"
+
+# A new tab is the most recent one.
+action new-tab
+assert-recent-order "Untitled 1|a.txt|b.txt"
+
+# From the find field, Ctrl+Tab switches and the typing stays in the field.
+find "a"
+assert-focus find
+hold-ctrl
+action next-recent-tab
+release-ctrl
+assert-title "a.txt — $TMP — Stet"
+assert-focus find

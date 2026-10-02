@@ -1,0 +1,115 @@
+# The rectangular clipboard (M6, ADR-016): Copy and Cut of a rectangle offer the block as
+# application/x-stet-column-block and as plain text; a block pastes as a rectangle in column
+# mode, at a normal caret and past the end of the text; plain text pastes into a rectangle by
+# its line count (one line typed on every row, several lines as a block); plain text outside
+# column mode is GTK's own paste. Headless, the clipboard belongs to this process; pasting from
+# another application is on the live list.
+unpace-frames
+type "abcdef\nabc\nabcdef\n"
+column-checkpoint start
+
+# Copy: the block and the same text as plain text. A row from a line that ends inside the
+# rectangle is shorter; virtual space copies nothing.
+column-select 1 3 3 6
+column-key "<Control>c"
+assert-clipboard-mime application/x-stet-column-block "cde\nc\ncde"
+assert-clipboard-contains "cde\nc\ncde"
+assert-column 1 3 3 6
+assert-text "abcdef\nabc\nabcdef\n"
+# Copy of a column caret (no cells) leaves the clipboard alone.
+column-select 1 1 3 1
+column-key "<Control>c"
+assert-clipboard-mime application/x-stet-column-block "cde\nc\ncde"
+column-key Escape
+
+# Paste the block in column mode: row by row from the caret's column, padded so the text to the
+# right stays aligned; a column caret after the block on its rows, the cursor on the top row.
+column-select 1 1 3 1
+column-key "<Control>v"
+wait-until assert-text "cdeabcdef\nc  abc\ncdeabcdef\n"
+assert-column 3 4 1 4
+column-key Escape
+assert-undo-steps start 1
+action undo
+assert-text "abcdef\nabc\nabcdef\n"
+
+# Cut: the block goes to the clipboard and out of the text, in one undo step.
+column-select 1 2 3 4
+column-key "<Control>x"
+assert-text "adef\na\nadef\n"
+assert-column 1 2 3 2
+assert-clipboard-mime application/x-stet-column-block "bc\nbc\nbc"
+column-key Escape
+assert-undo-steps start 1
+# Pasting it back where it was restores the text.
+column-select 1 2 3 2
+column-key "<Shift>Insert"
+wait-until assert-text "abcdef\nabc\nabcdef\n"
+column-key Escape
+
+# A block at a normal caret: inserted as a rectangle from the caret's column, onto the empty
+# last line too; the caret ends after the first row, outside column mode. One undo step.
+column-checkpoint before-caret-paste
+cursor 2 2
+column-key "<Control>v"
+wait-until assert-text "abcdef\nabcbc\nabcbcdef\n bc"
+assert-column none
+assert-cursor 2 4
+assert-undo-steps before-caret-paste 1
+action undo
+
+# Past the end of the text, the rows go on new lines.
+action select-all
+column-commit "12\n34"
+clipboard-text "x\ny\nz"
+column-select 2 2 2 2
+column-key "<Control>v"
+wait-until assert-text "12\n3x4\n y\n z"
+column-key Escape
+
+# Plain text from another application, one line: typed on every row of the rectangle, in
+# place of its block when it has one.
+action select-all
+column-commit "abcdef\nabc\nabcdef\n"
+clipboard-text "XY\n"
+column-select 1 1 3 1
+column-key "<Control>v"
+wait-until assert-text "XYabcdef\nXYabc\nXYabcdef\n"
+assert-column 1 3 3 3
+column-key Escape
+action undo
+column-select 1 2 3 4
+action paste
+wait-until assert-text "aXYdef\naXY\naXYdef\n"
+column-key Escape
+action undo
+
+# Several lines with the same count as the rectangle's rows: a block, CR LF and all.
+clipboard-text "1\r\n22\r\n333\r\n"
+column-select 1 1 3 1
+column-key "<Control>v"
+wait-until assert-text "1  abcdef\n22 abc\n333abcdef\n"
+column-key Escape
+action undo
+# More lines than rows: still a block, which runs on below the rectangle.
+clipboard-text "a\nb\nc\nd"
+column-select 1 1 2 1
+column-key "<Control>v"
+wait-until assert-text "aabcdef\nbabc\ncabcdef\nd"
+column-key Escape
+action undo
+
+# Outside column mode, plain text is GTK's paste.
+clipboard-text "plain "
+cursor 1 1
+column-key "<Control>v"
+wait-until assert-text "plain abcdef\nabc\nabcdef\n"
+assert-column none
+
+# Copy and Cut from the menu and the palette act on the rectangle too.
+column-select 2 1 3 3
+action copy
+assert-clipboard-mime application/x-stet-column-block "ab\nab"
+action cut
+assert-text "plain abcdef\nc\ncdef\n"
+assert-focus editor

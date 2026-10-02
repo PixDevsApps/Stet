@@ -1,0 +1,183 @@
+# Split view (M7): Move to Other View and Clone to Other View fill the second view; Switch
+# View (Ctrl+Alt+O, F8) and the keyboard focus decide the active view, where commands act and
+# new tabs open, and what the status bar and the window title show. A clone shares its
+# document and buffer (one undo history, one set of bookmarks and marks, the banners) with a
+# caret and scroll position of its own; only one of its views is in column mode at a time.
+# Closing the last tab of a view collapses the split. The menu is at the start of the first
+# strip on screen.
+
+write $TMP/a.txt "alpha\nbeta\ngamma\n"
+write $TMP/b.txt "one\ntwo\nthree\n"
+open a.txt b.txt
+assert-tab-count 2
+assert-split false
+assert-active-view 1
+assert-action-enabled switch-view false
+assert-view-tabs 1 2
+assert-view-tabs 2 0
+
+# Move to Other View: b goes to the second view, which becomes the active one.
+action move-to-other-view
+assert-split true
+assert-view-tabs 1 1
+assert-view-tabs 2 1
+assert-active-view 2
+assert-view-shows 1 "a.txt"
+assert-view-shows 2 "b.txt"
+assert-title "b.txt — $TMP — Stet"
+assert-focus editor
+assert-action-enabled switch-view true
+
+# Switch View moves the focus and the active view; the title and status bar follow.
+action switch-view
+assert-active-view 1
+assert-title "a.txt — $TMP — Stet"
+assert-status "4 lines, 17 chars"
+assert-focus editor
+# The focus moving into a view makes it the active one, as a click there does.
+view-focus 2
+assert-active-view 2
+assert-title "b.txt — $TMP — Stet"
+assert-status "4 lines, 14 chars"
+assert-focus editor
+
+# New tabs open in the active view; commands act there.
+action new-tab
+assert-view-tabs 2 2
+assert-view-shows 2 "Untitled 1"
+assert-view-shows 1 "a.txt"
+action close-tab
+assert-view-tabs 2 1
+assert-view-shows 2 "b.txt"
+
+# Clone to Other View: a second tab over the same document, in the other view.
+view-focus 1
+action clone-to-other-view
+assert-view-tabs 2 2
+assert-active-view 2
+assert-view-shows 2 "a.txt"
+assert-same-document 1 3
+assert-focus editor
+
+# One buffer: an edit in the clone shows in both views and marks both tabs, and Undo in the
+# other view takes it back.
+cursor 2 1
+type "BETA "
+assert-text "alpha\nBETA beta\ngamma\n"
+assert-tab-title 1 "● a.txt"
+assert-tab-title 3 "● a.txt"
+view-focus 1
+assert-text "alpha\nBETA beta\ngamma\n"
+# Each view has its own caret.
+assert-view-cursor 1 1 1
+assert-view-cursor 2 2 6
+cursor 3 2
+assert-view-cursor 1 3 2
+assert-view-cursor 2 2 6
+action undo
+assert-text "alpha\nbeta\ngamma\n"
+assert-tab-title 3 "a.txt"
+# The clone's caret was after the text Undo took away: it stays where that text was.
+view-focus 2
+assert-cursor 2 1
+
+# Bookmarks and marks belong to the document: both views show them.
+cursor 2 1
+action toggle-bookmark
+view-focus 1
+assert-bookmarks 2
+action mark
+find "gamma"
+action mark-all
+key find Escape
+view-focus 2
+assert-marks mark 1
+assert-bookmarks 2
+
+# Column mode: a rectangle in one view ends the other view's.
+column-select 1 1 2 3
+assert-column 1 1 2 3
+view-focus 1
+column-select 1 2 3 3
+assert-column 1 2 3 3
+view-focus 2
+assert-column none
+
+# The banners show in both views of a document that changed on disk with unsaved changes.
+cursor 1 1
+type "x"
+write $TMP/a.txt "changed on disk\n"
+window-focus
+wait-until assert-banner "changed on disk"
+view-focus 1
+assert-banner "changed on disk"
+
+# Closing the clone keeps the document open, without asking, unsaved changes and all.
+view-focus 2
+action close-tab
+assert-dialog false
+assert-view-tabs 2 1
+assert-view-shows 2 "b.txt"
+view-focus 1
+assert-dirty true
+assert-text "xalpha\nbeta\ngamma\n"
+assert-banner "changed on disk"
+
+# Closing the second view's last tab collapses the split; the main view is active.
+view-focus 2
+action close-tab
+assert-split false
+assert-view-tabs 2 0
+assert-active-view 1
+assert-title "*a.txt — $TMP — Stet"
+assert-focus editor
+# With one tab there is nothing to move; cloning it splits the window again.
+assert-action-enabled move-to-other-view false
+action clone-to-other-view
+assert-split true
+assert-same-document 1 2
+action close-tab
+assert-split false
+assert-tab-count 1
+assert-dirty true
+
+# A tab dragged onto the other view's strip moves there, as Move to Other View does: no tab
+# closes or opens, and it stays in the most-recently-used order (the view it left shows the
+# other tab, which comes first).
+write $TMP/c.txt "c\n"
+open c.txt
+assert-view-tabs 1 2
+assert-recent-order "c.txt|a.txt"
+drag-tab 2
+assert-split true
+assert-view-tabs 1 1
+assert-view-tabs 2 1
+assert-tab-count 2
+assert-recent-order "a.txt|c.txt"
+drag-tab 2
+assert-split false
+assert-view-tabs 1 2
+assert-tab-count 2
+assert-tab-title 2 "c.txt"
+
+# The menu sits at the start of the first strip on screen (1.3): the main view's, or the second
+# view's while the main view has no tab. It opens into the window, from the button's left edge
+# (1.3.1). Each of its pages is as wide as its own items, not as the widest submenu, and a page
+# taller than the room below the button scrolls (1.3.2).
+assert-menu-at 1
+popup menu
+assert-menu-within
+assert-menu-pages
+popdown menu
+drag-tab 2
+assert-split true
+assert-menu-at 1
+view-focus 1
+action close-tab
+respond discard
+assert-view-tabs 1 0
+assert-view-tabs 2 1
+assert-menu-at 2
+action clone-to-other-view
+assert-split true
+assert-menu-at 1

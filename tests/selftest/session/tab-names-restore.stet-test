@@ -1,0 +1,35 @@
+# Child of tab-names.stet-test: the named tabs come back with their names, before and after
+# their text is loaded; the other one still follows its first line. A tab renamed before its
+# text is loaded keeps the new name.
+assert-tab-count 3
+assert-tab-title 1 "● Packing list"
+assert-tab-title 2 "● unnamed draft"
+assert-tab-title 3 "● Ideas"
+assert-stub 1 true
+assert-stub 3 true
+assert-title "*unnamed draft — Stet"
+tab-menu 3
+action rename-file
+assert-dialog-text "Rename “Ideas”"
+dialog-set "New name" "Better ideas"
+dialog-enter "New name"
+wait-idle
+tab-menu-close
+assert-tab-title 3 "● Better ideas"
+assert-stub 3 true
+session-commit
+session-flush
+assert-session-contains $TMP/state/stet "\"custom_name\": \"Packing list\""
+assert-session-contains $TMP/state/stet "\"custom_name\": \"Better ideas\""
+assert-session-lacks $TMP/state/stet "\"custom_name\": \"unnamed draft\""
+select-tab 1
+wait-idle
+assert-stub 1 false
+assert-text "socks\nshoes\n"
+assert-tab-title 1 "● Packing list"
+assert-title "*Packing list — Stet"
+select-tab 3
+wait-idle
+assert-stub 3 false
+assert-text "second named\n"
+assert-tab-title 3 "● Better ideas"

@@ -1,0 +1,148 @@
+# Bookmarks (M7): Toggle Bookmark (Ctrl+Alt+K, Ctrl+F2) on the caret's line and a click in
+# the gutter; Next and Previous Bookmark (Ctrl+Alt+L and Ctrl+Alt+J, F2 and Shift+F2) wrap
+# around and are jumps to come back from; Clear All and Inverse. The operations of
+# Search › Bookmark are one undo step each, and Undo and Redo bring their bookmarks back.
+# Bookmarks move with typing and with bulk edits (ADR-003 amendment).
+
+set-text "one\ntwo\nthree\nfour\nfive\nsix\n"
+assert-gutter
+assert-bookmarks none
+action next-bookmark
+assert-toast "There are no bookmarks"
+
+cursor 2 1
+action toggle-bookmark
+assert-bookmarks 2
+gutter-click 4
+assert-bookmarks 2,4
+gutter-click 4
+assert-bookmarks 2
+gutter-click 5
+assert-bookmarks 2,5
+assert-action-enabled next-bookmark true
+assert-action-enabled remove-bookmarked-lines true
+assert-focus editor
+
+# Next and Previous wrap around.
+cursor 1 1
+action next-bookmark
+assert-cursor 2 1
+action next-bookmark
+assert-cursor 5 1
+action next-bookmark
+assert-cursor 2 1
+action previous-bookmark
+assert-cursor 5 1
+assert-focus editor
+
+# Typing moves bookmarks along with their lines.
+cursor 1 1
+type "zero\n"
+assert-bookmarks 3,6
+action undo
+assert-text "one\ntwo\nthree\nfour\nfive\nsix\n"
+assert-bookmarks 2,5
+
+# Copy Bookmarked Lines, Inverse Bookmarks, Clear All Bookmarks.
+action copy-bookmarked-lines
+assert-clipboard-contains "two\nfive\n"
+action inverse-bookmarks
+assert-bookmarks 1,3,4,6,7
+action inverse-bookmarks
+assert-bookmarks 2,5
+action clear-bookmarks
+assert-bookmarks none
+gutter-click 2
+gutter-click 5
+assert-bookmarks 2,5
+
+# Remove Bookmarked Lines is one undo step; Undo brings back the lines and their bookmarks,
+# Redo removes them again.
+column-checkpoint before-remove
+action remove-bookmarked-lines
+assert-text "one\nthree\nfour\nsix\n"
+assert-bookmarks none
+assert-line-op false false
+assert-undo-steps before-remove 1
+assert-text "one\nthree\nfour\nsix\n"
+action undo
+assert-text "one\ntwo\nthree\nfour\nfive\nsix\n"
+assert-bookmarks 2,5
+action redo
+assert-text "one\nthree\nfour\nsix\n"
+assert-bookmarks none
+action undo
+assert-bookmarks 2,5
+
+# Remove Non-Bookmarked Lines keeps the bookmarked lines, bookmarked.
+action remove-unbookmarked-lines
+assert-text "two\nfive\n"
+assert-bookmarks 1,2
+action undo
+assert-text "one\ntwo\nthree\nfour\nfive\nsix\n"
+assert-bookmarks 2,5
+action redo
+assert-bookmarks 1,2
+action undo
+assert-bookmarks 2,5
+
+# Cut Bookmarked Lines: the lines go to the clipboard.
+action cut-bookmarked-lines
+assert-clipboard-contains "two\nfive\n"
+assert-text "one\nthree\nfour\nsix\n"
+action undo
+assert-bookmarks 2,5
+
+# Paste to (Replace) Bookmarked Lines: every bookmarked line becomes the clipboard's text.
+clipboard-text "new"
+action paste-to-bookmarked-lines
+wait-idle
+assert-text "one\nnew\nthree\nfour\nnew\nsix\n"
+assert-bookmarks 2,5
+action undo
+assert-text "one\ntwo\nthree\nfour\nfive\nsix\n"
+assert-bookmarks 2,5
+
+# A bulk edit (Replace All of 2,756 matches, one replacement in the buffer) moves the
+# bookmarks with their lines, and Undo and Redo bring them back.
+write-generated $TMP/numbers.txt numbers 30000
+open numbers.txt
+wait-idle
+cursor 3 1
+action toggle-bookmark
+cursor 2000 1
+action toggle-bookmark
+assert-bookmarks 3,2000
+action replace
+find-mode regex
+find "^"
+replace-text "x\n"
+action replace-all
+wait-idle
+assert-replace-stats 2756 true
+assert-bookmarks 6,4000
+assert-bookmark-steps 1
+action undo
+assert-bookmarks 3,2000
+action redo
+assert-bookmarks 6,4000
+action undo
+assert-bookmarks 3,2000
+key find Escape
+assert-focus editor
+
+# A bookmark jump is a place to come back to.
+cursor 1 1
+action next-bookmark
+action next-bookmark
+assert-cursor 2000 1
+action go-back
+assert-cursor 3 1
+
+# A sort of the whole document (a text tool that replaces the text at once): Undo brings the
+# bookmarks back to their lines.
+action sort-lexical-descending
+wait-tool
+assert-tool-stats false false
+action undo
+assert-bookmarks 3,2000

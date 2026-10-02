@@ -1,0 +1,45 @@
+# Backup cost by document size (M2; not in CI, run it with the release build). A dirty document
+# of 1, 10 and 50 MB (decimal; 50 MB stays under the 50 MiB large-file mode), each backed up by
+# one commit: how long taking its text blocked the GTK thread (the only part on it), the
+# longest main-loop block meanwhile, and how long the store's thread took to write it.
+unpace-frames
+write-generated $TMP/1mb.log log 1000000
+write-generated $TMP/10mb.log log 10000000
+write-generated $TMP/50mb.log log 50000000
+
+open 1mb.log
+type "x"
+heartbeat-start
+session-commit
+session-flush
+report-session
+assert-max-block 1000
+
+open 10mb.log
+type "x"
+heartbeat-start
+session-commit
+session-flush
+report-session
+assert-max-block 1000
+
+# Over 16 Mi characters a document is backed up only once it was left alone for 2 s.
+open 50mb.log
+type "x"
+session-commit
+session-flush
+assert-backed-up false
+sleep 2500
+heartbeat-start
+session-commit
+session-flush
+assert-backed-up true
+report-session
+assert-max-block 1000
+
+# ... and at most once a minute.
+type "y"
+sleep 2500
+session-commit
+session-flush
+assert-backed-up false

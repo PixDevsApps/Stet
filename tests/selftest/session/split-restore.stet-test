@@ -1,0 +1,21 @@
+# Child of split-session.stet-test: the split comes back with its views, the clone over the
+# same document with its own caret, the bookmark, the tab each view shows and the divider.
+assert-tab-count 3
+assert-split true
+assert-active-view 1
+assert-view-tabs 1 1
+assert-view-tabs 2 2
+assert-view-shows 1 "one.txt"
+assert-view-shows 2 "one.txt"
+assert-same-document 1 3
+wait-idle
+assert-text "one\ntwo\nthree\nfour\n"
+assert-bookmarks 3
+assert-cursor 3 1
+assert-view-cursor 2 4 2
+assert-split-position 400
+assert-title "one.txt — $TMP/files — Stet"
+assert-focus editor
+view-focus 2
+assert-cursor 4 2
+assert-bookmarks 3

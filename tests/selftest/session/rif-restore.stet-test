@@ -1,0 +1,27 @@
+# Child of replace-in-files.stet-test: Replace in Files reaches a restored tab that hasn't
+# loaded its text; it loads, takes the change as one undoable edit, and is saved.
+assert-tab-count 2
+assert-stub 1 true
+assert-title "front.txt — $TMP/tree — Stet"
+action find-in-files
+find "TODO"
+replace-text "DONE"
+fif-folder $TMP/tree
+fif-filters "*.*"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+assert-rif open 1
+assert-rif replacements 1
+assert-stub 1 false
+assert-title "front.txt — $TMP/tree — Stet"
+select-tab 1
+assert-text "DONE in a restored tab\n"
+assert-dirty false
+assert-file $TMP/tree/stub.txt "DONE in a restored tab\n"
+action undo
+assert-text "TODO in a restored tab\n"
+assert-dirty true
+action redo
+assert-dirty false

@@ -1,0 +1,23 @@
+# Not in CI. Replace All over 1M log lines through our own engine (M4 exit criterion: at most
+# 5 s end to end and one undo step), with how long the GTK thread is blocked, and the undo.
+# The 149 MB fixture opens through the file pipeline in large-file mode (M3), so highlight-all
+# is off.
+#
+#   python3 tools/gen-fixtures.py search-1m.log
+#   cargo build --release
+#   STET_HEADLESS_TIMEOUT=3600 tools/headless.sh 42 target/release/stet --self-test tests/selftest/perf-replace.stet-test
+
+open $DIR/../../target/fixtures/search-1m.log
+wait-idle-low 900
+action replace
+find-mode regex
+find "user=(\\w+)"
+replace-text "user=\\U\\1\\E"
+wait-idle-low 900
+text-checkpoint original
+bench-replace-all 1000000
+assert-replace-stats 1000000 true
+assert-can-undo true
+bench-undo
+assert-text-checkpoint original
+assert-can-undo false

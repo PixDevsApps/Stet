@@ -1,0 +1,112 @@
+# Quick open (Ctrl+P, M8): the open documents (most recently used first), the recent files,
+# then the files under the project root (the git root of the current document's folder),
+# fuzzy-ranked with the matched characters highlighted. The project's files come from a walk
+# that respects .gitignore and leaves out hidden and binary-looking files; `name:line` opens at
+# a line, `:line` goes to a line of the current document; Escape closes and the editor gets
+# the focus back.
+
+mkdir $TMP/proj/.git
+write $TMP/proj/.gitignore "target/\n"
+write $TMP/proj/src/main.rs "fn main() {\n    println!(\"hi\");\n}\n"
+write $TMP/proj/src/model.rs "pub struct Model;\n\nimpl Model {}\n"
+write $TMP/proj/src/window/mod.rs "mod a;\nmod b;\nmod c;\n"
+write $TMP/proj/docs/guide.md "# Guide\n"
+write $TMP/proj/target/debug/build.rs "ignored\n"
+write $TMP/proj/.hidden/secret.txt "hidden\n"
+write $TMP/proj/assets/icon.png "not text"
+generate-tree $TMP/proj/gen 2000 1
+write $TMP/elsewhere/notes.txt "recent notes\n"
+open elsewhere/notes.txt
+action close-tab
+open proj/src/main.rs
+assert-title "main.rs — $TMP/proj/src — Stet"
+assert-accels
+
+quick-open
+wait-quick-open
+assert-quick-open-shown true
+assert-focus quick-open
+assert-quick-open-files 2003
+assert-quick-open-note "2,003 files"
+# Nothing typed: the open document, then the recent file, then project files.
+assert-quick-open-row 0 "$TMP/proj/src/main.rs"
+assert-quick-open-row 1 "$TMP/elsewhere/notes.txt"
+assert-quick-open-count 50
+
+# Fuzzy ranking: a file-name hit first, its matched characters highlighted; ignored, hidden
+# and binary-looking files are not listed.
+quick-open-type "model"
+wait-quick-open
+assert-quick-open-row 0 "src/model.rs"
+assert-quick-open-positions 0 "4,5,6,7,8"
+assert-quick-open-count 1
+quick-open-type "build"
+wait-quick-open
+assert-quick-open-count 0
+quick-open-type "secret"
+wait-quick-open
+assert-quick-open-count 0
+quick-open-type "icon"
+wait-quick-open
+assert-quick-open-count 0
+quick-open-type "f1999"
+wait-quick-open
+assert-quick-open-row 0 "gen/d19/f1999.txt"
+quick-open-type "wmod"
+wait-quick-open
+assert-quick-open-row 0 "src/window/mod.rs"
+
+# Escape closes and gives the editor the focus back.
+quick-open-close
+assert-quick-open-shown false
+assert-focus editor
+assert-title "main.rs — $TMP/proj/src — Stet"
+
+# Enter opens the file; name:line opens it at the line.
+quick-open "model.rs:3"
+wait-quick-open
+assert-quick-open-row 0 "src/model.rs"
+quick-open-activate
+assert-title "model.rs — $TMP/proj/src — Stet"
+assert-cursor 3 1
+assert-focus editor
+# The open documents come first now, the current one on top.
+quick-open
+wait-quick-open
+assert-quick-open-row 0 "$TMP/proj/src/model.rs"
+assert-quick-open-row 1 "$TMP/proj/src/main.rs"
+assert-quick-open-row 2 "$TMP/elsewhere/notes.txt"
+assert-quick-open-lacks "src/model.rs"
+# An open document switches tabs, at a line.
+quick-open-type "main:2:5"
+wait-quick-open
+assert-quick-open-row 0 "$TMP/proj/src/main.rs"
+quick-open-activate
+assert-title "main.rs — $TMP/proj/src — Stet"
+assert-cursor 2 5
+# A recent file opens.
+quick-open "notes"
+wait-quick-open
+assert-quick-open-row 0 "$TMP/elsewhere/notes.txt"
+quick-open-activate
+assert-title "notes.txt — $TMP/elsewhere — Stet"
+
+# :line goes to a line of the current document; Go Back returns.
+action next-recent-tab
+assert-title "main.rs — $TMP/proj/src — Stet"
+cursor 1 1
+quick-open ":3"
+assert-quick-open-row 0 ""
+quick-open-activate
+assert-cursor 3 1
+action go-back
+assert-cursor 1 1
+
+# Ctrl+P is the registry's quick-open; the palette lists it.
+palette "quick open"
+assert-palette-first "Quick Open…"
+palette-activate
+wait-quick-open
+assert-quick-open-shown true
+quick-open-close
+assert-focus editor

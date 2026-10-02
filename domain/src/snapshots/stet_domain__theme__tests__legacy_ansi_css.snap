@@ -1,0 +1,37 @@
+---
+source: domain/src/theme.rs
+expression: theme.adwaita_css()
+---
+:root {
+  --window-bg-color: #282828;
+  --window-fg-color: #ebdbb2;
+  --view-bg-color: #282828;
+  --view-fg-color: #ebdbb2;
+  --headerbar-bg-color: #1e1e1e;
+  --headerbar-fg-color: #ebdbb2;
+  --headerbar-backdrop-color: #1e1e1e;
+  --headerbar-shade-color: #282828;
+  --sidebar-bg-color: #1e1e1e;
+  --sidebar-fg-color: #ebdbb2;
+  --sidebar-backdrop-color: #1e1e1e;
+  --popover-bg-color: #141414;
+  --popover-fg-color: #ebdbb2;
+  --dialog-bg-color: #141414;
+  --dialog-fg-color: #ebdbb2;
+  --card-bg-color: #282828;
+  --card-fg-color: #ebdbb2;
+  --border-color: #282828;
+  --accent-bg-color: #458588;
+  --accent-fg-color: #282828;
+  --accent-color: #458588;
+  --error-bg-color: #cc241d;
+  --error-fg-color: #ebdbb2;
+  --error-color: #cc241d;
+  --warning-bg-color: #d79921;
+  --warning-fg-color: #282828;
+  --warning-color: #d79921;
+  --success-bg-color: #98971a;
+  --success-fg-color: #282828;
+  --success-color: #98971a;
+  --window-radius: 0px;
+}

@@ -1,0 +1,93 @@
+# Indentation (M5): detected when a file opens, the settings' per language otherwise, and the
+# status bar's item and popover (keyboard focus in and back out); exact tab stops after a
+# width change (ADR-015). Then the document map toggle, never in large-file mode.
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/indent.stet-test
+
+unpace-frames
+
+# A new document: tabs, four wide; the status bar says so.
+assert-indentation "Tab Width: 4"
+assert-status "| Tab Width: 4 |"
+# A language's defaults: Rust four spaces, YAML two, a Makefile tabs.
+action set-language rust
+assert-indentation "Spaces: 4"
+action set-language yaml
+assert-indentation "Spaces: 2"
+action set-language makefile
+assert-indentation "Tab Width: 4"
+
+# Opened files keep the indentation they use.
+write $TMP/two.py "def f():\n  if x:\n    return 1\n"
+open two.py
+assert-language python3
+assert-indentation "Spaces: 2"
+assert-status "| Spaces: 2 |"
+write $TMP/tabs.c "int f(void)\n{\n\treturn 1;\n}\n"
+open tabs.c
+assert-indentation "Tab Width: 4"
+write $TMP/plain.txt "nothing indented\nat all\n"
+open plain.txt
+assert-indentation "Tab Width: 4"
+
+# The popover: the focus goes in, a choice applies to this document, Escape-like closing
+# gives the focus back to the editor.
+select-tab 2
+assert-title "tabs.c — $TMP — Stet"
+popup indentation
+assert-focus indentation
+indent-choose width:8
+assert-indentation "Tab Width: 8"
+assert-status "| Tab Width: 8 |"
+assert-tab-grid
+indent-choose width:3
+assert-tab-grid
+indent-choose spaces
+assert-indentation "Spaces: 3"
+popdown indentation
+assert-focus editor
+# The choice sticks when the language changes.
+action set-language rust
+assert-indentation "Spaces: 3"
+# Converting the indentation rewrites the leading tabs or spaces, one undo step.
+indent-choose width:4
+indent-choose to-spaces
+assert-text "int f(void)\n{\n    return 1;\n}\n"
+assert-indentation "Spaces: 4"
+indent-choose to-tabs
+assert-text "int f(void)\n{\n\treturn 1;\n}\n"
+assert-indentation "Tab Width: 4"
+action undo
+assert-text "int f(void)\n{\n    return 1;\n}\n"
+# Detect from Content, in the popover and the palette.
+indent-choose detect
+assert-indentation "Spaces: 4"
+assert-toast "Indentation detected: Spaces: 4"
+action undo
+action detect-indentation
+assert-indentation "Tab Width: 4"
+palette "indentation"
+assert-palette-contains "Indentation…"
+palette-close
+action choose-indentation
+assert-focus indentation
+popdown indentation
+assert-focus editor
+
+# The document map: off by default, a View toggle, never in large-file mode.
+assert-action-state document-map false
+assert-map false
+action document-map
+assert-action-state document-map true
+assert-map true
+select-tab 1
+assert-map true
+action document-map
+assert-map false
+action document-map
+write-generated $TMP/huge.log log 55000000
+open huge.log
+wait-idle
+assert-large true
+assert-map false
+select-tab 1
+assert-map true

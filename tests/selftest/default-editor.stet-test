@@ -1,0 +1,42 @@
+# Set as Default Editor… (M5, INTEGRATIONS.md section 4), in a sandbox: the run has its own
+# home and XDG directories (sandbox-home) and its own Omarchy state directory ($TMP/omarchy),
+# so neither the user's mimeapps.list nor ~/.local/state/omarchy/defaults/editor is touched.
+# A stand-in desktop entry lets xdg-mime report Stet as the default.
+# Run: tools/headless.sh 72 target/debug/stet --self-test tests/selftest/default-editor.stet-test
+
+sandbox-home
+unpace-frames
+write $TMP/home/.local/share/applications/io.github.pixdevsapps.Stet.desktop "[Desktop Entry]\nType=Application\nName=Stet\nExec=env %F\nMimeType=text/plain;\n"
+write $TMP/omarchy/defaults/editor "code\n"
+
+# It says what it will change and asks first; Cancel changes nothing.
+palette "default editor"
+assert-palette-first "Set as Default Editor…"
+palette-activate
+wait-until assert-dialog true
+assert-dialog-text "Make Stet the default editor?"
+assert-dialog-text "writes “stet” to $TMP/omarchy/defaults/editor (now: code)"
+assert-dialog-text "xdg-mime default io.github.pixdevsapps.Stet.desktop for 16 file types"
+assert-dialog-text "To undo: omarchy-default-editor nvim"
+assert-focus dialog
+respond cancel
+assert-file $TMP/omarchy/defaults/editor "code\n"
+assert-missing $TMP/home/.config/mimeapps.list
+assert-focus editor
+
+# Set as Default: the Omarchy file holds "stet", and xdg-mime makes Stet the default for the
+# desktop entry's types; the report says what changed.
+action set-as-default-editor
+wait-until assert-dialog true
+respond accept
+wait-until assert-dialog-text "Stet is the default editor"
+assert-dialog-text "now holds “stet” (it held “code”)"
+assert-dialog-text "xdg-mime now reports io.github.pixdevsapps.Stet.desktop for text/plain"
+respond close
+assert-toast "Stet is the default editor"
+assert-file $TMP/omarchy/defaults/editor "stet\n"
+assert-file-contains $TMP/home/.config/mimeapps.list "[Default Applications]"
+assert-file-contains $TMP/home/.config/mimeapps.list "text/plain=io.github.pixdevsapps.Stet.desktop"
+assert-file-contains $TMP/home/.config/mimeapps.list "text/markdown=io.github.pixdevsapps.Stet.desktop"
+assert-file-contains $TMP/home/.config/mimeapps.list "application/json=io.github.pixdevsapps.Stet.desktop"
+assert-focus editor

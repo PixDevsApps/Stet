@@ -1,0 +1,405 @@
+# Column mode (M6, ADR-016): entering it from the keyboard (Alt+Shift+arrows, Home, End, page
+# keys, Begin/End Select) and the mouse (Alt+drag, Alt+click, Alt+Shift+click); leaving it
+# (Escape, a plain arrow, Shift+arrow, a click, an action that doesn't know columns); typing as
+# one undo step per burst and every trigger that closes a burst; virtual space; Backspace and
+# Delete across tabs and wide and combining characters; overwrite mode; Tab and Enter; a
+# read-only document; the status bar; the keyboard focus; and the accessibility fix.
+# Keys go through `column-key`, which dispatches them in GTK's order: the window's capture
+# controller, the application accelerators, column mode's key controller, the view's bindings.
+unpace-frames
+
+# Column mode's controllers run before the accelerators and GtkSourceView's key handler, and
+# Alt+Shift+arrows reach the registry's actions before GtkSourceView's move-viewport bindings.
+assert-controller-order
+assert-key-route "<Alt><Shift>Down" app:column-select-down
+assert-key-route "<Alt><Shift>Up" app:column-select-up
+assert-key-route "<Alt><Shift>Left" app:column-select-left
+assert-key-route "<Alt><Shift>Right" app:column-select-right
+assert-key-route "<Alt><Shift>Home" app:column-select-line-start
+assert-key-route "<Alt><Shift>End" app:column-select-line-end
+assert-key-route "<Alt><Shift>Page_Up" app:column-select-page-up
+assert-key-route "<Alt><Shift>Page_Down" app:column-select-page-down
+assert-key-route "<Alt><Shift>KP_Down" app:column-select-down
+assert-key-route "<Alt><Shift>b" app:column-begin-end-select
+assert-key-route "<Alt>c" app:column-editor
+assert-key-route BackSpace binding:signal(backspace)
+assert-menu-contains "Begin/End Select in Column Mode"
+assert-menu-contains "Column Editor…"
+palette "column select down"
+assert-palette-first "Column Select Down"
+palette-close
+
+# ----- Keyboard selection ------------------------------------------------------------------
+type "abcdef\nab\n\tx\nabcdefgh\n"
+column-checkpoint four-lines
+cursor 1 3
+column-key "<Alt><Shift>Down"
+column-key "<Alt><Shift>Down"
+assert-column 1 3 3 3
+assert-status "Ln 3, Col 3, Sel 3×0"
+column-key "<Alt><Shift>Right"
+column-key "<Alt><Shift>Right"
+assert-column 1 3 3 5
+assert-status "Ln 3, Col 5, Sel 3×2"
+column-key "<Alt><Shift>Left"
+column-key "<Alt><Shift>Left"
+column-key "<Alt><Shift>Left"
+assert-column 1 3 3 2
+# End goes to the end of the cursor's line ("\tx" is 5 cells), Home to its indentation, then
+# to column 1.
+column-key "<Alt><Shift>End"
+assert-column 1 3 3 6
+column-key "<Alt><Shift>Home"
+assert-column 1 3 3 5
+column-key "<Alt><Shift>Home"
+assert-column 1 3 3 1
+column-key "<Alt><Shift>KP_Up"
+assert-column 1 3 2 1
+column-key "<Alt><Shift>Page_Down"
+assert-column 1 3 5 1
+column-key "<Alt><Shift>Page_Up"
+assert-column 1 3 1 1
+# Escape leaves column mode with the caret at the cursor corner.
+column-key Escape
+assert-column none
+assert-cursor 1 1
+assert-status "Ln 1, Col 1, Sel 0"
+assert-focus editor
+# A stream selection is where a rectangle starts from.
+select 1 2 2 2
+column-key "<Alt><Shift>Down"
+assert-column 1 2 3 2
+column-key Escape
+
+# A plain arrow leaves column mode at the cursor corner, in virtual space at the line's end.
+column-select 1 2 2 6
+column-key Right
+assert-column none
+assert-cursor 2 3
+# Shift+arrow leaves it at the cursor corner and selects from there.
+column-select 1 2 1 4
+column-key "<Shift>Right"
+assert-column none
+assert-selection "d"
+# Begin/End Select in Column Mode.
+cursor 1 2
+action column-begin-end-select
+assert-column none
+cursor 3 3
+action column-begin-end-select
+assert-column 1 2 3 6
+column-key Escape
+
+# ----- The mouse ---------------------------------------------------------------------------
+# Every cell of a line (inside tabs, of wide characters, past the end) maps to a point that
+# maps back to it; Alt+drag relies on that.
+action new-tab
+column-commit "\t(\"black\",\t0x000000),\n日本語 wide\nab\n"
+wait-idle-low
+assert-hit-test 1
+assert-hit-test 2
+assert-hit-test 3
+action close-tab
+respond discard
+# Alt+drag, Alt+click (a column caret, here in virtual space), Alt+Shift+click (the cursor
+# corner moves, the anchor stays), and a plain click that leaves column mode.
+column-drag 1 2 4 5
+assert-column 1 2 4 5
+assert-status "Ln 4, Col 5, Sel 4×3"
+assert-column-painted 4
+column-drag 2 7 2 7
+assert-column 2 7 2 7
+column-drag 4 3 4 3 shift
+assert-column 2 7 4 3
+column-click 1 1
+assert-column none
+assert-cursor 1 1
+assert-focus editor
+
+# ----- Typing ------------------------------------------------------------------------------
+# Typed text goes in on every line at the column, padding short lines; a burst is one undo step.
+column-select 1 7 4 7
+column-type "=1"
+assert-text "abcdef=1\nab    =1\n\tx =1\nabcdef=1gh\n"
+assert-column 1 9 4 9
+assert-burst true
+column-key Escape
+assert-burst false
+assert-undo-steps four-lines 1
+# An input method commits several characters at once (one insert).
+column-select 1 3 2 3
+column-commit "日本"
+assert-text "ab日本cdef=1\nab日本    =1\n\tx =1\nabcdef=1gh\n"
+column-key Escape
+action undo
+# Typing over a block replaces it on every line.
+# A tab cut by the block's edges becomes the spaces it showed outside the block.
+column-select 1 2 4 4
+column-type "#"
+assert-text "a#def=1\na#   =1\n # x =1\na#def=1gh\n"
+column-key Escape
+# Ctrl+Z right after a burst undoes the burst: the key closes it before the view's binding.
+column-key "<Control>z"
+assert-text "abcdef=1\nab    =1\n\tx =1\nabcdef=1gh\n"
+assert-column none
+column-key "<Control>y"
+assert-text "a#def=1\na#   =1\n # x =1\na#def=1gh\n"
+action undo
+action undo
+assert-text "abcdef\nab\n\tx\nabcdefgh\n"
+
+# ----- What closes a typing burst (ADR-016) ------------------------------------------------
+# Each trigger between two keys makes two undo steps of them, so the steps back to the
+# checkpoint grow by two each time.
+column-checkpoint burst
+# A Ctrl chord (here an application accelerator).
+column-select 1 3 2 3
+column-type "a"
+column-key "<Control>plus"
+assert-burst false
+assert-column 1 4 2 4
+column-type "b"
+column-key Escape
+assert-undo-steps burst 2
+action zoom-reset
+# An Alt chord on a navigation key: the rectangle grows by a line, typing goes on.
+column-select 1 3 2 3
+column-type "a"
+column-key "<Alt><Shift>Down"
+assert-burst false
+assert-column 1 4 3 4
+column-type "b"
+column-key Escape
+assert-undo-steps burst 4
+# The palette opening (the focus leaves the editor); column mode stays.
+column-select 1 3 2 3
+column-type "a"
+popup palette
+assert-burst false
+popdown palette
+assert-focus editor
+assert-column 1 4 2 4
+column-type "b"
+column-key Escape
+assert-undo-steps burst 6
+# The hamburger menu opening.
+column-select 1 3 2 3
+column-type "a"
+popup menu
+assert-burst false
+popdown menu
+assert-focus editor
+column-type "b"
+column-key Escape
+assert-undo-steps burst 8
+# A click (Alt+Shift+click on the cursor corner keeps the rectangle).
+column-select 1 3 2 3
+column-type "a"
+column-drag 2 4 2 4 shift
+assert-burst false
+assert-column 1 4 2 4
+column-type "b"
+column-key Escape
+assert-undo-steps burst 10
+# A registry action from the menu or the palette.
+column-select 1 3 2 3
+column-type "a"
+action zoom-in
+assert-burst false
+action zoom-reset
+column-type "b"
+column-key Escape
+assert-undo-steps burst 12
+# The idle timeout (1 s).
+column-select 1 3 2 3
+column-type "a"
+assert-burst true
+sleep 1200
+assert-burst false
+column-type "b"
+column-key Escape
+assert-undo-steps burst 14
+# Column mode ending (Escape) closes it too: one more burst, one more step.
+column-select 1 3 2 3
+column-type "a"
+column-key Escape
+assert-burst false
+assert-undo-steps burst 15
+
+# After an undo and a redo of a step of several edits, the next burst is a step of its own
+# (GTK 4.22 leaves the redone step open to the next user action; the view closes it again).
+action select-all
+column-commit "ab\nab\n"
+column-select 1 1 2 1
+column-type "x"
+column-key Escape
+action undo
+action redo
+assert-text "xab\nxab\n"
+column-checkpoint redone
+column-select 1 1 2 1
+column-type "y"
+column-key Escape
+assert-undo-steps redone 1
+# The same holds after a redone Replace All (any step of several edits).
+action replace
+find "a"
+replace-text "b"
+action replace-all
+assert-text "yxbb\nyxbb\n"
+key find Escape
+action undo
+action redo
+column-checkpoint replaced
+column-select 1 1 2 1
+column-type "z"
+column-key Escape
+assert-undo-steps replaced 1
+# And with more left to redo (two steps undone, one redone), where the step is closed when the
+# next user action begins: a burst, then plain typing outside column mode.
+action select-all
+column-commit "ab\nab\n"
+column-select 1 1 2 1
+column-type "x"
+column-key Escape
+column-select 1 1 2 1
+column-type "y"
+column-key Escape
+action undo
+action undo
+action redo
+assert-text "xab\nxab\n"
+column-checkpoint partly-redone
+column-select 1 1 2 1
+column-type "z"
+column-key Escape
+assert-undo-steps partly-redone 1
+column-select 1 1 2 1
+column-type "w"
+column-key Escape
+action undo
+action undo
+action redo
+assert-text "zxab\nzxab\n"
+column-checkpoint typed-after-redo
+cursor 1 1
+type "q"
+assert-undo-steps typed-after-redo 1
+
+# ----- Backspace and Delete ----------------------------------------------------------------
+# A caret inside a tab: one cell goes, the tab becomes the spaces it showed.
+action select-all
+column-commit "a\tbc\nabcde\nab\n"
+column-select 1 3 3 3
+column-key BackSpace
+assert-text "a  bc\nacde\na\n"
+assert-column 1 2 3 2
+column-key Escape
+# A tab at the caret on every line goes whole, with Delete and with Backspace.
+action select-all
+column-commit "\tx\n\ty\n"
+column-select 1 1 2 1
+column-key Delete
+assert-text "x\ny\n"
+column-key Escape
+action select-all
+column-commit "\tx\n\ty\n\n"
+column-select 1 5 3 5
+column-key BackSpace
+assert-text "x\ny\n\n"
+assert-column 1 1 3 1
+column-key Escape
+# Wide characters take one cell each, like everything but tabs.
+action select-all
+column-commit "日本語\nabc\n"
+column-select 1 3 2 3
+column-key BackSpace
+assert-text "日語\nac\n"
+column-key Delete
+assert-text "日\na\n"
+column-key Escape
+# A combining mark is a cell of its own.
+action select-all
+column-commit "éx\nabc\n"
+column-select 1 3 2 3
+column-key BackSpace
+assert-text "ex\nac\n"
+column-key Escape
+# Backspace in virtual space only moves the caret; Delete there changes nothing.
+action select-all
+column-commit "ab\nab\n"
+column-select 1 6 2 6
+column-key BackSpace
+assert-column 1 5 2 5
+column-key Delete
+assert-text "ab\nab\n"
+# A block: Backspace and Delete remove its cells.
+column-select 1 1 2 2
+column-key Delete
+assert-text "b\nb\n"
+assert-column 1 1 2 1
+column-key Escape
+# The menu's Delete works on the rectangle too.
+action select-all
+column-commit "abc\nabc\n"
+column-select 1 1 2 1
+action delete
+assert-text "bc\nbc\n"
+column-key Escape
+
+# ----- Overwrite, Tab and Enter ------------------------------------------------------------
+# Overwrite mode types over as many cells as the text takes, on every line.
+action select-all
+column-commit "abcd\nabcd\nab\n"
+column-select 1 2 3 2
+toggle-overwrite
+column-type "XY"
+assert-text "aXYd\naXYd\naXY\n"
+column-key Escape
+toggle-overwrite
+assert-status "INS"
+# Tab types a tab on every line.
+action select-all
+column-commit "ab\nab\n"
+column-select 1 2 2 2
+column-key Tab
+assert-text "a\tb\na\tb\n"
+assert-column 1 5 2 5
+# Enter leaves column mode at the cursor corner and breaks the line there.
+column-key Return
+assert-column none
+assert-text "a\tb\na\t\nb\n"
+
+# ----- Actions that don't know columns -----------------------------------------------------
+# They end column mode first, leaving the rectangle's corners selected: Find takes the text.
+action select-all
+column-commit "find me here\nfind me too\n"
+column-select 1 6 1 8
+action find
+assert-column none
+assert-field find "me"
+key find Escape
+assert-focus editor
+column-select 1 1 2 3
+action select-all
+assert-column none
+assert-selection "find me here\nfind me too\n"
+
+# ----- A read-only document ----------------------------------------------------------------
+write $TMP/ro.txt "abc\nabc\n"
+chmod $TMP/ro.txt 444
+open ro.txt
+assert-read-only true
+column-select 1 2 2 2
+column-key BackSpace
+column-key Delete
+column-type "x"
+assert-text "abc\nabc\n"
+assert-column 1 2 2 2
+column-key Escape
+action close-tab
+
+# ----- Accessibility -----------------------------------------------------------------------
+# GTK's AT-SPI AddSelection asks get_selection with NULL ranges; GTK 4.22's own crashes then.
+select 1 1 1 5
+assert-a11y-selection

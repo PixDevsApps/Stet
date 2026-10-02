@@ -1,0 +1,31 @@
+# Child of session-restore.stet-test, after the SIGKILL: every tab is back as the last backup
+# had it, and the typing after that backup is lost. The active tab loaded at once; the others
+# are stubs until they are shown or an operation needs their text.
+assert-tab-count 43
+assert-title "*fn main() {} — Stet"
+assert-language rust
+assert-stub 43 false
+assert-stub 1 true
+assert-stub 42 true
+assert-tab-title 1 "● file00.txt"
+assert-history find "kept|searches"
+assert-recent $TMP/files/latin1.txt
+assert-zoom 2
+assert-window-size 900 640
+report-restore
+assert-tabs-digest $TMP/digest-backed-up
+assert-stub 1 false
+select-tab 1
+assert-text "file 0\nsecond line 0\nedited 0\n"
+assert-status "LF"
+select-tab 41
+assert-status "CRLF"
+select-tab 42
+assert-status "UTF-8"
+assert-text "café\n"
+# Closing the window quits without asking and keeps everything, the last seconds' typing
+# included.
+select-tab 2
+type "KEPT BY QUIT"
+tabs-digest $TMP/digest-quit
+quit

@@ -1,0 +1,13 @@
+# The session keeps a split window (M7, ADR-006 amendment): the view of every tab, a clone of
+# a document in the other view as a record of its own with its own caret, the bookmarks, the
+# tab in front of the other view and the divider's position. The children in
+# tests/selftest/session/ share the scratch directory $TMP/c. A session written before M7,
+# without those fields, restores as one view.
+
+child-run $TMP/c $DIR/session/split-make.stet-test 0
+assert-session-tabs $TMP/c/state/stet 3
+child-run $TMP/c $DIR/session/split-restore.stet-test 0
+
+write $TMP/old/files/old.txt "old\nsession\n"
+write $TMP/old/state/stet/session.json "{\"schema_version\": 1, \"tabs\": [{\"id\": \"m2-tab\", \"path\": \"$TMP/old/files/old.txt\", \"display_name\": \"old.txt\", \"caret\": 4, \"first_visible_line\": 0}], \"active_tab\": 0, \"window\": {\"width\": 1000, \"height\": 700, \"maximized\": false, \"zoom\": 0}, \"recent_files\": []}\n"
+child-run $TMP/old $DIR/session/split-old.stet-test 0

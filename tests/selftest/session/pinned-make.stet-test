@@ -1,0 +1,22 @@
+# Child of pinned.stet-test: pins two tabs, leaves an untitled draft named by its first line,
+# and quits by closing the window, so pinned-restore.stet-test restores them.
+write $TMP/files/one.txt "one\n"
+write $TMP/files/two.txt "two\n"
+write $TMP/files/three.txt "three\n"
+open files/one.txt files/two.txt files/three.txt
+assert-tab-count 3
+select-tab 3
+action pin-tab
+select-tab 3
+action pin-tab
+assert-pinned 1 true
+assert-pinned 2 true
+assert-pinned 3 false
+assert-tab-title 1 "three.txt"
+assert-tab-title 2 "two.txt"
+assert-tab-title 3 "one.txt"
+action new-tab
+type "restored draft\n"
+assert-tab-title 4 "● restored draft"
+select-tab 3
+quit window

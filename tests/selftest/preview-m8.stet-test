@@ -1,0 +1,59 @@
+# Preview screenshots for M8 (navigation and Replace in Files), in real Omarchy themes. Needs
+# Omarchy's themes in /usr/share/omarchy/themes, so it is not part of tools/ci.sh; it writes
+# into tools/progress/public/. Run from the repository root:
+#   tools/headless.sh 42 target/debug/stet --self-test tests/selftest/preview-m8.stet-test
+
+mkdir $TMP/stet/.git
+write $TMP/stet/src/main.rs "use std::io;\n\nmod greet;\n\n/// Reads a name and greets it.\nfn main() -> io::Result<()> {\n\tlet mut name = String::new();\n\tio::stdin().read_line(&mut name)?;\n\t// TODO: ask again on empty input\n\tprintln!(\"{}\", greet::greet(name.trim()));\n\tOk(())\n}\n"
+write $TMP/stet/src/greet.rs "/// Greets someone by name.\npub fn greet(name: &str) -> String {\n\tformat!(\"Hello, {name}!\")\n}\n\n// TODO: greet in more languages\npub fn shout(name: &str) -> String {\n\tgreet(name).to_uppercase()\n}\n"
+write $TMP/stet/src/grammar.rs "// TODO: plural forms\npub fn plural(word: &str) -> String {\n\tformat!(\"{word}s\")\n}\n"
+write $TMP/stet/notes.md "# Notes\n\n- TODO: quick open\n- TODO: back and forward\n"
+write $TMP/stet/Cargo.toml "[package]\nname = \"hello\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"
+write-hex $TMP/stet/legacy.txt "544f444f3a20636166e9206e6f746573200d0a"
+
+# Quick open, fuzzy-ranked with the matched characters highlighted, in a dark theme.
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+open stet/notes.md
+open stet/src/main.rs
+quick-open "gre"
+wait-quick-open
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m8-quick-open-tokyo-night-2026-10-01.png
+quick-open-close
+
+# A pinned tab, an untitled tab named after its first line, and the Ctrl+Tab switcher, in a
+# light theme.
+theme-set /usr/share/omarchy/themes/catppuccin-latte catppuccin-latte
+wait-until assert-theme-source omarchy:catppuccin-latte
+select-tab 1
+action pin-tab
+action new-tab
+type "Shopping list\nmilk\n"
+open stet/src/greet.rs
+hold-ctrl
+action next-recent-tab
+action next-recent-tab
+sleep 400
+assert-switcher true notes.md
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m8-switcher-pinned-catppuccin-latte-2026-10-01.png
+switcher-key Escape
+release-ctrl
+
+# Replace in Files: the confirmation, then the results with a skipped file, in gruvbox.
+theme-set /usr/share/omarchy/themes/gruvbox gruvbox
+wait-until assert-theme-source omarchy:gruvbox
+action find-in-files
+find "TODO"
+replace-text "Todo ✓"
+fif-folder $TMP/stet
+fif-filters "*.*"
+action replace-in-files
+wait-until assert-dialog true
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m8-replace-in-files-confirm-gruvbox-2026-10-01.png
+respond replace
+wait-rif
+wait-frames 3
+screenshot $DIR/../../tools/progress/public/m8-replace-in-files-results-gruvbox-2026-10-01.png

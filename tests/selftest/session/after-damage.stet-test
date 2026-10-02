@@ -1,0 +1,68 @@
+# Child of session-restore.stet-test: what restoring finds after the parent changed file00.txt
+# and file03.txt on disk, deleted the backup of file01.txt and left a stray file in the backup
+# folder while no Stet ran.
+assert-tab-count 44
+assert-toast "Recovered an unsaved document that was not in the last session"
+
+# The stray file is an orphan: an untitled document at the end, named after its first line
+# (M8), adopted by the next commit.
+select-tab 44
+wait-idle
+assert-title "*recovered text — Stet"
+assert-text "recovered text\n"
+assert-dirty true
+session-commit
+session-flush
+assert-orphans $TMP/state/stet 0
+assert-backups $TMP/state/stet 43
+
+# file00.txt changed on disk after its unsaved changes were backed up: Load Disk Version takes
+# the file, as one step that Undo takes back.
+select-tab 1
+wait-idle
+assert-banner "The file “file00.txt” changed on disk since your unsaved changes."
+assert-text "file 0\nsecond line 0\nedited 0\n"
+assert-dirty true
+# Compare (M7) shows the restored text beside the file on disk; Clear Compare closes the copy.
+banner-click "Compare"
+wait-compare
+assert-split true
+assert-view-shows 2 "file00.txt (saved)"
+assert-comparing true
+assert-focus editor
+action clear-compare
+assert-split false
+assert-tab-count 44
+assert-banner "The file “file00.txt” changed on disk since your unsaved changes."
+banner-click "Load Disk Version"
+wait-idle
+assert-focus editor
+assert-text "changed while Stet was closed\n"
+assert-dirty false
+assert-no-banner "changed on disk"
+action undo
+assert-text "file 0\nsecond line 0\nedited 0\n"
+assert-dirty true
+
+# file03.txt too: Keep Mine keeps the restored text, and Save writes it over the file.
+select-tab 4
+wait-idle
+assert-banner "The file “file03.txt” changed on disk since your unsaved changes."
+banner-click "Keep Mine"
+wait-idle
+assert-focus editor
+assert-no-banner "changed on disk"
+assert-dirty true
+action save
+wait-idle
+assert-file $TMP/files/file03.txt "file 3\nsecond line 3\nedited 3\n"
+
+# file01.txt's backup was gone: the file opens from disk, with a banner saying so.
+select-tab 2
+wait-idle
+assert-banner "The unsaved changes to “file01.txt” from the last session could not be restored."
+assert-text "file 1\nsecond line 1\n"
+assert-dirty false
+banner-click Dismiss
+assert-no-banner "could not be restored"
+assert-focus editor

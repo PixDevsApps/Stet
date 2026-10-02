@@ -1,0 +1,23 @@
+# The README's screenshot (1.3) in a real Omarchy theme: a Rust file with a search, a Markdown
+# file and an untitled tab with a name of its own. Needs Omarchy's themes in
+# /usr/share/omarchy/themes, so it is not part of tools/ci.sh; it writes into docs/images/.
+# Run from the repository root:
+#   tools/headless.sh 61 target/debug/stet --self-test tests/selftest/preview-readme.stet-test
+
+write $TMP/stet/src/main.rs "use std::io;\n\nmod greet;\n\n/// Reads a name and greets it.\nfn main() -> io::Result<()> {\n\tlet mut name = String::new();\n\tio::stdin().read_line(&mut name)?;\n\t// TODO: ask again on empty input\n\tprintln!(\"{}\", greet::greet(name.trim()));\n\tOk(())\n}\n"
+write $TMP/stet/README.md "# Greeter\n\nSays hello.\n"
+theme-set /usr/share/omarchy/themes/tokyo-night tokyo-night
+wait-until assert-theme-source omarchy:tokyo-night
+open stet/README.md stet/src/main.rs
+action new-tab
+type "- buy coffee\n- answer the email from Kari\n- book the train for Friday\n"
+action rename-file
+dialog-set "New name" "Today"
+dialog-enter "New name"
+wait-idle
+select-tab 2
+cursor 7 14
+action find
+find "name"
+wait-frames 3
+screenshot $DIR/../../docs/images/stet-tokyo-night.png

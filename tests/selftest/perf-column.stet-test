@@ -1,0 +1,71 @@
+# M6 exit criteria, timed (not in CI): on 10,000 lines of spike S5's shapes, inserting at column
+# 0 on every line is one undo step and takes < 200 ms; its undo and redo each take < 200 ms;
+# likewise one key typed on a 10,000-line column caret and a 10,000-row block pasted. Times are
+# from the snapshot to the caret placed afterwards (`assert-column-op`) and of the undo() and
+# redo() calls (`bench-undo-redo`, which also reports when the main loop was idle again).
+# Run it with the release build too:
+#   cargo build --release
+#   tools/headless.sh 82 target/release/stet --self-test tests/selftest/perf-column.stet-test
+unpace-frames
+write-column-lines $TMP/10k.txt 10000
+open 10k.txt
+# S5's shapes assume tabs four wide; pin that, since M5 detects a file's indentation.
+popup indentation
+indent-choose tabs
+indent-choose width:4
+popdown indentation
+assert-indentation "Tab Width: 4"
+wait-idle-low
+column-checkpoint start
+text-checkpoint start
+
+# Insert at column 0 on every line (the Column Editor), with the view in the middle.
+cursor 5000 1
+wait-until assert-visible-line 5000
+column-select 1 1 10000 1
+column-editor open
+column-editor text "// "
+heartbeat-start
+column-editor ok
+assert-column-op 200 bulk
+assert-visible-line 5000
+# The longest the main loop was blocked from OK until GTK has measured the new lines again.
+wait-idle-low
+assert-max-block 200
+column-key Escape
+assert-undo-steps start 1
+# Undo and redo, and the longest the main loop was blocked until GTK had measured the lines.
+heartbeat-start
+bench-undo-redo start 200
+wait-idle-low
+assert-max-block 200
+action undo
+wait-idle-low
+
+# One key typed on a 10,000-line column caret, then Backspace (one burst, one undo step).
+column-select 1 1 10000 1
+column-type "x"
+assert-column-op 200 bulk
+column-key BackSpace
+assert-column-op 200 bulk
+column-key Escape
+assert-text-checkpoint start
+wait-idle-low
+
+# A 10,000-row block pasted at column 0.
+column-select 1 1 10000 11
+column-key "<Control>c"
+column-key Escape
+column-checkpoint before-paste
+column-select 1 1 1 1
+heartbeat-start
+column-key "<Control>v"
+wait-until assert-text-contains "\tfn ite\tfn item_1() {}"
+assert-column-op 200 bulk
+wait-idle-low
+assert-max-block 200
+column-key Escape
+heartbeat-start
+bench-undo-redo before-paste 200
+wait-idle-low
+assert-max-block 200

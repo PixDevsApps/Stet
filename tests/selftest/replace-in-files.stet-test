@@ -1,0 +1,149 @@
+# Replace in Files (M8, ADR-005 amendment), on a temporary tree only. After a confirmation
+# naming the folder and filters, every file the walk reaches is replaced in with the
+# in-document engine; each keeps its encoding, BOM and line endings byte for byte. Binary and
+# read-only files are skipped with the reason. Open documents get the change in their buffer
+# as one undoable edit: a clean one is then saved, a dirty one stays unsaved. A restored tab
+# whose text isn't loaded yet loads first (children in tests/selftest/session/).
+
+mkdir $TMP/tree/.git
+write $TMP/tree/.gitignore "ignored/\n"
+write $TMP/tree/a.txt "TODO alpha\nTODO beta\n"
+write $TMP/tree/b.txt "TODO bravo\n"
+write $TMP/tree/c.txt "nothing to do\n"
+write $TMP/tree/sub/crlf.txt "TODO one\r\nTODO two\r\n"
+write $TMP/tree/sub/mixed.txt "TODO a\r\nTODO b\nTODO c\r"
+write-hex $TMP/tree/sub/utf16.txt "fffe 54004f0044004f00 2000 7800 0d000a00"
+write-hex $TMP/tree/sub/latin1.txt "544f444f 20 636166e9 20 676172e76f6e 0d0a"
+write-hex $TMP/tree/bin.dat "544f444f 00 62696e 0a"
+write $TMP/tree/locked.txt "TODO locked\n"
+chmod $TMP/tree/locked.txt 444
+write $TMP/tree/ignored/x.txt "TODO ignored\n"
+write $TMP/tree/notes.md "TODO not in the filter\n"
+
+# a.txt open and clean, b.txt open with unsaved changes.
+open tree/a.txt
+open tree/b.txt
+cursor 1 1
+type "X"
+assert-dirty true
+
+# The files row has the replace field and Replace in Files.
+action find-in-files
+assert-bar-mode files
+find "TODO"
+replace-text "DONE"
+fif-folder $TMP/tree
+fif-filters "*.txt *.dat"
+
+# The confirmation names the folder and the filters and says disk files can't be undone;
+# Cancel changes nothing.
+action replace-in-files
+wait-until assert-dialog true
+assert-dialog-text "Replace in Files?"
+assert-dialog-text "in the files matching *.txt *.dat in $TMP/tree"
+assert-dialog-text "can't be undone"
+respond cancel
+assert-dialog false
+assert-file $TMP/tree/sub/crlf.txt "TODO one\r\nTODO two\r\n"
+assert-file $TMP/tree/a.txt "TODO alpha\nTODO beta\n"
+
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+report-rif
+assert-rif replacements 10
+assert-rif files 6
+assert-rif skipped 2
+assert-rif open 2
+assert-rif searched 9
+assert-rif failed 0
+assert-rif cancelled false
+
+# Every file keeps its encoding, BOM and line endings; only the matches changed.
+assert-file-hex $TMP/tree/sub/crlf.txt "444f4e45 206f6e65 0d0a 444f4e45 2074776f 0d0a"
+assert-file $TMP/tree/sub/mixed.txt "DONE a\r\nDONE b\nDONE c\r"
+assert-file-hex $TMP/tree/sub/utf16.txt "fffe 44004f004e004500 2000 7800 0d000a00"
+assert-file-hex $TMP/tree/sub/latin1.txt "444f4e45 20 636166e9 20 676172e76f6e 0d0a"
+assert-file $TMP/tree/c.txt "nothing to do\n"
+# Left alone: binary, read-only, ignored, filtered out. Files that don't match aren't listed,
+# whatever they are.
+assert-file-hex $TMP/tree/bin.dat "544f444f 00 62696e 0a"
+assert-file $TMP/tree/locked.txt "TODO locked\n"
+assert-file $TMP/tree/ignored/x.txt "TODO ignored\n"
+assert-file $TMP/tree/notes.md "TODO not in the filter\n"
+assert-mode $TMP/tree/locked.txt 444
+
+# The results panel lists each file, the open documents and why files were skipped.
+assert-results-shown true
+assert-results-heading "Replace “TODO” with “DONE” (10 replacements in 6 files of 9 searched; 2 skipped)"
+assert-results-contains "sub/crlf.txt (2 replacements)"
+assert-results-contains "a.txt (2 replacements in the open document, saved)"
+assert-results-contains "b.txt (1 replacement in the open document, which has unsaved changes)"
+assert-results-contains "bin.dat (1 match not replaced: binary file)"
+assert-results-contains "locked.txt (1 match not replaced: read-only)"
+assert-results-contains "    Line 2: DONE two"
+assert-find-message "Replace “TODO” with “DONE” (10 replacements in 6 files of 9 searched; 2 skipped)"
+
+# The clean open document was saved; its edit is one step that Undo takes back.
+select-tab 1
+assert-title "a.txt — $TMP/tree — Stet"
+assert-text "DONE alpha\nDONE beta\n"
+assert-dirty false
+assert-file $TMP/tree/a.txt "DONE alpha\nDONE beta\n"
+action undo
+assert-text "TODO alpha\nTODO beta\n"
+assert-dirty true
+action redo
+assert-dirty false
+
+# The dirty one has the change in its buffer, unsaved; the file is as it was.
+select-tab 2
+assert-text "XDONE bravo\n"
+assert-dirty true
+assert-file $TMP/tree/b.txt "TODO bravo\n"
+action undo
+assert-text "XTODO bravo\n"
+
+# Next Search Result goes to a replacement, in whichever file the walk reported first.
+action next-search-result
+assert-focus editor
+assert-text-contains "DONE"
+
+# Regex with templates, and Extended line breaks that join CRLF lines.
+find-mode regex
+find "DONE (\\w+)"
+replace-text "\\U\$1\\E"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+assert-rif skipped 0
+assert-file-hex $TMP/tree/sub/crlf.txt "4f4e45 0d0a 54574f 0d0a"
+assert-file-hex $TMP/tree/sub/latin1.txt "434146c9 20 676172e76f6e 0d0a"
+assert-file-hex $TMP/tree/sub/utf16.txt "fffe 5800 0d000a00"
+find-mode extended
+find "ONE\\r\\nTWO"
+replace-text "1+2"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+assert-file-hex $TMP/tree/sub/crlf.txt "312b32 0d0a"
+
+# An unrepresentable replacement skips the file and says why.
+find-mode normal
+find "garçon"
+replace-text "Ω"
+action replace-in-files
+wait-until assert-dialog true
+respond replace
+wait-rif
+assert-rif skipped 1
+assert-results-contains "latin1.txt (1 match not replaced: windows-1252 can't represent 1 character of the replacement (Ω))"
+assert-file-hex $TMP/tree/sub/latin1.txt "434146c9 20 676172e76f6e 0d0a"
+
+# A restored tab that hasn't loaded its text yet loads first and takes the change.
+child-run $TMP/c $DIR/session/rif-make.stet-test 0
+child-run $TMP/c $DIR/session/rif-restore.stet-test 0
+assert-file $TMP/c/tree/stub.txt "DONE in a restored tab\n"

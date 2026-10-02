@@ -1,0 +1,48 @@
+# Mark and the bookmarked-line operations in large-file mode (M7), by hand: a 60 MiB log (over
+# the 50 MiB of large-file mode). Mark with Bookmark line finds a regex on a worker and
+# bookmarks every 50th line; the marks are drawn around the lines on screen only; Jump Down and
+# Next Bookmark work; Remove Non-Bookmarked Lines is one undo step. The longest main-loop block
+# of each part is reported. GTK applies the Undo of that step (putting back almost all of the
+# 60 MiB) in one go on the main loop, M5's known cost of undoing a large edit, so its bar is
+# 10 s. Run from the repository root:
+#   cargo build --release
+#   STET_HEADLESS_TIMEOUT=600 tools/headless.sh 61 target/release/stet --self-test tests/selftest/perf-marks-large-file.stet-test
+
+unpace-frames
+write-generated $TMP/sixty.log log 62914560
+open sixty.log
+wait-idle
+assert-large true
+
+heartbeat-start
+action mark
+mark-option bookmark true
+find-mode regex
+find "user=user7\$"
+action mark-all
+wait-idle
+report-mark
+assert-mark-stats true
+assert-max-block 1000
+key find Escape
+cursor 1 1
+action jump-down-mark
+assert-selection "user=user7"
+action next-bookmark
+assert-cursor 58 1
+assert-focus editor
+
+heartbeat-start
+column-checkpoint marked
+action remove-unbookmarked-lines
+wait-idle
+assert-line-op true true
+assert-max-block 2000
+assert-bookmark-count 11698
+assert-undo-steps marked 1
+heartbeat-start
+action undo
+wait-idle
+assert-max-block 10000
+assert-bookmark-count 11698
+assert-large true

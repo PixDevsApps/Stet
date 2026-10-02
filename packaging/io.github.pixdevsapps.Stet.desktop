@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Stet
+GenericName=Text Editor
+Comment=Edit text and code files, keyboard-first
+Exec=stet %F
+Icon=io.github.pixdevsapps.Stet
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.github.pixdevsapps.Stet
+DBusActivatable=true
+Categories=Utility;TextEditor;Development;
+Keywords=text;editor;code;notepad;
+MimeType=text/plain;text/markdown;text/rust;application/toml;text/x-shellscript;application/json;application/xml;application/yaml;text/x-python;text/x-csrc;text/x-c++src;text/x-makefile;text/x-log;text/css;text/html;text/javascript;

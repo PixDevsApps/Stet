@@ -1,0 +1,32 @@
+# Compare at a CI-sized scale (M7): two generated versions of a 2,000-line text with changed,
+# removed, added and moved lines. The diff runs on a worker, every row with a line on both
+# sides is level, and the views scroll together. perf-compare.stet-test has the 10,000-line
+# exit criterion.
+
+write-generated $TMP/old.txt lines-old 90000
+write-generated $TMP/new.txt lines-new 90000
+open old.txt new.txt
+heartbeat-start
+action compare
+wait-compare
+report-compare
+assert-compare-under 1000 5000
+wait-idle-low
+assert-compare-aligned
+assert-compare-line new 8 changed
+assert-compare-line old 14 removed
+assert-compare-line old 201 moved
+assert-max-block 1000
+
+# Scrolling one view scrolls the other level, both ways.
+scroll-to-line 1500
+wait-frames 2
+assert-scroll-level
+view-focus 2
+scroll-to-line 400
+wait-frames 2
+assert-scroll-level
+action next-difference
+wait-frames 2
+assert-scroll-level
+assert-focus editor
