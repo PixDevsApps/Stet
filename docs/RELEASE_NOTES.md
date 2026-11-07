@@ -2,6 +2,10 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
+## 1.4.0 — 2026-11-07
+
+- **A + button for a new tab.** Right of the menu (☰) at the left end of the tab strip, a + opens a new untitled tab, as File › New (Ctrl+N) does. In split view it opens the tab in the view whose strip it is on.
+
 ## 1.3.4 — 2026-10-02
 
 - **Stet's repository is public**, at [github.com/PixDevsApps/Stet](https://github.com/PixDevsApps/Stet). Stet itself works as in 1.3.3.

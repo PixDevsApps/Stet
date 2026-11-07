@@ -1,8 +1,8 @@
-# Release status: Stet 1.3.4
+# Release status: Stet 1.4.0
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-10-02
+Synced: 2026-11-07
 
 The M9 exit criteria ([PLAN.md](PLAN.md#m9--polish-qa-and-10-6-8-days)) are: every checklist item passes or is recorded here, no P1 bugs, and the user's sign-off. This page is the record. Evidence, with commands, dates and caveats, is in [TESTING.md](TESTING.md); decisions in [DECISIONS.md](DECISIONS.md).
 
@@ -21,6 +21,8 @@ The M9 exit criteria ([PLAN.md](PLAN.md#m9--polish-qa-and-10-6-8-days)) are: eve
 **1.3.4 (2026-10-02)** is the first public release, on GitHub as [v1.3.4](https://github.com/PixDevsApps/Stet/releases/tag/v1.3.4) with its package: the repository is public ([release notes](RELEASE_NOTES.md#134--2026-10-02)). Stet works as in 1.3.3. Checked with CI (704 tests; 50 scripts, 4,647 steps) and the container's fresh install of its package ([TESTING.md](TESTING.md#2026-10-02--134-the-repository-goes-public)).
 
 **1.3.3 (2026-10-02)** rewords `stet --help`, the package description, the desktop entry's comment, the header of the `keys.toml` Stet creates and the README's introduction, at the user's request ([release notes](RELEASE_NOTES.md#133--2026-10-02)). Checked with CI (704 tests; 50 scripts, 4,647 steps), `desktop-file-validate` and the container's fresh install of its package ([TESTING.md](TESTING.md#2026-10-02--133-new-wording-for-stets-descriptions)).
+
+**1.4.0 (2026-11-07)** adds a + button right of the menu that opens a new tab, at the user's request ([release notes](RELEASE_NOTES.md#140--2026-11-07)). Checked with its new self-test `new-tab-button` and `split`, fmt, Clippy, 703 of 704 unit tests and a headless screenshot ([TESTING.md](TESTING.md#2026-11-07--a--button-for-a-new-tab)). **CI did not pass** on this machine, which now has GTK 4.24.1 and libadwaita 1.10.0: 17 self-test scripts fail the same way without the change (16 because GTK's Broadway server aborts), and a spike crate's timing test is flaky; both are open follow-ups in [PLAN.md](PLAN.md#stet-140-a--button-for-a-new-tab--2026-11-07). No live check was run. The tag `v1.4.0` is on GitHub; there is no GitHub release for it, so the README's install steps still install 1.3.4.
 
 ## Milestones
 

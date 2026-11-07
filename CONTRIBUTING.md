@@ -5,7 +5,7 @@ Stet is a native, keyboard-first text editor for Omarchy. Keep changes within th
 Ideas outside the lean 1.0 scope go on the 1.x or Later lists, not into the code.
 
 The repository is [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet) on GitHub (public since
-2026-10-02); `main` is the only branch, and releases are annotated tags (`v1.3.4`). Propose changes as a
+2026-10-02); `main` is the only branch, and releases are annotated tags (`v1.4.0`). Propose changes as a
 branch and a pull request against `main`.
 
 For the original development environment, work only in

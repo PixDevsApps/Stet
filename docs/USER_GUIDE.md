@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-10-01 (1.3)
+Synced: 2026-11-07 (1.4)
 
 This guide describes Stet 1.0: the MVP (M1–M5, 0.3), column mode (M6), bookmarks, Mark, split view and compare (M7), and navigation and Replace in Files (M8). Installing Stet is in [INSTALL.md](INSTALL.md); how it fits into Omarchy is in [INTEGRATIONS.md](INTEGRATIONS.md).
 
@@ -12,7 +12,7 @@ This guide describes Stet 1.0: the MVP (M1–M5, 0.3), column mode (M6), bookmar
 
 ```
 +------------------------------------------------------------------------------+
-| [=] | main.rs  x | ● notes.txt  x | Cargo.toml  x |                          |  menu, tab strip
+| [=] [+] | main.rs  x | ● notes.txt  x | Cargo.toml  x |                      |  menu, new tab, tab strip
 +------------------------------------------------------------------------------+
 | File changed on disk.                              [Reload] [Keep Mine]      |  banners (when needed)
 +-----+-------------------------------------------------------------+----------+
@@ -29,6 +29,7 @@ This guide describes Stet 1.0: the MVP (M1–M5, 0.3), column mode (M6), bookmar
 
 - **Tab strip.** One tab per document; `●` marks unsaved changes. Drag tabs to reorder them. Double-click a tab to rename it, as Rename… does: a file is renamed on disk; an untitled tab only gets the name, and nothing is saved. Right-click a tab for its menu: Close, Close Others, Close to the Right; Save, Save As…; Copy Full Path, Copy File Name, Copy Directory Path; Open Containing Folder (your file manager) and Open Terminal Here (your terminal, through `xdg-terminal-exec`); Rename… and Move to Trash…. These act on the tab you clicked.
 - **The menu** (☰, the left end of the tab strip) has nine submenus: File, Edit, Search, View, Encoding, Language, Settings, Tools, Help. Every command is also in the **command palette** (Ctrl+Shift+P or F1), with its keys.
+- **The + button**, right of the menu, opens a new untitled tab, as File › New (Ctrl+N) does. In split view it opens the tab in the view whose strip it is on.
 - **Banners** above the text say when something needs your attention: a file changed on disk, a read-only file, an encoding that could not be read back exactly, mixed line endings, a large file.
 - **The editor's context menu** (right-click) has GtkTextView's clipboard items and, below them, Convert Case to, Comment/Uncomment, Line Operations, Select and Find Next and Go to Matching Brace.
 - **The status bar** shows the caret's line and column and the selection (`Sel 12 | 2` is 12 characters on 2 lines), the document's lines and characters, the words if you ask for them (`word_count` in [config.toml](#configtoml)), and four buttons: the language (the language picker), the line ending (convert it), the encoding (reinterpret or convert), the indentation (below), then INS or OVR (the Insert key).

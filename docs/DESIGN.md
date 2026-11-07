@@ -2,11 +2,23 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-10-02
+Synced: 2026-11-07
 
 The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). Dated entries describe the state at that date; newer entries take precedence.
 
 ---
+
+## As built in 1.4 — 2026-11-07
+
+Asked for by the user ([PLAN.md](PLAN.md#stet-140-a--button-for-a-new-tab--2026-11-07)):
+
+- **A + button** (`list-add-symbolic`, flat, tooltip and accessible name "New Tab") sits right of the hamburger menu, in the same box at the start of the first strip on screen, so it moves with the menu. A click runs New (`new-tab`, Ctrl+N) in the view whose strip it is on: in split view the + is on the main view's strip and opens the tab there even when the second view is the active one; while the main view has no tab it is on the second view's strip. The new tab's editor gets the keyboard focus; the button never takes it.
+
+```
++------------------------------------------------------------------------------+
+| [=] [+] | main.rs  x | ● notes.txt  x | Cargo.toml  x |                      |  menu, new tab, tab strip
++------------------------------------------------------------------------------+
+```
 
 ## As built in 1.3.2 — 2026-10-02
 
@@ -220,7 +232,7 @@ The product-level UX principles are in [PRD.md](PRD.md#ux-principles). In short:
 
 ```
 +------------------------------------------------------------------------------+
-| [=] | * main.rs  x | notes.txt  x | Cargo.toml  x |                          |  1 hamburger + tab strip
+| [=] [+] | * main.rs  x | notes.txt  x | Cargo.toml  x |                      |  1 hamburger, new tab + tab strip
 +------------------------------------------------------------------------------+
 | File changed on disk.                       [Reload] [Keep mine] [Compare]   |  2 banner (only when needed)
 +-----+------------------------------------------------------------+-----------+
@@ -246,7 +258,7 @@ The product-level UX principles are in [PRD.md](PRD.md#ux-principles). In short:
                 +--------------------------------------------+
 ```
 
-1. **Tab strip** (AdwTabBar). It is the window's top bar: there is no separate title bar and no window-control buttons, because Hyprland tiles windows and `SUPER+W` closes them. Each tab shows the file name, a dirty dot and a close button; untitled tabs are "new 1", "new 2" (first-line names are 1.0; built in M8, see its entry). Tabs reorder by drag; a double-click on a tab renames it: its file (1.1), or an untitled tab's name, without saving (1.2). The tab context menu offers close others / close to the right; save and save as (1.1); copy path, filename or directory; open containing folder; open a terminal here; rename (a file, or an untitled tab's name since 1.2); move to trash. The **hamburger button** sits at the left end of the strip (since 1.3; at the right end before).
+1. **Tab strip** (AdwTabBar). It is the window's top bar: there is no separate title bar and no window-control buttons, because Hyprland tiles windows and `SUPER+W` closes them. Each tab shows the file name, a dirty dot and a close button; untitled tabs are "new 1", "new 2" (first-line names are 1.0; built in M8, see its entry). Tabs reorder by drag; a double-click on a tab renames it: its file (1.1), or an untitled tab's name, without saving (1.2). The tab context menu offers close others / close to the right; save and save as (1.1); copy path, filename or directory; open containing folder; open a terminal here; rename (a file, or an untitled tab's name since 1.2); move to trash. The **hamburger button** sits at the left end of the strip (since 1.3; at the right end before), with a **+ button** for a new tab right of it (1.4).
 2. **Banners** (AdwBanner) sit between the tab strip and the editor and belong to the current tab. They appear only when something needs attention: file changed on disk while dirty (Reload / Keep mine / Compare in 1.0), deleted on disk, read-only file (points to `sudoedit`), lossy decode (`lossy_roundtrip`), mixed line endings, large-file mode, opened formatted by the long-line path, and restore conflicts.
 3. **Editor** (GtkSourceView) with line numbers, current-line highlight and optional whitespace and EOL glyphs. The document map (GtkSourceMap) is an off-by-default toggle, disabled in large-file mode. Split view (1.0) puts two editors side by side in a GtkPaned.
 4. **Find bar** (Ctrl+F, Ctrl+H for replace). Proposed position: below the editor, so the text never shifts when it opens; the M1 mock decides. Controls: pattern, replacement, match case, whole word, mode (Normal / Extended / Regex), wrap, in selection, backward, match count, previous / next, close. Escape returns focus to the editor.

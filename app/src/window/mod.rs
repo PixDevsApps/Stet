@@ -232,14 +232,17 @@ pub struct Inner {
     /// The views side by side, divided where the tab strips above them are (`top_paned` in
     /// [`Window::new`]).
     views_paned: gtk::Paned,
-    /// The hamburger menu (and the window controls the decoration layout puts first, outside
-    /// Hyprland), at the start of the first strip on screen (1.3).
+    /// The hamburger menu, the new-tab button right of it (1.4) and, outside Hyprland,
+    /// the window controls the decoration layout puts first, at the start of the first strip
+    /// on screen (1.3).
     start: gtk::Box,
     /// The window controls outside Hyprland, at the end of the last strip on screen.
     end: gtk::Box,
     content: gtk::Box,
     toasts: adw::ToastOverlay,
     menu_button: gtk::MenuButton,
+    /// Opens a new tab in the view whose strip it is on (1.4).
+    new_tab_button: gtk::Button,
     pub status: StatusBar,
     pub find: FindBar,
     pub results: Rc<ResultsPanel>,
@@ -291,6 +294,13 @@ impl Window {
             .tooltip_text("Menu")
             .build();
         menu_button.add_css_class("flat");
+        let new_tab_button = gtk::Button::builder()
+            .icon_name("list-add-symbolic")
+            .tooltip_text("New Tab")
+            .focus_on_click(false)
+            .build();
+        new_tab_button.add_css_class("flat");
+        new_tab_button.update_property(&[gtk::accessible::Property::Label("New Tab")]);
         let start = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let end = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let tiling = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
@@ -301,6 +311,7 @@ impl Window {
             end.append(&gtk::WindowControls::new(gtk::PackType::End));
         }
         start.append(&menu_button);
+        start.append(&new_tab_button);
         views[0].bar.set_start_action_widget(Some(&start));
         views[0].bar.set_end_action_widget(Some(&end));
         // The strips sit side by side over the views, divided where the views are (M7).
@@ -396,6 +407,7 @@ impl Window {
                 content,
                 toasts,
                 menu_button,
+                new_tab_button,
                 status,
                 find,
                 results,
@@ -501,6 +513,18 @@ impl Window {
                 move |_| Window { inner }.on_view_selected(index)
             ));
         }
+        inner.new_tab_button.connect_clicked(glib::clone!(
+            #[weak(rename_to = inner)]
+            self.inner,
+            move |_| {
+                let window = Window { inner };
+                if let Some(view) = window.menu_view() {
+                    window.set_active_view(view, false);
+                }
+                let name = ActionId::NewTab.detailed_name();
+                let _ = WidgetExt::activate_action(&window.inner.window, &name, None);
+            }
+        ));
         inner.window.connect_close_request(glib::clone!(
             #[weak(rename_to = inner)]
             self.inner,
@@ -1684,6 +1708,11 @@ impl Window {
     /// The hamburger menu's button.
     pub fn menu_button(&self) -> &gtk::MenuButton {
         &self.inner.menu_button
+    }
+
+    /// The button right of the menu that opens a new tab (1.4).
+    pub fn new_tab_button(&self) -> &gtk::Button {
+        &self.inner.new_tab_button
     }
 
     /// The view whose tab strip has the menu at its start.

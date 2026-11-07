@@ -37,6 +37,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("assert-active-view", 1, 1),
     ("assert-split", 1, 1),
     ("assert-menu-at", 1, 1),
+    ("click-new-tab", 0, 0),
     ("assert-menu-within", 0, 0),
     ("assert-menu-pages", 0, 0),
     ("assert-view-tabs", 2, 2),
@@ -95,6 +96,11 @@ impl Harness {
                 Err(error) => Err(error),
             },
             "assert-menu-within" => self.check_menu_within().await,
+            "click-new-tab" => {
+                self.window.new_tab_button().emit_clicked();
+                self.wait_until_settled().await;
+                Ok(())
+            }
             "assert-menu-pages" => self.check_menu_pages().await,
             "view-focus" => match view_index(arg(0)) {
                 Ok(index) => match self.window.view_page(index) {
@@ -607,8 +613,8 @@ fn mark_style(word: &str) -> Result<MarkStyle, String> {
 }
 
 impl Harness {
-    /// The menu is at the start of view `index`'s tab strip (1.3), left of its first tab, once
-    /// the strip has been laid out.
+    /// The menu is at the start of view `index`'s tab strip (1.3), and the new-tab button right
+    /// of it (1.4), both left of its first tab, once the strip has been laid out.
     async fn check_menu_at(&self, index: usize) -> StepResult {
         self.wait_frames(2).await?;
         equal(
@@ -632,13 +638,25 @@ impl Harness {
         let tab = tab
             .compute_bounds(bar)
             .ok_or("the first tab is not on its strip")?;
-        if menu.width() > 0.0 && menu.x() + menu.width() <= tab.x() {
+        let plus = self
+            .window
+            .new_tab_button()
+            .compute_bounds(bar)
+            .ok_or("the new-tab button is not on its strip")?;
+        if menu.width() > 0.0
+            && plus.width() > 0.0
+            && menu.x() + menu.width() <= plus.x()
+            && plus.x() + plus.width() <= tab.x()
+        {
             Ok(())
         } else {
             Err(format!(
-                "the menu spans {:.0}–{:.0} and the first tab starts at {:.0}",
+                "the menu spans {:.0}–{:.0}, the new-tab button {:.0}–{:.0}, and the first tab \
+                 starts at {:.0}",
                 menu.x(),
                 menu.x() + menu.width(),
+                plus.x(),
+                plus.x() + plus.width(),
                 tab.x()
             ))
         }

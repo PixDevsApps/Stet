@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-10-02
+Synced: 2026-11-07
 
 The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). Dated entries describe the state at that date; newer entries take precedence.
 
@@ -11,6 +11,20 @@ The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). 
 ## Evidence log
 
 Dated test and acceptance results go here, newest first. Spike results go to `docs/spikes/` and are linked from [RESEARCH.md](RESEARCH.md#m0-spike-results).
+
+### 2026-11-07 — a + button for a new tab
+
+Run by the agent on the development machine (rustc 1.98.1, gtk4 4.24.1, libadwaita 1.10.0, gtksourceview5 5.22.0, kernel 7.2.15), on `45e1790` with the change uncommitted; headless runs on display 73. No `gtk4-broadwayd` was left after any run.
+
+| Command | Result |
+| --- | --- |
+| `tools/headless.sh 73 target/debug/stet --self-test tests/selftest/new-tab-button.stet-test` | **Pass** (27/27). The first run failed on the test's expected names only ("new 1"; untitled tabs are "Untitled 1"). |
+| `… --self-test tests/selftest/split.stet-test` | **Pass** (141/141), with `assert-menu-at` checking the + too. |
+| A scratch script (not committed): tokyo-night, `click-new-tab`, `screenshot` | The + right of the menu, before the first tab; checked by eye. |
+| `STET_CI_DISPLAY=73 bash tools/ci.sh --ui` | **Fail** in `cargo test`: `stet-spikes`' `main_loop_runs_until_done_or_timeout` (`elapsed >= 20 ms`). Alone it failed 3 of 5 runs. Older than this change, and the crate doesn't depend on the app. |
+| The same script with `cargo test --workspace -- --skip main_loop_runs_until_done_or_timeout` (a scratch copy, removed) | fmt and Clippy pass; 703 tests pass (34 + 451 + 210 + 4 + 3 + 1). The smoke run logged its first frame. The script then stopped at `column-clipboard`: `gtk4-broadwayd` aborted. |
+| Every self-test script ci.sh runs, without stopping at a failure | 34 of 51 pass, with 2,669 steps between them, `new-tab-button` and `split` among them. 16 stop when `gtk4-broadwayd` aborts (`broadway-output.c:458: assertion failed: (!reused_node->consumed)`). `theme` fails at step 16: the status bar's colour is `#cdd6f4`, not `#d0d8e0`. |
+| Those 17 scripts on `45e1790` without the change (`git stash -u`, built again) | The same 17 failures, in the same way. They follow the system's update from GTK 4.22.4 and libadwaita 1.9.3 (follow-up in PLAN.md). |
 
 ### 2026-10-02 — the history starts at 1.3.4
 
@@ -604,7 +618,8 @@ tools/headless.sh 20 target/debug/stet --self-test tests/selftest/files.stet-tes
 | `open`, `open-start` | command-line arguments | Opens files as a command line in the running instance would (`file:line:col`, `-n`, `-c`); `open` waits until they are loaded, `open-start` does not |
 | `choose-file` | path | Picks the file in the file chooser that Open or Save As shows (GTK's own, headless) and accepts it; for Save As it sets the folder and the name, since GTK 4.22's Save chooser keeps its suggested name when given a file |
 | `assert-chooser-name` | name | 1.2: the name the open Save As chooser proposes |
-| `assert-menu-at` | view (`1` or `2`) | 1.3: that view's tab strip has the menu at its start, left of its first tab, and the other strip doesn't |
+| `assert-menu-at` | view (`1` or `2`) | 1.3: that view's tab strip has the menu at its start, left of its first tab, and the other strip doesn't; since 1.4 also the + button, between the menu and the first tab |
+| `click-new-tab` | — | 1.4: clicks the + button right of the menu (emits its `clicked`) and waits until the window settles |
 | `assert-menu-within` | — | 1.3.1: the open menu lies within the window's width; since 1.3.2 also its height |
 | `assert-menu-pages` | — | 1.3.2: the open menu is as wide as the page it shows, not as its widest page, and lies within the window, across and down; on the main page, the widest page and the tallest (each shown as a click on its item does) and the main page again |
 | `assert-dialog-text`, `assert-dialog-lacks` | text | The open dialog has, or lacks, the text in its heading, body or labels: a question, or since 1.3.2 another dialog the window shows, such as About |
