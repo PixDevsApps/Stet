@@ -1,4 +1,4 @@
-# Release status: Stet 1.4.0
+# Release status: Stet 1.4.1
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
@@ -23,6 +23,8 @@ The M9 exit criteria ([PLAN.md](PLAN.md#m9--polish-qa-and-10-6-8-days)) are: eve
 **1.3.3 (2026-10-02)** rewords `stet --help`, the package description, the desktop entry's comment, the header of the `keys.toml` Stet creates and the README's introduction, at the user's request ([release notes](RELEASE_NOTES.md#133--2026-10-02)). Checked with CI (704 tests; 50 scripts, 4,647 steps), `desktop-file-validate` and the container's fresh install of its package ([TESTING.md](TESTING.md#2026-10-02--133-new-wording-for-stets-descriptions)).
 
 **1.4.0 (2026-11-07)** adds a + button right of the menu that opens a new tab, at the user's request ([release notes](RELEASE_NOTES.md#140--2026-11-07)). Checked with its new self-test `new-tab-button` and `split`, fmt, Clippy, 703 of 704 unit tests and a headless screenshot ([TESTING.md](TESTING.md#2026-11-07--a--button-for-a-new-tab)). **CI did not pass** on this machine, which now has GTK 4.24.1 and libadwaita 1.10.0: 17 self-test scripts fail the same way without the change (16 because GTK's Broadway server aborts), and a spike crate's timing test is flaky; both are open follow-ups in [PLAN.md](PLAN.md#stet-140-a--button-for-a-new-tab--2026-11-07). No live check was run. Its package, `stet-1.4.0-1-x86_64.pkg.tar.zst` (SHA-256 `1e5063af4a4883924453666bdf45b2d77aa2d45868467dfbb206e4b6f8919856`, built from `v1.4.0`, `175b699`), passed the container's fresh-install test and is in `.local/release/`. The tag `v1.4.0` is on GitHub; there is no GitHub release for it, so the README's install steps still install 1.3.4.
+
+**1.4.1 (2026-11-07)** changes only the version and the headless tests' setup: they no longer read the desktop's GTK settings, which fixed `theme.stet-test` ([release notes](RELEASE_NOTES.md#141--2026-11-07)). The 16 scripts that stop because of a GTK 4.24 Broadway bug wait for a fix from GTK, the user's decision ([upstream note](upstream/gtk-broadway-shared-render-node.md)). Not tagged; no package.
 
 ## Milestones
 

@@ -2,6 +2,10 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
+## 1.4.1 — 2026-11-07
+
+- **No change to Stet itself.** Its headless tests no longer read the desktop's GTK settings. On GTK 4.24 some of them stop because of a GTK bug, which is waiting for a fix from GTK.
+
 ## 1.4.0 — 2026-11-07
 
 - **A + button for a new tab.** Right of the menu (☰) at the left end of the tab strip, a + opens a new untitled tab, as File › New (Ctrl+N) does. In split view it opens the tab in the view whose strip it is on.

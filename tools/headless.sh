@@ -23,8 +23,12 @@ mkdir -p "$root/.local"
 log="$root/.local/broadway-$display.log"
 gtk4-broadwayd --address 127.0.0.1 ":$display" >"$log" 2>&1 &
 broadwayd=$!
+# An empty config folder: GTK would read the user's gtk-4.0/gtk.css (Omarchy Theme Studio
+# writes one) and fontconfig their fonts.conf, so a run would depend on the desktop's setup.
+config=$(mktemp -d)
 
 cleanup() {
+    rm -rf -- "$config"
     if kill -0 "$broadwayd" 2>/dev/null; then
         kill "$broadwayd" 2>/dev/null || true
         wait "$broadwayd" 2>/dev/null || true
@@ -54,6 +58,7 @@ status=0
 env -u WAYLAND_DISPLAY -u DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE \
     GDK_BACKEND=broadway BROADWAY_DISPLAY=":$display" \
     GTK_A11Y=none ADW_DISABLE_PORTAL=1 GSETTINGS_BACKEND=memory GIO_USE_VFS=local \
+    XDG_CONFIG_HOME="$config" \
     dbus-run-session --config-file="$root/tools/headless-dbus.conf" -- \
     timeout --kill-after=5 "$timeout_s" "$@" || status=$?
 exit "$status"

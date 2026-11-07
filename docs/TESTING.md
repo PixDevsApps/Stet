@@ -12,6 +12,22 @@ The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). 
 
 Dated test and acceptance results go here, newest first. Spike results go to `docs/spikes/` and are linked from [RESEARCH.md](RESEARCH.md#m0-spike-results).
 
+### 2026-11-07 — the self-tests after the GTK 4.24 update
+
+Run by the agent on the development machine (gtk4 4.24.1, libadwaita 1.10.0, gtksourceview5 5.22.0), on `06da37c` with the changes below uncommitted; headless runs on display 73. No `gtk4-broadwayd` and no temporary config folder was left after any run.
+
+| Command | Result |
+| --- | --- |
+| `cat ~/.config/gtk-4.0/gtk.css` (read only) | Written by Omarchy Theme Studio on 2026-11-04: it imports `~/.local/state/omarchy/current/theme/gtk.css`, which sets `--window-fg-color: #cdd6f4` and the other libadwaita colours. GTK applies it at user priority, above Stet's application-priority styles. This is the `#cdd6f4` `theme.stet-test` saw. |
+| `tools/headless.sh` with `XDG_CONFIG_HOME` an empty temporary folder; `… --self-test tests/selftest/theme.stet-test` | **Pass** (82/82); before the change, step 16 failed. The editor font stayed JetBrainsMono Nerd Font. |
+| Every self-test script ci.sh runs, without stopping at a failure | 35 of 51 pass, 2,751 steps, `theme` among them. The 16 others stop when `gtk4-broadwayd` aborts. |
+| The 16 crashing scripts against the steps that use `unpace-frames` | Each of them connects the Broadway client (`unpace-frames`); of the scripts that pass, only `default-editor` does. |
+| GTK's Broadway sources, 4.22.4 and 4.24.1, from gitlab.gnome.org (`broadway-output.c`, `broadway-server.c`, `gskbroadwayrenderer.c`) | Only trivial changes between the two. The assertion guards against one reused node appearing twice in a frame; the renderer identifies nodes by pointer. |
+| A temporary probe step (not committed): `GtkWidgetPaintable` of the window, the tree walked with `gsk_render_node_get_children` | 109 nodes, one `GskFillNode` in four places; the status bar alone has the same three repeats: its four buttons' arrow icon. Details: [the upstream note](upstream/gtk-broadway-shared-render-node.md). |
+| `focus.stet-test` with `GSK_RENDERER=cairo` | `gtk4-broadwayd` aborts on the assertion before, `(node == reused_node)`. |
+| `focus`, `session`, `toolbox` and `column` with `unpace-frames` commented out (scratch copies) | `focus` 141/141 in 106 s, `session` 138/138 in 44 s, `toolbox` 283/283 in 15 s; `column` 327/330: `assert-hit-test 1` and `2` map cells elsewhere. |
+| `pacman -Si weston sway cage mutter` (a query, nothing installed) | All four are in the Arch repositories (weston 15.0.1); none is installed. |
+
 ### 2026-11-07 — a + button for a new tab
 
 Run by the agent on the development machine (rustc 1.98.1, gtk4 4.24.1, libadwaita 1.10.0, gtksourceview5 5.22.0, kernel 7.2.15), on `45e1790` with the change uncommitted; headless runs on display 73. No `gtk4-broadwayd` was left after any run.
@@ -702,7 +718,7 @@ What the self-tests cannot show: real key presses (keys reach GTK's accelerators
 
 ### Headless Broadway runs
 
-Every GTK program an agent runs goes through `tools/headless.sh <display> <cmd...>` with its assigned display number, terminates on its own, and leaves no `gtk4-broadwayd` running ([BUILD.md](BUILD.md#headless-gtk-runs)).
+Every GTK program an agent runs goes through `tools/headless.sh <display> <cmd...>` (which since 2026-11-07 also hides the user's `~/.config`) with its assigned display number, terminates on its own, and leaves no `gtk4-broadwayd` running ([BUILD.md](BUILD.md#headless-gtk-runs)).
 
 What headless runs can show: the code builds, starts, renders, handles actions and exits cleanly; buffer, search and layout costs inside GTK. What they cannot show: Hyprland behaviour, fractional scaling, fcitx5 and text-input-v3, drag-and-drop from Nautilus, clipboard between apps, window rules and focus. Those belong to spike S4 and the manual acceptance list below.
 

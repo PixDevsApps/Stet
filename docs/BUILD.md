@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-10-02
+Synced: 2026-11-07
 
 Run commands from the repository root (the original working copy is `/home/fredrick/Projects/linux-apps/notes`; the folder keeps the M0 working name). Milestones M1, M3 and M4 are built and merged (Wave A, 2026-10-01): the editor shell with its headless self-tests and a local Arch package, the file pipeline for encodings and large files, and search; M2 and M5 are next. [PLAN.md](PLAN.md) has the current state.
 
@@ -172,6 +172,7 @@ The wrapper (as scaffolded on 2026-09-30):
 - starts `gtk4-broadwayd` on display `:<display>` (TCP port 8080 + display, bound to 127.0.0.1) and refuses a display that is already in use;
 - runs `<cmd...>` inside a private D-Bus session (`dbus-run-session` with `tools/headless-dbus.conf`, which has no service directories, so no portal, gvfs or AT-SPI service is activated);
 - removes `WAYLAND_DISPLAY`, `DISPLAY` and `HYPRLAND_INSTANCE_SIGNATURE` from the environment and sets `GDK_BACKEND=broadway`, `GTK_A11Y=none`, `ADW_DISABLE_PORTAL=1`, `GSETTINGS_BACKEND=memory` and `GIO_USE_VFS=local`;
+- since 2026-11-07, points `XDG_CONFIG_HOME` at an empty temporary folder, removed afterwards: GTK reads the user's `gtk-4.0/gtk.css` (Omarchy Theme Studio writes one that sets libadwaita's colours) and fontconfig their `fonts.conf`, so a run depended on the desktop's setup;
 - kills the command after `STET_HEADLESS_TIMEOUT` seconds (default 300);
 - logs the daemon to `.local/broadway-<display>.log` (the wrapper creates `.local/` if needed), stops it when the command exits, and removes the socket file it leaves behind.
 
