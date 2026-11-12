@@ -245,7 +245,7 @@ impl Window {
             .collect();
         sections.push(("Command palette".to_owned(), Vec::new()));
         for id in ActionId::ALL {
-            if keymap.keys(id).is_empty() {
+            if keymap.keys(id).is_empty() || !actions::available(id) {
                 continue;
             }
             let index = id

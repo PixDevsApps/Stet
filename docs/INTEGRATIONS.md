@@ -277,3 +277,19 @@ Built in M5 (2026-10-01) unless the table says otherwise; the tab menu's command
 - Shipping Hyprland rules in the package.
 - Always-on-top: Wayland's xdg-shell gives apps no way to request it; Omarchy's `SUPER+O` pops out any window.
 - An omarchy-shell plugin before 1.x (a quick-note or recent-files panel would read a file Stet writes).
+
+## 9. Flatpak (1.6)
+
+The Flatpak ([ADR-019](DECISIONS.md#adr-019--a-flatpak-from-stets-own-repository-2026-11-12), `packaging/flatpak/`) runs the same code in a sandbox; `stet_infrastructure::sandbox` tells by `/.flatpak-info`, and outside a Flatpak none of this applies.
+
+- **Permissions:** `--filesystem=host` (every file and folder of the user, removable media, `/mnt` and `/opt`; the host's `/usr` and `/etc` stay out), Wayland with X11 as fallback, the GPU and IPC. No network, no `--talk-name` and no `flatpak-spawn --host`.
+- **Theme:** read from `~/.local/state/omarchy/current/theme/` as outside, through `--filesystem=host`. `omarchy-theme-color` (in the host's `/usr`) isn't there, so the built-in resolver, which gives the same palette (a unit test compares them where Omarchy is installed), reads `colors.toml`. Outside Omarchy the folder is missing and Stet follows the system's light or dark style through the Settings portal.
+- **Font:** the runtime's fontconfig sees the host's font files (`/run/host/fonts`, `/run/host/user-fonts`) but not the host's `/etc/fonts`, so Omarchy's default rule (`/etc/fonts/conf.d/50-omarchy.conf`, JetBrainsMono Nerd Font) doesn't reach it. Stet runs `fc-match` with `XDG_CONFIG_HOME` set to the host's (`HOST_XDG_CONFIG_HOME`, else `~/.config`), so a `fontconfig/fonts.conf` there, which `omarchy-font-set` writes, decides the family, and watches that folder; without one the family is the runtime's `monospace`, DejaVu Sans Mono in GNOME 51. `font =` in `config.toml` overrides both, as everywhere.
+- **Stet's own files** are in `~/.var/app/io.github.pixdevsapps.Stet/`: `config/stet/` (`config.toml`, `keys.toml`), `.local/state/stet/` (session, backups, save backups) and `cache/stet/`, because Flatpak points `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` there. The Arch package's files in `~/.config/stet` and `~/.local/state/stet` aren't read.
+- **Check for Updates…** and **Open Terminal Here** have no action in a Flatpak, so the menus, the palette and the keyboard shortcuts leave them out (`stet::actions::available`): Flatpak updates Stet, and the sandbox can't start the host's terminal.
+- **Open Containing Folder** runs the runtime's `xdg-open`, which hands the folder to the OpenURI portal, so the desktop's file manager opens it.
+- **Set as Default Editor…** changes nothing: the sandbox's `xdg-mime` would write the sandbox's own `mimeapps.list`. It says to choose Stet in the system's settings, or to run `xdg-mime default io.github.pixdevsapps.Stet.desktop text/plain`.
+- **File dialogs** (Open, Save As, Compare with File…) always go through the FileChooser portal in a sandbox: GTK has no in-process fallback there, so a desktop without a portal that offers FileChooser (`xdg-desktop-portal-gtk`, `-gnome` or `-kde`) has no file dialogs in the Flatpak. Files still open from the command line, quick open and the recent files.
+- **Move to Trash** uses `gio::File::trash`, which GLib sends through the Trash portal in a sandbox.
+- **Activation and `--wait`:** Flatpak exports the D-Bus service file with `Exec` rewritten into `flatpak run`, so the bus starts Stet in its own sandbox as it starts the package's. Without the service, a `--wait` command line becomes the editor itself and waits for the whole editor, because a process it started would end with its sandbox. `GIT_EDITOR` is `flatpak run io.github.pixdevsapps.Stet --wait`.
+- **The app-id is the package's**, so only one of the two should be installed; see ADR-019's consequences.

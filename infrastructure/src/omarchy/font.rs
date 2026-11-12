@@ -7,17 +7,26 @@ use std::process::{Command, Stdio};
 /// Used when `fc-match` is missing or fails; Pango resolves the alias itself.
 pub const FALLBACK_FAMILY: &str = "monospace";
 
-/// `fc-match monospace -f '%{family[0]}'`, or [`FALLBACK_FAMILY`].
+/// `fc-match monospace -f '%{family[0]}'`, or [`FALLBACK_FAMILY`]. In a Flatpak fontconfig
+/// would read the app's own `XDG_CONFIG_HOME`, so `fc-match` is given the host's, where
+/// `omarchy-font-set` writes `fontconfig/fonts.conf`; the host's `/etc/fonts` stays out of reach.
 pub fn monospace_family() -> String {
-    monospace_family_with(Path::new("fc-match"))
+    let config_home = crate::sandbox::is_flatpak().then(crate::sandbox::desktop_config_home);
+    monospace_family_with(Path::new("fc-match"), config_home.as_deref())
 }
 
-pub fn monospace_family_with(fc_match: &Path) -> String {
-    let output = Command::new(fc_match)
+/// [`monospace_family`] with the `fc-match` at `fc_match`, and `XDG_CONFIG_HOME` set to
+/// `config_home` when given.
+pub fn monospace_family_with(fc_match: &Path, config_home: Option<&Path>) -> String {
+    let mut command = Command::new(fc_match);
+    command
         .args(["monospace", "-f", "%{family[0]}"])
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output();
+        .stderr(Stdio::null());
+    if let Some(config_home) = config_home {
+        command.env("XDG_CONFIG_HOME", config_home);
+    }
+    let output = command.output();
     match output {
         Ok(output) if output.status.success() => {
             let family = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -38,9 +47,10 @@ pub fn monospace_family_with(fc_match: &Path) -> String {
     }
 }
 
-/// `$XDG_CONFIG_HOME/fontconfig`, which `omarchy-font-set` creates and writes.
+/// `$XDG_CONFIG_HOME/fontconfig`, which `omarchy-font-set` creates and writes; the host's in a
+/// Flatpak.
 pub fn fontconfig_dir() -> PathBuf {
-    crate::xdg::config_home().join("fontconfig")
+    crate::sandbox::desktop_config_home().join("fontconfig")
 }
 
 #[cfg(test)]
@@ -64,7 +74,24 @@ mod tests {
             dir.path(),
             "[ \"$1\" = monospace ] && [ \"$3\" = '%{family[0]}' ] && printf 'Test Mono Nerd Font'",
         );
-        assert_eq!(monospace_family_with(&fc_match), "Test Mono Nerd Font");
+        assert_eq!(
+            monospace_family_with(&fc_match, None),
+            "Test Mono Nerd Font"
+        );
+    }
+
+    #[test]
+    fn gives_fc_match_the_config_home() {
+        let _spawning = crate::test_support::spawn_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let fc_match = script(
+            dir.path(),
+            "[ \"$XDG_CONFIG_HOME\" = /host/config ] && printf 'Host Mono' || printf 'Own Mono'",
+        );
+        assert_eq!(
+            monospace_family_with(&fc_match, Some(Path::new("/host/config"))),
+            "Host Mono"
+        );
     }
 
     #[test]
@@ -73,10 +100,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         for body in ["exit 1", "printf '  \\n'"] {
             let fc_match = script(dir.path(), body);
-            assert_eq!(monospace_family_with(&fc_match), FALLBACK_FAMILY, "{body}");
+            assert_eq!(
+                monospace_family_with(&fc_match, None),
+                FALLBACK_FAMILY,
+                "{body}"
+            );
         }
         assert_eq!(
-            monospace_family_with(&dir.path().join("missing")),
+            monospace_family_with(&dir.path().join("missing"), None),
             FALLBACK_FAMILY
         );
     }

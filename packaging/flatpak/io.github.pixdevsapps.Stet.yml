@@ -1,0 +1,54 @@
+# Stet as a Flatpak (ADR-019). tools/flatpak.py builds it from `git archive` of the tagged commit
+# and publishes it in Stet's own Flatpak repository. The crates come from cargo-sources.json
+# (tools/flatpak-cargo-sources.py); the build has no network.
+app-id: io.github.pixdevsapps.Stet
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: stet
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # An editor opens and saves files anywhere, and Find in Files, Replace in Files and quick
+  # open read whole folders. This includes Omarchy's theme in ~/.local/state/omarchy and the
+  # fontconfig file omarchy-font-set writes. No network: Check for Updates isn't in the Flatpak.
+  - --filesystem=host
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/stet/cargo
+    CARGO_NET_OFFLINE: 'true'
+    RUSTFLAGS: --remap-path-prefix=/run/build/stet=/usr/src/stet
+modules:
+  - name: stet
+    buildsystem: simple
+    build-commands:
+      - cargo build --release --locked --offline -p stet
+      - install -Dm755 target/release/stet /app/bin/stet
+      - install -Dm644 packaging/io.github.pixdevsapps.Stet.desktop /app/share/applications/io.github.pixdevsapps.Stet.desktop
+      - install -Dm644 packaging/io.github.pixdevsapps.Stet.metainfo.xml /app/share/metainfo/io.github.pixdevsapps.Stet.metainfo.xml
+      - sed 's|^Exec=/usr/bin/|Exec=/app/bin/|' packaging/io.github.pixdevsapps.Stet.service > io.github.pixdevsapps.Stet.service
+      - install -Dm644 io.github.pixdevsapps.Stet.service /app/share/dbus-1/services/io.github.pixdevsapps.Stet.service
+      - install -Dm644 assets/brand/io.github.pixdevsapps.Stet.svg /app/share/icons/hicolor/scalable/apps/io.github.pixdevsapps.Stet.svg
+      - install -Dm644 assets/brand/io.github.pixdevsapps.Stet-symbolic.svg /app/share/icons/hicolor/symbolic/apps/io.github.pixdevsapps.Stet-symbolic.svg
+      - for size in 16 24 32 48 64 128 256; do install -Dm644 assets/icons/io.github.pixdevsapps.Stet-$size.png /app/share/icons/hicolor/${size}x${size}/apps/io.github.pixdevsapps.Stet.png; done
+      - install -Dm644 LICENSE /app/share/licenses/io.github.pixdevsapps.Stet/LICENSE
+      - install -Dm644 THIRD_PARTY.md /app/share/licenses/io.github.pixdevsapps.Stet/THIRD_PARTY.md
+      - install -Dm644 packaging/dependency-licenses.json /app/share/licenses/io.github.pixdevsapps.Stet/dependency-licenses.json
+      - cp -r packaging/licenses /app/share/licenses/io.github.pixdevsapps.Stet/dependencies
+      - chmod -R u=rwX,go=rX /app/share/licenses/io.github.pixdevsapps.Stet/dependencies
+      - for doc in README.md docs/INSTALL.md docs/USER_GUIDE.md docs/INTEGRATIONS.md; do install -Dm644 $doc /app/share/doc/stet/$(basename $doc); done
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - .local
+          - .git
+          - .claude
+          - tools/live/pointer/target
+      - cargo-sources.json

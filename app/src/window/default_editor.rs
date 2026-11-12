@@ -2,7 +2,8 @@
 //! will change and asks first, then writes `stet` to Omarchy's default-editor file, so
 //! SUPER+SHIFT+N (`omarchy-launch-editor`) starts Stet, and makes Stet the default for the
 //! text types in its desktop entry with `xdg-mime`, so a double-click in the file manager
-//! opens Stet. It is the only place where Stet changes the user's configuration.
+//! opens Stet. It is the only place where Stet changes the user's configuration. A Flatpak
+//! changes nothing: it says how to do it instead (INTEGRATIONS.md "Flatpak").
 
 use super::Window;
 use crate::worker;
@@ -10,6 +11,14 @@ use std::path::{Path, PathBuf};
 use stet_domain::document::tilde;
 use stet_infrastructure::desktop::{self, COMMAND, DESKTOP_ID};
 use stet_infrastructure::omarchy::defaults;
+
+/// What a Flatpak says instead: its `xdg-mime` would write the sandbox's own `mimeapps.list`,
+/// and Omarchy's default-editor file is read only there.
+const FLATPAK: &str = "This Stet is a Flatpak, which can't change which app opens your files. \
+     Choose Stet as the default text editor in your system's settings, or run this in a \
+     terminal:\n\nxdg-mime default io.github.pixdevsapps.Stet.desktop text/plain\n\nOn Omarchy, \
+     install Stet's Arch package instead: there Set as Default Editor… also makes SUPER+SHIFT+N \
+     open Stet.";
 
 /// What the system looks like before the change.
 struct Before {
@@ -28,6 +37,11 @@ struct After {
 
 impl Window {
     pub(super) async fn set_as_default_editor(&self) {
+        if stet_infrastructure::sandbox::is_flatpak() {
+            self.show_message("Choose Stet in your system's settings", FLATPAK)
+                .await;
+            return;
+        }
         let omarchy_dir = self.inner.shared.config.omarchy_dir.clone();
         let probe = worker::run(move || Before {
             editor_file: defaults::editor_file(&omarchy_dir),

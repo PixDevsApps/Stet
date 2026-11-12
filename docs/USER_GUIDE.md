@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-12 (1.5.1)
+Synced: 2026-11-12 (1.6.0)
 
 This guide describes Stet 1.0: the MVP (M1–M5, 0.3), column mode (M6), bookmarks, Mark, split view and compare (M7), and navigation and Replace in Files (M8). Installing Stet is in [INSTALL.md](INSTALL.md); how it fits into Omarchy is in [INTEGRATIONS.md](INTEGRATIONS.md).
 
@@ -408,9 +408,12 @@ Stet's default keys are adapted to Omarchy: every F-key command also has a key w
 - **Set as default editor**: **Settings › Set as Default Editor…** makes SUPER+SHIFT+N (`omarchy-launch-editor`) start Stet and makes Stet the default for the text types in its desktop entry, so a double-click in the file manager opens Stet. It says exactly what it will change, asks first, and reports what changed; [INTEGRATIONS.md](INTEGRATIONS.md#4-set-as-default-editor-built-in-m5) has the details and how to undo it.
 - **Terminal and folder**: Open Terminal Here uses `xdg-terminal-exec --dir=<folder>`, as Omarchy's own terminal launcher does; Open Containing Folder uses `xdg-open`.
 - `GIT_EDITOR="stet --wait"` and `SUDO_EDITOR="stet --wait"` arrive with M2.
+- **In the Flatpak** (1.6) the theme is followed as above, the font only when `omarchy-font-set` has written `~/.config/fontconfig/fonts.conf` (or `font` is set in `config.toml`), Open Terminal Here isn't in the menus, and Set as Default Editor… only says how to choose Stet in the system's settings ([INTEGRATIONS.md](INTEGRATIONS.md#9-flatpak-16)).
 
 ## Updating
 
 **Check for Updates…**, at the bottom of the menu (☰), asks GitHub which Stet release is the latest and says whether yours is. When a newer one is out, it shows the command that installs it, with **Copy Command**: paste it into a terminal and press Enter, type your password when asked, then quit Stet (Ctrl+Alt+Q) and start it again; your tabs and unsaved text come back. The command is the README's install line for that version.
+
+**The Flatpak** (1.6) updates with your other Flatpak apps (`flatpak update`, or your software centre), so its menu has no Check for Updates….
 
 Stet asks only when you choose Check for Updates…, never on its own. The request is made with `curl`, carries the name "Stet" and nothing about you, and only the answer's version number is read. Stet never installs anything itself.

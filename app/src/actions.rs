@@ -14,6 +14,15 @@ use stet_domain::actions::{
 };
 use stet_domain::settings::Keymap;
 
+/// Whether `id` is there at all. In a Flatpak, Open Terminal Here (the sandbox can't start the
+/// host's terminal) and Check for Updates (Flatpak updates Stet, and the command it gives is
+/// pacman's) get no action, and the menus, the palette and the shortcuts leave them out
+/// (INTEGRATIONS.md "Flatpak").
+pub fn available(id: ActionId) -> bool {
+    !(matches!(id, ActionId::OpenTerminalHere | ActionId::CheckForUpdates)
+        && stet_infrastructure::sandbox::is_flatpak())
+}
+
 fn simple_action(id: ActionId) -> gio::SimpleAction {
     match id.kind() {
         ActionKind::Command => gio::SimpleAction::new(id.name(), None),
@@ -26,7 +35,7 @@ fn simple_action(id: ActionId) -> gio::SimpleAction {
 pub fn install_window_actions(window: &Window) {
     for id in ActionId::ALL
         .into_iter()
-        .filter(|id| id.scope() == ActionScope::Window)
+        .filter(|id| id.scope() == ActionScope::Window && available(*id))
     {
         let action = simple_action(id);
         action.connect_activate(glib::clone!(
@@ -176,7 +185,7 @@ pub fn eol_menu() -> gio::Menu {
 /// The submenu of the hamburger menu named `name`, by section.
 fn submenu(name: &str, keymap: &Keymap) -> gio::Menu {
     let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
-    for id in ActionId::ALL {
+    for id in ActionId::ALL.into_iter().filter(|id| available(*id)) {
         if let Some(place) = id.spec().menu.filter(|place| place.submenu == Some(name)) {
             sections
                 .entry(place.section)
@@ -196,7 +205,7 @@ pub fn tab_menu(keymap: &Keymap) -> gio::Menu {
     let menu = gio::Menu::new();
     for ids in TAB_MENU {
         let section = gio::Menu::new();
-        for id in *ids {
+        for id in ids.iter().filter(|id| available(**id)) {
             let item = item(*id, keymap);
             if matches!(id, ActionId::PinTab | ActionId::UnpinTab) {
                 item.set_attribute_value("hidden-when", Some(&"action-disabled".to_variant()));
@@ -233,7 +242,7 @@ pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
     for menu in Menu::ALL {
         let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
         let mut nested: BTreeMap<(u8, usize, &str), BTreeMap<u8, gio::Menu>> = BTreeMap::new();
-        for id in ActionId::ALL {
+        for id in ActionId::ALL.into_iter().filter(|id| available(*id)) {
             let spec = id.spec();
             let Some(place) = spec.menu.filter(|place| place.menu == menu) else {
                 continue;
@@ -294,7 +303,7 @@ pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
     }
     // Below the submenus, the items of the first page itself (1.5).
     let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
-    for id in ActionId::ALL {
+    for id in ActionId::ALL.into_iter().filter(|id| available(*id)) {
         if let Some(place) = id.spec().menu.filter(|place| place.menu == Menu::Main) {
             sections
                 .entry(place.section)

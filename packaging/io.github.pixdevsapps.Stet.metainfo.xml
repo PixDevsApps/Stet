@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.pixdevsapps.Stet</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>Stet</name>
+  <summary>Fast, keyboard-first text and code editor</summary>
+  <developer id="io.github.pixdevsapps">
+    <name>PixDevs</name>
+  </developer>
+
+  <description>
+    <p>
+      Stet is a fast text and code editor, quick to drive from the keyboard, that never loses
+      your work: unsaved and untitled tabs survive quitting and rebooting, with no save prompts.
+    </p>
+    <ul>
+      <li>Tabs whose unsaved text comes back after a quit or a reboot</li>
+      <li>Regex find and replace, Find All, and Find and Replace in Files with a results panel</li>
+      <li>Line tools, case conversion, comment toggling, and JSON and XML formatting</li>
+      <li>Column editing, bookmarks and Mark</li>
+      <li>Quick open, a Ctrl+Tab switcher, back and forward</li>
+      <li>Split view, and two files compared side by side</li>
+      <li>Careful handling of encodings and line endings, in files up to 256 MiB</li>
+      <li>Familiar keyboard shortcuts, your own in keys.toml, and an F1 command palette</li>
+    </ul>
+    <p>
+      Stet follows the system's light or dark style. On Omarchy it also follows the live theme,
+      and changes with it.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.pixdevsapps.Stet.desktop</launchable>
+  <provides>
+    <binary>stet</binary>
+    <dbus type="user">io.github.pixdevsapps.Stet</dbus>
+    <mediatype>text/plain</mediatype>
+    <mediatype>text/markdown</mediatype>
+    <mediatype>application/json</mediatype>
+    <mediatype>application/xml</mediatype>
+  </provides>
+
+  <url type="homepage">https://github.com/PixDevsApps/Stet</url>
+  <url type="bugtracker">https://github.com/PixDevsApps/Stet/issues</url>
+  <url type="vcs-browser">https://github.com/PixDevsApps/Stet</url>
+  <url type="help">https://github.com/PixDevsApps/Stet/blob/main/docs/USER_GUIDE.md</url>
+
+  <categories>
+    <category>Utility</category>
+    <category>TextEditor</category>
+    <category>Development</category>
+  </categories>
+  <keywords>
+    <keyword>text</keyword>
+    <keyword>editor</keyword>
+    <keyword>code</keyword>
+    <keyword>notepad</keyword>
+  </keywords>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f2efe6</color>
+    <color type="primary" scheme_preference="dark">#1d212b</color>
+  </branding>
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <content_rating type="oars-1.1" />
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>A Rust file with a search, in Omarchy's Tokyo Night theme</caption>
+      <image type="source" width="1024" height="720">https://raw.githubusercontent.com/PixDevsApps/Stet/v1.5.1/docs/images/stet-tokyo-night.png</image>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="1.6.0" date="2026-11-12">
+      <description>
+        <p>Stet is also a Flatpak, from its own repository, for Linux systems other than Omarchy and Arch.</p>
+      </description>
+    </release>
+    <release version="1.5.1" date="2026-11-12">
+      <description>
+        <p>A tab dropped after the last tab stays in that strip.</p>
+      </description>
+    </release>
+    <release version="1.5.0" date="2026-11-12">
+      <description>
+        <p>The + follows the tabs, submenus open when you point at them, and Check for Updates… says whether a newer version is out.</p>
+      </description>
+    </release>
+    <release version="1.4.0" date="2026-11-07">
+      <description>
+        <p>A + button opens a new tab.</p>
+      </description>
+    </release>
+    <release version="1.3.4" date="2026-10-02">
+      <description>
+        <p>Stet's repository is public.</p>
+      </description>
+    </release>
+  </releases>
+</component>

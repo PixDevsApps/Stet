@@ -2,9 +2,9 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-12 (1.5.1)
+Synced: 2026-11-12 (1.6.0)
 
-Stet comes from the GitHub repository [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet): as the Arch package attached to a release, or built from source. There is no AUR package yet. These steps are for Arch Linux and Omarchy; other distributions need the same libraries. Building details are in [BUILD.md](BUILD.md), using Stet in [USER_GUIDE.md](USER_GUIDE.md).
+Stet comes from the GitHub repository [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet): as the Arch package attached to a release, as a Flatpak for other Linux systems ([below](#on-other-linux-systems-flatpak)), or built from source. There is no AUR package yet. These steps are for Arch Linux and Omarchy; other distributions need the same libraries. Building details are in [BUILD.md](BUILD.md), using Stet in [USER_GUIDE.md](USER_GUIDE.md).
 
 ---
 
@@ -35,6 +35,24 @@ curl -L -o /tmp/stet.pkg.tar.zst https://github.com/PixDevsApps/Stet/releases/la
 Releases before 1.5.0 have only the versioned file, for example [v1.3.4](https://github.com/PixDevsApps/Stet/releases/tag/v1.3.4)'s `stet-1.3.4-1-x86_64.pkg.tar.zst`.
 
 **To uninstall:** `sudo pacman -R stet`.
+
+## On other Linux systems: Flatpak
+
+From 1.6.0 on, Stet is also a Flatpak, for Fedora, Ubuntu, Linux Mint, Pop!_OS, Debian and other Linux systems, from Stet's own Flatpak repository ([ADR-019](DECISIONS.md#adr-019--a-flatpak-from-stets-own-repository-2026-11-12)). Your system needs Flatpak; many have it already, and [flatpak.org](https://flatpak.org/setup/) shows how to add it. Then run this in a terminal:
+
+```sh
+flatpak install --user https://github.com/PixDevsApps/Stet/releases/latest/download/io.github.pixdevsapps.Stet.flatpakref
+```
+
+Answer **y** when it asks. The first time, it also downloads the GNOME runtime Stet runs on, from Flathub; that takes a few minutes. Then start Stet from your app menu, or with `flatpak run io.github.pixdevsapps.Stet` (add files to open them).
+
+- **Updates** come with your other Flatpak apps: `flatpak update`, or your software centre's updates page. Check for Updates… isn't in the Flatpak's menu.
+- **On Omarchy and Arch, use the package above instead.** The Flatpak can't open a terminal (Open Terminal Here isn't in its menu), Set as Default Editor… only says how to choose Stet in your system's settings, and it uses Omarchy's font only after `omarchy-font-set` (or `font =` in its `config.toml`). Install only one of the two: they share the app-id but keep separate settings and sessions.
+- **Your files:** the Flatpak may open and save files anywhere you can. Its settings are in `~/.var/app/io.github.pixdevsapps.Stet/config/stet/`, its session and drafts in `~/.var/app/io.github.pixdevsapps.Stet/.local/state/stet/`.
+- **As `GIT_EDITOR`:** `git config --global core.editor "flatpak run io.github.pixdevsapps.Stet --wait"`.
+- **To uninstall:** `flatpak uninstall --delete-data io.github.pixdevsapps.Stet` removes it with its settings and unsaved drafts; leave out `--delete-data` to keep them. `flatpak remote-delete stet` then removes Stet's repository from your list.
+
+What differs inside the sandbox is listed in [INTEGRATIONS.md](INTEGRATIONS.md#9-flatpak-16).
 
 ## Get the source
 

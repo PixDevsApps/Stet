@@ -2,6 +2,11 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
+## 1.6.0 — 2026-11-12
+
+- **Stet as a Flatpak**, for Linux systems other than Omarchy and Arch, from Stet's own Flatpak repository: `flatpak install --user https://github.com/PixDevsApps/Stet/releases/latest/download/io.github.pixdevsapps.Stet.flatpakref`, then `flatpak update` for updates. It runs on GNOME's runtime and needs no network. In the Flatpak, Check for Updates… and Open Terminal Here aren't in the menu, Set as Default Editor… says how to choose Stet in your system's settings, and Stet keeps its settings and session in `~/.var/app/io.github.pixdevsapps.Stet/`. On Omarchy and Arch, the package stays the way to install Stet.
+- The Arch package also installs Stet's AppStream description (`/usr/share/metainfo/io.github.pixdevsapps.Stet.metainfo.xml`), which software centres read.
+
 ## 1.5.1 — 2026-11-12
 
 - **A tab dropped after the last tab stays in that strip.** A tab dragged onto the + or onto the empty part of a tab strip after it now becomes that strip's last tab, also in the other view's strip in split view. In 1.5.0 such a tab went back to where it came from.

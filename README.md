@@ -30,9 +30,19 @@ It downloads the latest release and installs it. When the terminal asks for your
 
 To have your text files open in Stet, choose **Settings › Set as Default Editor…** in Stet's menu (**☰**, at the left of the tabs). To update, run the same line again; **Check for Updates…** in Stet's menu says when there is a new version and gives you the line. To remove Stet, run `sudo pacman -R stet`; your unsaved drafts stay in `~/.local/state/stet`.
 
+### Other Linux systems: Flatpak
+
+From 1.6.0 on, Stet is also a Flatpak for Fedora, Ubuntu, Debian and other Linux systems, from Stet's own Flatpak repository. This line installs it, and `flatpak update` keeps it up to date:
+
+```sh
+flatpak install --user https://github.com/PixDevsApps/Stet/releases/latest/download/io.github.pixdevsapps.Stet.flatpakref
+```
+
+On Omarchy and Arch, use the package above: the Flatpak has no Open Terminal Here and can't set itself as the default editor. [INSTALL.md](docs/INSTALL.md#on-other-linux-systems-flatpak) has the details.
+
 ## Status
 
-**Stet 1.5.1** (2026-11-12) is the latest version. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
+**Stet 1.6.0** (2026-11-12) is the latest release; it adds the Flatpak. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
 
 ## Build from source
 

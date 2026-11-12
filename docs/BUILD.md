@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-07
+Synced: 2026-11-12
 
 Run commands from the repository root (the original working copy is `/home/fredrick/Projects/linux-apps/notes`; the folder keeps the M0 working name). Milestones M1, M3 and M4 are built and merged (Wave A, 2026-10-01): the editor shell with its headless self-tests and a local Arch package, the file pipeline for encodings and large files, and search; M2 and M5 are next. [PLAN.md](PLAN.md) has the current state.
 
@@ -37,7 +37,8 @@ notes/               repository root (this checkout's folder keeps the M0 workin
   infrastructure/    crate `stet-infrastructure`: std I/O
   spikes/            crate `stet-spikes`: M0 spike binaries s1_perf, s2_search, s3_theme, s4_live, s5_column
   assets/            brand/ (SVG icon masters), icons/ (PNG exports); provenance in docs/ASSETS.md
-  packaging/         PKGBUILD.in, the desktop file, dependency-licenses.json and licenses/
+  packaging/         PKGBUILD.in, the desktop file, the metainfo, dependency-licenses.json and licenses/;
+                     flatpak/ (the Flatpak's manifest and cargo-sources.json, 1.6)
   tests/selftest/    `.stet-test` scripts for `stet --self-test`, and their fixture themes
   tools/             ci.sh, headless.sh + headless-dbus.conf, gen-fixtures.py, package-source.py,
                      license-report.py, export-icons.sh, progress/ (preview screenshots)
@@ -265,9 +266,26 @@ makepkg checks `makedepends` against pacman's database. Where Rust comes from ru
 - `tools/package-source.py` archives the **committed** tree (`git archive HEAD`; it warns about uncommitted changes), gzips it with a zero timestamp, and fills `packaging/PKGBUILD.in`'s `@PKGVER@`, `@SHA256@` and `@SOURCE_DATE_EPOCH@` (the commit time).
 - `PKGBUILD`: `prepare()` runs `cargo fetch --locked` for the host target; `build()` runs `cargo build --release --locked --offline`; `check()` runs only `cargo test --locked --offline -p stet-domain -p stet-infrastructure`, never the GTK self-tests (a clean build has no display).
 - Depends: `gtk4 libadwaita gtksourceview5 glib2 pcre2 fontconfig curl gcc-libs glibc` (`curl` since 1.5, for Check for Updates); make depends: `rust cargo pkgconf`. `url` is the GitHub repository, `https://github.com/PixDevsApps/Stet` (public since 2026-10-02; the 1.0–1.3.0 packages were built without it, 1.3.1 and later have it).
-- Installs `/usr/bin/stet`; `/usr/share/applications/io.github.pixdevsapps.Stet.desktop`; the D-Bus service file `/usr/share/dbus-1/services/io.github.pixdevsapps.Stet.service` (M2); the icon in hicolor (scalable, symbolic, and 16 to 256 px); `/usr/share/licenses/stet/` (LICENSE, THIRD_PARTY.md, `dependency-licenses.json` and each crate's license texts under `dependencies/`); README, INTEGRATIONS, INSTALL and USER_GUIDE under `/usr/share/doc/stet/`.
+- Installs `/usr/bin/stet`; `/usr/share/applications/io.github.pixdevsapps.Stet.desktop`; the AppStream metainfo `/usr/share/metainfo/io.github.pixdevsapps.Stet.metainfo.xml` (1.6); the D-Bus service file `/usr/share/dbus-1/services/io.github.pixdevsapps.Stet.service` (M2); the icon in hicolor (scalable, symbolic, and 16 to 256 px); `/usr/share/licenses/stet/` (LICENSE, THIRD_PARTY.md, `dependency-licenses.json` and each crate's license texts under `dependencies/`); README, INTEGRATIONS, INSTALL and USER_GUIDE under `/usr/share/doc/stet/`.
 - `tools/license-report.py` follows the `stet` package's normal dependencies in the locked graph (dev- and build-dependencies are not shipped) and fails if a crate declares no license or ships no license text. Run it after every dependency change: on 2026-10-01 (M2) it had not run since M1 and listed 87 crates; after the merge of M2 and M5 it lists 130, M3's and M4's crates, M2's `glib-unix` and M5's `toml` included.
 - The desktop file sets `DBusActivatable=true` and the service file runs `/usr/bin/stet --gapplication-service` (M2, [ADR-011 amendment](DECISIONS.md#adr-011-amendment--d-bus-activation-and---wait-as-built-in-m2-2026-10-01)).
+
+### The Flatpak (1.6)
+
+The Flatpak ([ADR-019](DECISIONS.md#adr-019--a-flatpak-from-stets-own-repository-2026-11-12)) needs `flatpak`, `flatpak-builder`, `appstreamcli`, `desktop-file-validate`, `ostree` and `gpg`, and from Flathub the GNOME 51 SDK and the Rust extension:
+
+```sh
+flatpak install --user flathub org.gnome.Sdk//51 org.gnome.Platform//51 org.freedesktop.Sdk.Extension.rust-stable//26.08
+python3 tools/flatpak-cargo-sources.py      # after every Cargo.lock change; tools/ci.sh checks it
+python3 tools/flatpak.py build              # HEAD, which must be the commit tagged v<version>
+python3 tools/flatpak.py build --worktree   # a test: the files git would commit now
+```
+
+- `build` copies the tree into `.local/flatpak/release/<version>/src` (`git archive HEAD`, or with `--worktree` the tracked and new files), runs `flatpak-builder` with the manifest into `.local/flatpak/release/<version>/build` and an unsigned repository beside it, and checks the result: `appstreamcli validate`, a `<release>` for the version in the metainfo, `desktop-file-validate`, the exported D-Bus service rewritten into `flatpak run`, and no home or build path in `/app/bin/stet`.
+- The build has no network: `flatpak-builder` downloads the crates `packaging/flatpak/cargo-sources.json` lists from static.crates.io beforehand, checked against `Cargo.lock`'s SHA-256, and Cargo reads them as a vendored source. `RUSTFLAGS` maps the build folder to `/usr/src/stet`.
+- The Flatpak installs `/app/bin/stet`, the desktop entry, the metainfo, the D-Bus service (`Exec=/app/bin/stet --gapplication-service`), the icons, the license bundle in `/app/share/licenses/io.github.pixdevsapps.Stet/` and the four guides in `/app/share/doc/stet/`.
+- `keygen` makes the repository's signing key once, in `.local/flatpak/gpg` (or `STET_FLATPAK_GPG_HOME`); `site` signs the build into `.local/flatpak/site/` (or `STET_FLATPAK_SITE`) with `stet.flatpakrepo`, `io.github.pixdevsapps.Stet.flatpakref` and an `index.html`, for `STET_FLATPAK_URL` (by default `https://pixdevsapps.github.io/stet-flatpak/`); `publish` force-pushes that folder as one commit to `PixDevsApps/stet-flatpak`, whose GitHub Pages serve it.
+- To try a build without touching your own Flatpak installation, install it into a scratch one: `FLATPAK_USER_DIR=<scratch> flatpak --user …` ([TESTING.md](TESTING.md#2026-11-12--160-the-flatpak) shows how the 1.6.0 build was tried headless).
 
 ### Releasing
 
@@ -278,6 +296,19 @@ cp .local/release/stet-<version>-1-x86_64.pkg.tar.zst .local/release/stet-x86_64
 gh release create v<version> --repo PixDevsApps/Stet --verify-tag --title "Stet <version>" \
     --notes-file <notes> .local/release/stet-x86_64.pkg.tar.zst
 ```
+
+From 1.6.0 on, a release also carries the Flatpak's `io.github.pixdevsapps.Stet.flatpakref` (from `tools/flatpak.py site`), which INSTALL.md's Flatpak command fetches through `releases/latest/download/`. GitHub counts that file's downloads, which is how Flatpak installs are counted ([ADR-019](DECISIONS.md#adr-019--a-flatpak-from-stets-own-repository-2026-11-12)), so a release without it both breaks the command and loses the count. Publish the site before the release, so the file points at a repository that has the version; both steps are on the owner's word:
+
+```sh
+python3 tools/flatpak.py build      # on the tagged commit
+python3 tools/flatpak.py site       # needs the signing key in .local/flatpak/gpg
+python3 tools/flatpak.py publish
+gh release create v<version> --repo PixDevsApps/Stet --verify-tag --title "Stet <version>" \
+    --notes-file <notes> .local/release/stet-x86_64.pkg.tar.zst \
+    .local/flatpak/site/io.github.pixdevsapps.Stet.flatpakref
+```
+
+`site` adds the new build to the repository in `.local/flatpak/site/repo` and keeps the last three, so that folder and the key are what the next release needs; without the folder, `site` starts a new repository that holds only the new build. `PixDevsApps/stet-flatpak` (public, created on 2026-11-12) serves its `main` branch's root through GitHub Pages, set once.
 
 Releases are never drafts or pre-releases when published: GitHub's latest release, which both the install line and Check for Updates read, skips those. Check for Updates reads only the tag, so a tag must be `v` and three plain numbers.
 
@@ -295,3 +326,4 @@ The directory name is `stet` ([ADR-010](DECISIONS.md#adr-010-accepted--stet-2026
 | `~/.local/state/omarchy/current/` | read and watched, never written ([ADR-004](DECISIONS.md#adr-004-amendment--as-built-in-m1-2026-10-01)) | M1 |
 | `~/.config/fontconfig/` | watched; the family comes from `fc-match monospace` | M1 |
 | `$XDG_STATE_HOME/omarchy/defaults/editor`, `$XDG_CONFIG_HOME/mimeapps.list` | written only by Settings › Set as Default Editor… after the user confirms (the latter through `xdg-mime default`) | M5 |
+| `~/.var/app/io.github.pixdevsapps.Stet/` | the Flatpak's own `config/stet/`, `.local/state/stet/` and `cache/stet/`: Flatpak points the XDG variables there ([INTEGRATIONS.md](INTEGRATIONS.md#9-flatpak-16)) | 1.6 |

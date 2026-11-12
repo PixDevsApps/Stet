@@ -18,6 +18,8 @@ done
 display=${STET_CI_DISPLAY:-9}
 
 cargo fmt --all --check
+# The Flatpak's crate list must match Cargo.lock (ADR-019).
+python3 -I tools/flatpak-cargo-sources.py --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo build --workspace

@@ -37,6 +37,8 @@ package() {
   install -Dm755 target/release/stet "$pkgdir/usr/bin/stet"
   install -Dm644 packaging/io.github.pixdevsapps.Stet.desktop \
     "$pkgdir/usr/share/applications/io.github.pixdevsapps.Stet.desktop"
+  install -Dm644 packaging/io.github.pixdevsapps.Stet.metainfo.xml \
+    "$pkgdir/usr/share/metainfo/io.github.pixdevsapps.Stet.metainfo.xml"
   # D-Bus activation (ADR-011): a command line always reaches a running Stet as a remote.
   install -Dm644 packaging/io.github.pixdevsapps.Stet.service \
     "$pkgdir/usr/share/dbus-1/services/io.github.pixdevsapps.Stet.service"

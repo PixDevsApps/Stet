@@ -1929,7 +1929,7 @@ impl Window {
         };
         let mut items: Vec<palette::Item> = ActionId::ALL
             .into_iter()
-            .filter(|id| id.spec().palette && applies(*id))
+            .filter(|id| id.spec().palette && applies(*id) && crate::actions::available(*id))
             .map(|id| {
                 let on = id.kind() == ActionKind::Toggle
                     && self
