@@ -32,7 +32,7 @@ To have your text files open in Stet, choose **Settings › Set as Default Edito
 
 ## Status
 
-**Stet 1.5.1** (2026-11-12) is the latest version; the latest release with a package on GitHub is 1.5.0, which the line above installs. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
+**Stet 1.5.1** (2026-11-12) is the latest version. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
 
 ## Build from source
 

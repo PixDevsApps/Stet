@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-12 (1.5.0)
+Synced: 2026-11-12 (1.5.1)
 
 Stet comes from the GitHub repository [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet): as the Arch package attached to a release, or built from source. There is no AUR package yet. These steps are for Arch Linux and Omarchy; other distributions need the same libraries. Building details are in [BUILD.md](BUILD.md), using Stet in [USER_GUIDE.md](USER_GUIDE.md).
 
@@ -41,7 +41,7 @@ Releases before 1.5.0 have only the versioned file, for example [v1.3.4](https:/
 ```sh
 git clone https://github.com/PixDevsApps/Stet.git stet
 cd stet
-git checkout v1.5.0    # a release tag, or stay on main
+git checkout v1.5.1    # a release tag, or stay on main
 ```
 
 The repository is public, so cloning needs no GitHub account.

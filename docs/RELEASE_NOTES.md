@@ -6,7 +6,6 @@ Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
 - **A tab dropped after the last tab stays in that strip.** A tab dragged onto the + or onto the empty part of a tab strip after it now becomes that strip's last tab, also in the other view's strip in split view. In 1.5.0 such a tab went back to where it came from.
 - Two of Stet's own tests no longer fail now and then (the Keep Mine step of a self-test script, and a timing test). Stet itself is not changed by them.
-- There is no package of 1.5.1 yet: the README's install line and Check for Updates… still give 1.5.0.
 
 ## 1.5.0 — 2026-11-12
 
