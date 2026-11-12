@@ -8,6 +8,13 @@ The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). 
 
 ---
 
+## As built in 1.5.1 — 2026-11-12
+
+A fix of 1.5's + ([PLAN.md](PLAN.md#stet-151-a-tab-dropped-after-the--and-two-flaky-tests--2026-11-12)). This replaces the last sentence of "The + after the last tab" below.
+
+- **A tab dropped on a strip's + or on the empty part after it joins that strip's view as its last tab**, whether it comes from the other view or from the same strip. A pinned tab stays pinned and goes after the view's other pinned tabs. No placeholder shows there while the tab is dragged. Dropped on the strip's tabs, a tab lands where it is dropped, as before: that part is libadwaita's.
+- **How.** The + and the filler are Stet's widgets at the strip's end, outside libadwaita's tab box, whose drop area is only as wide as the tabs since 1.5. They now carry a `GtkDropTarget` for `AdwTabPage`. libadwaita gives no public way to put a dragged tab into a view: when something outside its strips accepts the drop, it asks the tab's view for a new window's tab view (`create-window`) and attaches the tab there, first. Stet answers with a tab view that is never on screen, and when the tab arrives there moves it on with `transfer_page`, to the end of the view's tabs, or of its pinned tabs. Answering with the view itself would put an unpinned tab before the view's pinned ones. Stet answers `create-window` only after its own drop target took a drop, so a tab dropped anywhere else outside the strips returns to its place, as before.
+
 ## As built in 1.5 — 2026-11-12
 
 Asked for by the user ([PLAN.md](PLAN.md#stet-150-the--after-the-last-tab-hover-submenus-and-check-for-updates--2026-11-12)):

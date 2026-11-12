@@ -214,6 +214,9 @@ pub struct ViewPane {
     /// The strip's tabs, as wide as they are, so that the + follows them (1.5). `None` if
     /// libadwaita's tab strip is built differently: the + then sits at the strip's far end.
     tab_scroller: Option<gtk::ScrolledWindow>,
+    /// Takes a tab dropped on the + or the empty part of the strip after it, which libadwaita's
+    /// strip doesn't cover since the tabs are only as wide as they are (1.5.1).
+    tab_drop: gtk::DropTarget,
 }
 
 impl ViewPane {
@@ -248,12 +251,15 @@ impl ViewPane {
             tracing::warn!("the tab strip has no tab scroller: the + sits at its end");
         }
         bar.set_end_action_widget(Some(&trail));
+        let tab_drop = gtk::DropTarget::new(adw::TabPage::static_type(), gdk::DragAction::MOVE);
+        trail.add_controller(tab_drop.clone());
         Self {
             tabs,
             bar,
             new_tab,
             trail,
             tab_scroller,
+            tab_drop,
         }
     }
 
@@ -333,6 +339,12 @@ pub struct Inner {
     /// A tab's close is being finished: its detach is a close, not a tab dragged to the other
     /// view's strip.
     finishing_close: Cell<bool>,
+    /// The view whose strip took a dropped tab after its last tab, until libadwaita hands the
+    /// tab over.
+    dropped_on: Cell<Option<usize>>,
+    /// Where libadwaita puts that tab, always first; from here it moves to the end of the
+    /// view's tabs. Never on screen.
+    drop_stage: adw::TabView,
     actions: RefCell<HashMap<ActionId, gio::SimpleAction>>,
     last_focus_check: Cell<Option<Instant>>,
     last_toast: RefCell<String>,
@@ -484,6 +496,8 @@ impl Window {
                 closing_without_prompt: Cell::new(false),
                 moving: Cell::new(false),
                 finishing_close: Cell::new(false),
+                dropped_on: Cell::new(None),
+                drop_stage: adw::TabView::new(),
                 actions: RefCell::new(HashMap::new()),
                 last_focus_check: Cell::new(None),
                 last_toast: RefCell::new(String::new()),
@@ -567,7 +581,56 @@ impl Window {
                 self.inner,
                 move |_| Window { inner }.on_view_selected(index)
             ));
+            // A tab dropped after the strip's last tab: libadwaita then asks the tab's view
+            // for a new window's tab view to put it in, which is the stage.
+            view.tab_drop.connect_drop(glib::clone!(
+                #[weak(rename_to = inner)]
+                self.inner,
+                #[upgrade_or]
+                false,
+                move |target, _, _, _| {
+                    inner.dropped_on.set(Some(index));
+                    if let Some(drag) = target.current_drop().and_then(|drop| drop.drag()) {
+                        drag.connect_dnd_finished(glib::clone!(
+                            #[weak]
+                            inner,
+                            move |_| inner.dropped_on.set(None)
+                        ));
+                        drag.connect_cancel(glib::clone!(
+                            #[weak]
+                            inner,
+                            move |_, _| inner.dropped_on.set(None)
+                        ));
+                    }
+                    true
+                }
+            ));
+            view.tabs.connect_create_window(glib::clone!(
+                #[weak(rename_to = inner)]
+                self.inner,
+                #[upgrade_or]
+                None,
+                move |_| inner.dropped_on.get().map(|_| inner.drop_stage.clone())
+            ));
         }
+        inner.drop_stage.connect_page_attached(glib::clone!(
+            #[weak(rename_to = inner)]
+            self.inner,
+            move |stage, tab_page, _| {
+                let index = inner.dropped_on.take().unwrap_or(inner.active.get());
+                let (stage, tab_page) = (stage.clone(), tab_page.clone());
+                // Once libadwaita has finished attaching it here.
+                glib::spawn_future_local(async move {
+                    let target = &inner.views[index].tabs;
+                    let position = if tab_page.is_pinned() {
+                        target.n_pinned_pages()
+                    } else {
+                        target.n_pages()
+                    };
+                    stage.transfer_page(&tab_page, target, position);
+                });
+            }
+        ));
         for (index, view) in inner.views.iter().enumerate() {
             view.new_tab.connect_clicked(glib::clone!(
                 #[weak(rename_to = inner)]
@@ -1769,6 +1832,11 @@ impl Window {
     /// The + after view `index`'s last tab, which opens a new tab there (1.4, 1.5).
     pub fn new_tab_button(&self, index: usize) -> &gtk::Button {
         &self.inner.views[index].new_tab
+    }
+
+    /// What takes a tab dropped after view `index`'s last tab, for the self-test.
+    pub fn tab_drop_target(&self, index: usize) -> &gtk::DropTarget {
+        &self.inner.views[index].tab_drop
     }
 
     /// The view whose tab strip has the menu at its start.

@@ -12,6 +12,27 @@ The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). 
 
 Dated test and acceptance results go here, newest first. Spike results go to `docs/spikes/` and are linked from [RESEARCH.md](RESEARCH.md#m0-spike-results).
 
+### 2026-11-12 — 1.5.1: a tab dropped after the +, and two flaky tests
+
+Run by the agent on the development machine (gtk4 4.24.1, libadwaita 1.10.0, gtksourceview5 5.22.0), on `0f744ce` with the changes uncommitted (committed afterwards as 1.5.1), 12:43–12:57 CET; headless runs on display 73. No `gtk4-broadwayd` was left after the runs. No live check was run.
+
+| Command | Result |
+| --- | --- |
+| libadwaita 1.10.0's `adw-tab-box.c`, `adw-tab-bar.c` and `adw-tab-view.c` from gitlab.gnome.org, read | A strip takes dropped tabs on its tab box, and the tab view's content takes them too and puts them last; nothing covers the strip's end action widget, where Stet's + and filler are. After a drop that something else accepts, `tab_dnd_finished_cb` calls `detach_into_new_window`: it emits `create-window` on the tab's view and attaches the tab at position 0 of the answer, or back at its place without one. Read, not run. |
+| `tools/headless.sh 73 target/debug/stet --self-test tests/selftest/new-tab-button.stet-test`, first run with the new `drop-tab` steps | **Failed:** the second `drop-tab` aborted on `g_object_ref: assertion 'G_IS_OBJECT (object)' failed`. The fault was the step's: it emitted `create-window` from Rust and dropped the answer. libadwaita-rs 0.9.2's handler returns a view it doesn't own, which the signal takes; emitted from C, as libadwaita does, the reference comes back, but here the window's stage lost it. The step now never drops the answer. |
+| The same again | **Pass,** 107 of 107 (64 before), with no GLib warning or critical in the log: a tab dropped from the other view, whose last tab it was; within its own view; an unpinned and a pinned tab into a view with a pinned tab. |
+| The same with the drop handler not recording its view (scratch build, restored) | 84 of 107: the view had 2 tabs where 3 were wanted, so the steps catch a drop that isn't taken. |
+| `compare-banner.stet-test` as it was, with Keep Mine's `stat` on the worker delayed 200 ms (scratch build, restored) | **Failed** as on 2026-10-02, 39 of 40: step 30, `assert-no-banner "changed on disk"`, "a banner shows “doc.txt” changed on disk." |
+| The same build with the script waiting (`wait-until assert-no-banner`); then without the delay | Pass, 40 of 40, both. |
+| `bash tools/ci.sh` (12:49) | fmt and Clippy passed; app 38, domain 456 and infrastructure 215 tests passed; **`main_loop_runs_until_done_or_timeout` failed** (`elapsed >= 20 ms`), so the script stopped. |
+| `cargo test -p stet-spikes --lib main_loop_runs_until_done_or_timeout`, 30 runs with the test changed | 30 of 30 passed. |
+| Every self-test script ci.sh runs, one by one without stopping at a failure (12:51–12:55) | **36 of 52 pass,** 2,864 steps: about 7, activation 49, back-forward 88, bookmarks 118, cli 44, compare-banner 40, compare-large 25, compare 128, convert 121, default-editor 31, disk 137, encodings 181, fif 97, files 112, find 84, first-line 46, marks 103, new-tab-button 107, parity 1, pinned 69, quick-open 89, registry 30, replace-in-files 116, results 84, rif-fixtures 134, search-crlf 33, search-decoded 110, search 229, session-restore 24, split-session 6, split 141, switcher 93, tabstops 30, theme 82, tokens 42, updates 33. **16 stop** when `gtk4-broadwayd` aborts, the same 16 as on 2026-11-07: column-clipboard, column-editor, column-large, column, context, focus, indent, large, marks-large, session-settings, session, settings, tab-double-click, tab-names, toolbox-large, toolbox. |
+| On the final code: `bash tools/ci.sh` (12:56) and `new-tab-button`, `split`, `pinned`, `compare-banner`, `disk` | **Pass:** fmt, Clippy `-D warnings`, 718 tests (38 + 456 + 215 + 5 + 3 + 1; 14 ignored), build; 107, 141, 69, 40 and 137 steps. |
+| After the version became 1.5.1: `bash tools/ci.sh` (13:30), `target/debug/stet --version`, and `new-tab-button`, `updates`, `about`, `compare-banner` | **Pass:** fmt, Clippy `-D warnings`, 718 tests, build; `stet 1.5.1`; 107, 33, 7 and 40 steps. |
+| `pacman -Q gtk4`, `pacman -Si gtk4` | Both 1:4.24.1-1: no GTK update to try the Broadway bug on. |
+
+Not covered: a real drag. The self-tests have no real pointer to drag with; `drop-tab` emits the drop target's `drop` and the view's `create-window`, and attaches the tab to the answer as libadwaita does.
+
 ### 2026-11-12 — 1.5.0: the + after the last tab, hover submenus and Check for Updates
 
 Run by the agent on the development machine (gtk4 4.24.1, libadwaita 1.10.0, curl 8.23.0), on `b0450f0` with the changes uncommitted; headless runs on display 73. No `gtk4-broadwayd` was left after the runs.
@@ -586,6 +607,7 @@ tools/headless.sh 20 target/debug/stet --self-test tests/selftest/files.stet-tes
 | Script | Covers |
 | --- | --- |
 | `about.stet-test` | 1.3.2: Help › About Stet says what Stet is and does, with its copyright |
+| `new-tab-button.stet-test` | 1.4, 1.5: each strip's + opens a new tab in its view and gives its editor the focus; it follows the last tab, and stays at the end of the tabs on screen when they scroll; with the main view empty. 1.5.1: a tab dropped on the + or after it becomes that strip's last tab, from the other view or its own, pinned or not |
 | `registry.stet-test` | Every registry accelerator is installed and parses in GTK; every editing key the menu shows is a real GtkTextView binding; every language-hint id is installed; the menu holds every registry action and nothing else; the undo cap; INS/OVR; palette filtering and running actions |
 | `files.stet-test` | Open, edit, save (mode kept), dirty markers in the tab and window title, the close prompt (Discard, Cancel, Save All), Restore Closed Tab with untitled text, Save As, recent files (in `session.json` since M2: 0700/0600, menu; no `recent.json`), a Latin-1 file edited and saved as Windows-1252 (M3; M1 opened it read-only), NUL files read-only, CRLF kept, dropped files (no URI inserted), a vanished recent file, Clear Recent Files in the session (M2 removed M1's quit prompt from it) |
 | `encodings.stet-test` | M3: the fixture corpus (UTF-8 ± BOM, UTF-16 LE/BE ± BOM with NUL and a surrogate pair, Windows-1252, ISO-8859-15, Shift_JIS and its lossy case, GB18030, CR-only, CRLF, mixed, NUL text, binary, an existing ␀, broken UTF-8) opens with the right status-bar encoding and line ending and saves byte for byte, or is flagged lossy; the lossy, mixed (Normalize, Keep) and binary (Edit Anyway) banners and save prompts; no temporary file left behind |
@@ -658,6 +680,7 @@ tools/headless.sh 20 target/debug/stet --self-test tests/selftest/files.stet-tes
 | `assert-menu-at` | view (`1` or `2`) | 1.3: that view's tab strip has the menu at its start, left of its first tab, and the other strip doesn't (1.4 also checked the + there; since 1.5 `assert-new-tab-at` does) |
 | `assert-new-tab-at` | view (`1` or `2`) | 1.5: that view's + lies right after its last tab (−1 to 12 px), or after the end of the tabs on screen when they scroll, and within the strip |
 | `click-new-tab` | view (`1` or `2`) | 1.4: clicks the + button (emits its `clicked`); since 1.5 the + of that view's strip, after its last tab; then waits until the window settles |
+| `drop-tab` | tab (counted across the views), view (`1` or `2`) | 1.5.1: what a tab dropped on that view's + or the empty part after it sets off: the strip's drop target takes it (`drop`), the tab's view is asked for a new window's tab view (`create-window`), and the tab is attached there, first; then waits until the window settles |
 | `assert-menu-within` | — | 1.3.1: the open menu lies within the window's width; since 1.3.2 also its height |
 | `assert-menu-submenus` | — | 1.5, in place of 1.3.2's `assert-menu-pages`: the open menu is nested, has one submenu per menu, and each of them and the tallest deeper submenu, shown as resting the pointer on its item does, lies within the window (its popup placed relative to its parent menu's) |
 | `popup-submenu` | submenu's label | 1.5: opens that submenu of the open menu, as resting the pointer on its item does |

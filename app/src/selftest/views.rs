@@ -8,6 +8,7 @@ use crate::editor::EditorPage;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::prelude::*;
+use libadwaita as adw;
 use sourceview5::prelude::*;
 use std::time::{Duration, Instant};
 use stet_domain::diff::{LineKind, Side};
@@ -20,6 +21,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("mark-option", 2, 2),
     ("view-focus", 1, 1),
     ("drag-tab", 1, 1),
+    ("drop-tab", 2, 2),
     ("scroll-to-line", 1, 1),
     ("set-split-position", 1, 1),
     ("wait-compare", 0, 0),
@@ -159,6 +161,37 @@ impl Harness {
                     None => Err(format!("there is no tab {index}")),
                 },
                 Err(error) => Err(error),
+            },
+            // What happens when a tab is dropped on a strip's + or the empty part after it:
+            // the strip accepts the drop, and libadwaita asks the tab's view for a new
+            // window's tab view and attaches the tab there, first.
+            "drop-tab" => match (number(arg(0)), view_index(arg(1))) {
+                (Ok(index), Ok(view)) => match self.window.tab_at(index) {
+                    Some((tabs, tab_page)) => {
+                        let value = glib::BoxedValue(tab_page.to_value());
+                        let accepted = self
+                            .window
+                            .tab_drop_target(view)
+                            .emit_by_name::<bool>("drop", &[&value, &0f64, &0f64]);
+                        // The signal takes the reference its handler returns, and the
+                        // binding's handler returns one it doesn't own. libadwaita, emitting
+                        // from C, gives it back; emitted from here, dropping the answer would
+                        // take it from the window.
+                        let stage = tabs
+                            .emit_by_name::<Option<adw::TabView>>("create-window", &[])
+                            .map(std::mem::ManuallyDrop::new);
+                        match stage {
+                            Some(stage) if accepted => {
+                                tabs.transfer_page(&tab_page, &stage, 0);
+                                self.wait_until_settled().await;
+                                Ok(())
+                            }
+                            _ => Err(format!("the strip of view {} did not take the tab", arg(1))),
+                        }
+                    }
+                    None => Err(format!("there is no tab {index}")),
+                },
+                (Err(error), _) | (_, Err(error)) => Err(error),
             },
             "scroll-to-line" => match (self.page(), number(arg(0))) {
                 (Ok(page), Ok(line)) => {

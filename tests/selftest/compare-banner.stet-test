@@ -32,7 +32,7 @@ assert-split false
 assert-tab-count 1
 assert-banner "changed on disk"
 banner-click "Keep Mine"
-assert-no-banner "changed on disk"
+wait-until assert-no-banner "changed on disk"
 
 # Compare with Saved Version: the same, from the menu.
 action compare-with-saved

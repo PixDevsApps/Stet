@@ -1,4 +1,4 @@
-# Release status: Stet 1.5.0
+# Release status: Stet 1.5.1
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
@@ -27,6 +27,8 @@ The M9 exit criteria ([PLAN.md](PLAN.md#m9--polish-qa-and-10-6-8-days)) are: eve
 **1.4.1 (2026-11-07)** changes only the version and the headless tests' setup: they no longer read the desktop's GTK settings, which fixed `theme.stet-test` ([release notes](RELEASE_NOTES.md#141--2026-11-07)). The 16 scripts that stop because of a GTK 4.24 Broadway bug wait for a fix from GTK, the user's decision ([upstream note](upstream/gtk-broadway-shared-render-node.md)). Not tagged; no package.
 
 **1.5.0 (2026-11-12)** moves the + to right after the last tab, opens the menu's submenus when the pointer rests on them, and adds Check for Updates… with a one-line install, at the user's request ([release notes](RELEASE_NOTES.md#150--2026-11-12)). Checked with fmt, Clippy, the unit tests (the spike crate's flaky timing test failed once, then passed 3 of 3), 15 self-test scripts one by one (1,287 steps; the full `--ui` run still stops on GTK 4.24's Broadway bug), screenshots, and the container's fresh install of its package ([TESTING.md](TESTING.md#2026-11-12--150-the--after-the-last-tab-hover-submenus-and-check-for-updates)). It is the [v1.5.0 release](https://github.com/PixDevsApps/Stet/releases/tag/v1.5.0), whose only file, `stet-x86_64.pkg.tar.zst` (SHA-256 `cdab1488434ab300e087e50fb32f23a8748c2c00cfb248d0af6eb95c4b5bf43b`, built from `v1.5.0`, `da889f3`), the README's line installs. The user installed it on 2026-11-12 and reported: "1.5.0 is now installed on this machine and works perfect".
+
+**1.5.1 (2026-11-12)** makes a tab dropped on a strip's + or on the empty part after it that strip's last tab, and fixes two tests that failed now and then ([release notes](RELEASE_NOTES.md#151--2026-11-12), [PLAN.md](PLAN.md#stet-151-a-tab-dropped-after-the--and-two-flaky-tests--2026-11-12)). Checked with `bash tools/ci.sh` (718 tests) and the self-test scripts one by one (36 of 52 pass; the other 16 stop on GTK 4.24's Broadway bug), headless only ([TESTING.md](TESTING.md#2026-11-12--151-a-tab-dropped-after-the--and-two-flaky-tests)). A real drag in the live session is not checked. Not tagged; no package: the latest release is still 1.5.0.
 
 ## Milestones
 

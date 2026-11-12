@@ -193,6 +193,9 @@ mod tests {
     #[test]
     fn main_loop_runs_until_done_or_timeout() {
         let fired = Rc::new(Cell::new(false));
+        // The time is taken before the timeout starts: `elapsed` starts after it, so it can
+        // be a little under the timeout.
+        let started = Instant::now();
         glib::timeout_add_local_once(
             Duration::from_millis(20),
             glib::clone!(
@@ -202,7 +205,9 @@ mod tests {
             ),
         );
         let elapsed = run_main_loop_until(Duration::from_secs(5), || fired.get()).unwrap();
-        assert!(elapsed >= Duration::from_millis(20));
+        assert!(fired.get());
+        assert!(started.elapsed() >= Duration::from_millis(20));
+        assert!(elapsed <= started.elapsed());
         assert!(run_main_loop_until(Duration::from_millis(30), || false).is_err());
     }
 

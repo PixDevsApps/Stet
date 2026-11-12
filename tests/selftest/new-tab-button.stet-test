@@ -73,3 +73,54 @@ click-new-tab 2
 assert-view-tabs 2 3
 assert-view-shows 2 "Untitled 2"
 assert-focus editor
+
+# A tab dropped on a strip's + or on the empty part after it joins that strip's view as its last
+# tab (1.5.1); no tab closes or opens. From the other view, whose last tab it was:
+action move-to-other-view
+assert-view-tabs 1 1
+assert-view-tabs 2 2
+assert-view-shows 1 "Untitled 2"
+drop-tab 1 2
+assert-tab-count 3
+assert-view-tabs 1 0
+assert-view-tabs 2 3
+assert-tab-title 3 "Untitled 2"
+assert-view-shows 2 "Untitled 2"
+assert-new-tab-at 2
+
+# Within its own view, it becomes the last tab.
+assert-tab-title 1 "Untitled 1"
+drop-tab 1 2
+assert-view-tabs 2 3
+assert-tab-title 1 "Untitled 3"
+assert-tab-title 3 "Untitled 1"
+assert-view-shows 2 "Untitled 1"
+
+# A view with a pinned tab: an unpinned tab goes after all its tabs, and a pinned one stays
+# pinned, after the view's other pinned tabs.
+action pin-tab
+assert-pinned 1 true
+assert-tab-title 1 "Untitled 1"
+click-tab 3
+action move-to-other-view
+assert-view-tabs 1 1
+assert-view-shows 1 "Untitled 2"
+drop-tab 1 2
+assert-view-tabs 2 3
+assert-tab-title 1 "Untitled 1"
+assert-pinned 1 true
+assert-tab-title 3 "Untitled 2"
+assert-pinned 3 false
+click-tab 2
+action move-to-other-view
+action pin-tab
+assert-view-shows 1 "Untitled 3"
+assert-pinned 1 true
+drop-tab 1 2
+assert-tab-count 3
+assert-view-tabs 2 3
+assert-tab-title 1 "Untitled 1"
+assert-tab-title 2 "Untitled 3"
+assert-pinned 2 true
+assert-tab-title 3 "Untitled 2"
+assert-pinned 3 false
