@@ -1,36 +1,75 @@
-# The + button right of the hamburger menu opens a new tab (1.4), in the view whose strip it is
-# on: the main view's, or the second view's while the main view has no tab. It takes the keyboard
-# focus to the new tab's editor, as New (Ctrl+N) does.
+# The + after a tab strip's last tab opens a new tab (1.4; after the last tab since 1.5) in that
+# strip's view. It takes the keyboard focus to the new tab's editor, as New (Ctrl+N) does. Each
+# strip on screen has its own +; when the tabs scroll, it stays at the end of the tabs on screen.
 # Run: tools/headless.sh 73 target/debug/stet --self-test tests/selftest/new-tab-button.stet-test
 
 write $TMP/a.txt "alpha\n"
 open a.txt
 assert-tab-count 1
 assert-menu-at 1
-click-new-tab
+assert-new-tab-at 1
+click-new-tab 1
 assert-tab-count 2
 assert-tab-title 2 "Untitled 1"
 assert-title "Untitled 1 — Stet"
 assert-focus editor
+assert-new-tab-at 1
 
-# Split, with the second view active: the + is on the main view's strip, and opens its tab there.
+# More tabs than the strip shows: the + stays at the end of the tabs on screen.
+action new-tab
+action new-tab
+action new-tab
+action new-tab
+action new-tab
+action new-tab
+action new-tab
+action new-tab
+action new-tab
+action new-tab
+assert-tab-count 12
+assert-new-tab-at 1
+action close-tab
+action close-tab
+action close-tab
+action close-tab
+action close-tab
+action close-tab
+action close-tab
+action close-tab
+action close-tab
+action close-tab
+assert-tab-count 2
+assert-new-tab-at 1
+
+# Split, with the second view active: each strip has its +, and each opens its tab in its view.
 action move-to-other-view
 assert-split true
 assert-active-view 2
 assert-menu-at 1
-click-new-tab
+assert-new-tab-at 1
+assert-new-tab-at 2
+click-new-tab 1
 assert-view-tabs 1 2
 assert-view-tabs 2 1
 assert-active-view 1
 assert-view-shows 1 "Untitled 2"
 assert-focus editor
+click-new-tab 2
+assert-view-tabs 1 2
+assert-view-tabs 2 2
+assert-active-view 2
+assert-view-shows 2 "Untitled 3"
+assert-focus editor
+assert-new-tab-at 2
 
-# The main view empty: the + moves with the menu to the second view's strip.
+# The main view empty: the second view's strip has the menu, and its + still opens tabs there.
+view-focus 1
 action close-tab
 action close-tab
 assert-view-tabs 1 0
 assert-menu-at 2
-click-new-tab
-assert-view-tabs 2 2
+assert-new-tab-at 2
+click-new-tab 2
+assert-view-tabs 2 3
 assert-view-shows 2 "Untitled 2"
 assert-focus editor

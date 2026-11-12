@@ -37,9 +37,14 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("assert-active-view", 1, 1),
     ("assert-split", 1, 1),
     ("assert-menu-at", 1, 1),
-    ("click-new-tab", 0, 0),
+    ("click-new-tab", 1, 1),
+    ("assert-new-tab-at", 1, 1),
+    // Check for Updates (1.5).
+    ("release-server", 1, 2),
+    ("click-dialog-button", 1, 1),
     ("assert-menu-within", 0, 0),
-    ("assert-menu-pages", 0, 0),
+    ("assert-menu-submenus", 0, 0),
+    ("popup-submenu", 1, 1),
     ("assert-view-tabs", 2, 2),
     ("assert-view-shows", 2, 2),
     ("assert-same-document", 2, 2),
@@ -96,12 +101,36 @@ impl Harness {
                 Err(error) => Err(error),
             },
             "assert-menu-within" => self.check_menu_within().await,
-            "click-new-tab" => {
-                self.window.new_tab_button().emit_clicked();
-                self.wait_until_settled().await;
-                Ok(())
+            "click-new-tab" => match view_index(arg(0)) {
+                Ok(index) => {
+                    self.window.new_tab_button(index).emit_clicked();
+                    self.wait_until_settled().await;
+                    Ok(())
+                }
+                Err(error) => Err(error),
+            },
+            "release-server" => {
+                let body = step.args.get(1).cloned().unwrap_or_default();
+                release_server(arg(0), body).map(|url| self.window.set_update_url(Some(url)))
             }
-            "assert-menu-pages" => self.check_menu_pages().await,
+            "click-dialog-button" => {
+                let clicked = self
+                    .window
+                    .open_dialog()
+                    .is_some_and(|dialog| crate::window::dialogs::click_button(&dialog, arg(0)));
+                if clicked {
+                    self.wait_until_settled().await;
+                    Ok(())
+                } else {
+                    Err(format!("no open dialog has a button {}", arg(0)))
+                }
+            }
+            "assert-new-tab-at" => match view_index(arg(0)) {
+                Ok(index) => self.check_new_tab_at(index).await,
+                Err(error) => Err(error),
+            },
+            "assert-menu-submenus" => self.check_menu_submenus().await,
+            "popup-submenu" => self.popup_submenu(arg(0)).await,
             "view-focus" => match view_index(arg(0)) {
                 Ok(index) => match self.window.view_page(index) {
                     Some(page) => {
@@ -613,8 +642,8 @@ fn mark_style(word: &str) -> Result<MarkStyle, String> {
 }
 
 impl Harness {
-    /// The menu is at the start of view `index`'s tab strip (1.3), and the new-tab button right
-    /// of it (1.4), both left of its first tab, once the strip has been laid out.
+    /// The menu is at the start of view `index`'s tab strip (1.3), left of its first tab, once
+    /// the strip has been laid out.
     async fn check_menu_at(&self, index: usize) -> StepResult {
         self.wait_frames(2).await?;
         equal(
@@ -638,26 +667,48 @@ impl Harness {
         let tab = tab
             .compute_bounds(bar)
             .ok_or("the first tab is not on its strip")?;
-        let plus = self
-            .window
-            .new_tab_button()
+        if menu.width() > 0.0 && menu.x() + menu.width() <= tab.x() {
+            Ok(())
+        } else {
+            Err(format!(
+                "the menu spans {:.0}–{:.0}, and the first tab starts at {:.0}",
+                menu.x(),
+                menu.x() + menu.width(),
+                tab.x()
+            ))
+        }
+    }
+
+    /// View `index`'s + follows its last tab (1.5), or, once the tabs scroll, the end of the
+    /// tabs on screen, and lies within the strip.
+    async fn check_new_tab_at(&self, index: usize) -> StepResult {
+        self.wait_frames(2).await?;
+        let view = &self.window.inner.views[index];
+        let bar = view.bar.upcast_ref::<gtk::Widget>();
+        let plus = view
+            .new_tab
             .compute_bounds(bar)
-            .ok_or("the new-tab button is not on its strip")?;
-        if menu.width() > 0.0
-            && plus.width() > 0.0
-            && menu.x() + menu.width() <= plus.x()
-            && plus.x() + plus.width() <= tab.x()
+            .ok_or("the + is not on its strip")?;
+        let last = (0..view.tabs.n_pages())
+            .filter_map(|n| self.window.tab_widget(&view.tabs.nth_page(n)))
+            .filter_map(|(_, tab)| tab.compute_bounds(bar))
+            .map(|tab| tab.x() + tab.width())
+            .fold(f32::MIN, f32::max);
+        let end = view.tabs_end().ok_or("the strip has no tab scroller")?;
+        let after = last.min(end);
+        let gap = plus.x() - after;
+        if plus.width() > 0.0
+            && (-1.0..=12.0).contains(&gap)
+            && plus.x() + plus.width() <= bar.width() as f32
         {
             Ok(())
         } else {
             Err(format!(
-                "the menu spans {:.0}–{:.0}, the new-tab button {:.0}–{:.0}, and the first tab \
-                 starts at {:.0}",
-                menu.x(),
-                menu.x() + menu.width(),
+                "the + spans {:.0}–{:.0} on a strip {} wide; the last tab ends at {last:.0}, \
+                 and the tabs on screen at {end:.0}",
                 plus.x(),
                 plus.x() + plus.width(),
-                tab.x()
+                bar.width()
             ))
         }
     }
@@ -672,54 +723,89 @@ impl Harness {
         self.menu_within(&self.open_menu()?)
     }
 
-    /// The open menu's pages are each as wide as their own items (1.3.2), not as the widest
-    /// one, and lie within the window, a page taller than the room below the button scrolling:
-    /// the main page, the widest page and the tallest, each shown as a click on its item does,
-    /// then the main page again.
-    async fn check_menu_pages(&self) -> StepResult {
+    /// The open menu opens its submenus beside it, as resting the pointer on their items does
+    /// (1.5), and each lies within the window, one taller than the room below its item
+    /// scrolling (1.3.2): every submenu of the first page, and the tallest of the others.
+    async fn check_menu_submenus(&self) -> StepResult {
         let popover = self.open_menu()?;
-        let pages =
-            crate::window::menu_part::<gtk::Stack>(&popover).ok_or("the menu has no pages")?;
-        let needs = |widget: &gtk::Widget, orientation| widget.measure(orientation, -1).1;
-        let main = pages
-            .child_by_name("main")
-            .ok_or("the menu has no main page")?;
-        let (mut widest, mut tallest) = (main.clone(), main.clone());
-        let mut child = pages.first_child();
-        while let Some(current) = child {
-            child = current.next_sibling();
-            if needs(&current, gtk::Orientation::Horizontal)
-                > needs(&widest, gtk::Orientation::Horizontal)
-            {
-                widest = current.clone();
-            }
-            if needs(&current, gtk::Orientation::Vertical)
-                > needs(&tallest, gtk::Orientation::Vertical)
-            {
-                tallest = current;
-            }
+        let menu = popover
+            .downcast_ref::<gtk::PopoverMenu>()
+            .ok_or("the menu is not a popover menu")?;
+        if !menu.flags().contains(gtk::PopoverMenuFlags::NESTED) {
+            return Err("the menu's submenus are not nested".to_owned());
         }
-        for page in [&main, &widest, &tallest, &main] {
-            let name = pages.page(page).name().unwrap_or_default();
-            popover.set_property("visible-submenu", &name);
-            let started = Instant::now();
-            while pages.is_transition_running() || pages.visible_child().as_ref() != Some(page) {
-                if started.elapsed() > WAIT_TIMEOUT {
-                    return Err(format!("the menu did not show its page {name}"));
-                }
-                glib::timeout_future(Duration::from_millis(20)).await;
+        let submenus: Vec<gtk::PopoverMenu> = crate::window::menus_in(menu.upcast_ref())
+            .into_iter()
+            .filter(|submenu| submenu != menu)
+            .collect();
+        let item_of = |submenu: &gtk::PopoverMenu| {
+            submenu
+                .parent()
+                .and_then(|item| item.ancestor(gtk::PopoverMenu::static_type()))
+        };
+        let mut shown: Vec<&gtk::PopoverMenu> = submenus
+            .iter()
+            .filter(|submenu| item_of(submenu).as_ref() == Some(menu.upcast_ref()))
+            .collect();
+        if shown.len() != stet_domain::actions::Menu::ALL.len() {
+            return Err(format!(
+                "the menu has {} submenus, not {}",
+                shown.len(),
+                stet_domain::actions::Menu::ALL.len()
+            ));
+        }
+        let tallest = submenus
+            .iter()
+            .filter(|submenu| !shown.contains(submenu))
+            .max_by_key(|submenu| submenu.measure(gtk::Orientation::Vertical, -1).1);
+        shown.extend(tallest);
+        for submenu in shown {
+            let mut chain = vec![submenu.clone()];
+            while let Some(parent) = item_of(chain.last().unwrap_or(submenu))
+                .and_then(|parent| parent.downcast::<gtk::PopoverMenu>().ok())
+                .filter(|parent| parent != menu)
+            {
+                chain.push(parent);
+            }
+            for open in chain.iter().rev() {
+                open.popup();
             }
             self.wait_frames(2).await?;
-            let (width, own) = (pages.width(), needs(page, gtk::Orientation::Horizontal));
-            if width != own {
-                return Err(format!(
-                    "the menu is {width} wide on its page {name}, which needs {own}"
-                ));
+            let name = submenu
+                .parent()
+                .and_then(|item| item_text(&item))
+                .unwrap_or_default();
+            if !submenu.is_visible() {
+                return Err(format!("the submenu {name} did not open"));
             }
-            self.menu_within(&popover)
-                .map_err(|error| format!("on its page {name}, {error}"))?;
+            self.menu_within(submenu.upcast_ref())
+                .map_err(|error| format!("its submenu {name}: {error}"))?;
+            for open in &chain {
+                open.popdown();
+            }
+            if !popover.is_visible() {
+                popover.popup();
+            }
+            self.wait_frames(1).await?;
         }
         Ok(())
+    }
+
+    /// Opens the open menu's submenu `name`, as resting the pointer on its item does (1.5).
+    async fn popup_submenu(&self, name: &str) -> StepResult {
+        let popover = self.open_menu()?;
+        let submenu = crate::window::menus_in(popover.upcast_ref())
+            .into_iter()
+            .find(|submenu| {
+                submenu
+                    .parent()
+                    .and_then(|item| item_text(&item))
+                    .as_deref()
+                    == Some(name)
+            })
+            .ok_or_else(|| format!("the menu has no submenu {name}"))?;
+        submenu.popup();
+        self.wait_frames(2).await
     }
 
     fn open_menu(&self) -> Result<gtk::Popover, String> {
@@ -731,16 +817,26 @@ impl Harness {
     }
 
     fn menu_within(&self, popover: &gtk::Popover) -> StepResult {
-        let popup = popover
-            .surface()
-            .and_then(|surface| surface.downcast::<gtk::gdk::Popup>().ok())
-            .ok_or("the menu has no popup surface")?;
+        // A submenu's popup is placed relative to its parent menu's, that one's to the window.
+        let (mut popup_x, mut popup_y, mut popups) = (0, 0, 0);
+        let mut surface = popover.surface();
+        while let Some(popup) =
+            surface.and_then(|surface| surface.downcast::<gtk::gdk::Popup>().ok())
+        {
+            popup_x += popup.position_x();
+            popup_y += popup.position_y();
+            popups += 1;
+            surface = popup.parent();
+        }
+        if popups == 0 {
+            return Err("the menu has no popup surface".to_owned());
+        }
         let window = self.window.window();
         let (window_x, window_y) = window.surface_transform();
         let (inner_x, inner_y) = popover.surface_transform();
-        let left = f64::from(popup.position_x()) + inner_x - window_x;
+        let left = f64::from(popup_x) + inner_x - window_x;
         let right = left + f64::from(popover.width());
-        let top = f64::from(popup.position_y()) + inner_y - window_y;
+        let top = f64::from(popup_y) + inner_y - window_y;
         let bottom = top + f64::from(popover.height());
         let (width, height) = (f64::from(window.width()), f64::from(window.height()));
         if left >= 0.0 && right <= width && top >= 0.0 && bottom <= height {
@@ -752,6 +848,47 @@ impl Harness {
             ))
         }
     }
+}
+
+/// A server on this computer that answers Check for Updates' one request in GitHub's place,
+/// with HTTP `status` and `body`; `none`: a port where nothing listens. Returns its URL.
+fn release_server(status: &str, body: String) -> Result<String, String> {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
+    let address = listener.local_addr().map_err(|error| error.to_string())?;
+    let url = format!("http://{address}/repos/PixDevsApps/Stet/releases/latest");
+    if status == "none" {
+        return Ok(url);
+    }
+    let status: u16 = status
+        .parse()
+        .map_err(|_| format!("no HTTP status {status}; use a number or none"))?;
+    std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let mut request = Vec::new();
+        let mut buffer = [0; 4096];
+        while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+            match stream.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(read) => request.extend_from_slice(&buffer[..read]),
+            }
+        }
+        let answer = format!(
+            "HTTP/1.1 {status} Answer\r\nContent-Type: application/json\r\n\
+             Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = stream.write_all(answer.as_bytes());
+    });
+    Ok(url)
+}
+
+/// A menu item's text: GtkModelButton's `text`.
+fn item_text(item: &gtk::Widget) -> Option<String> {
+    item.find_property("text")
+        .and_then(|_| item.property::<Option<String>>("text"))
 }
 
 fn view_index(word: &str) -> Result<usize, String> {

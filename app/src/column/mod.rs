@@ -115,6 +115,7 @@ fn keeps_column_mode(id: ActionId) -> bool {
                 | ActionId::MoveTabForward
                 | ActionId::MoveTabBackward
                 | ActionId::About
+                | ActionId::CheckForUpdates
                 | ActionId::ToggleBookmark
                 | ActionId::ClearBookmarks
                 | ActionId::CopyBookmarkedLines

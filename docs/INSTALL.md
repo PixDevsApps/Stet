@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-10-02 (1.3.4)
+Synced: 2026-11-12 (1.5.0)
 
 Stet comes from the GitHub repository [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet): as the Arch package attached to a release, or built from source. There is no AUR package yet. These steps are for Arch Linux and Omarchy; other distributions need the same libraries. Building details are in [BUILD.md](BUILD.md), using Stet in [USER_GUIDE.md](USER_GUIDE.md).
 
@@ -10,7 +10,7 @@ Stet comes from the GitHub repository [PixDevsApps/Stet](https://github.com/PixD
 
 ## What it needs
 
-Runtime: `gtk4` (4.18 or newer), `libadwaita` (1.9), `gtksourceview5` (5.18 or newer), `glib2`, `pcre2` and `fontconfig`. On Omarchy they are installed already, as are `xdg-utils` (`xdg-open`, `xdg-mime`) and `xdg-terminal-exec`, which the tab menu's Open Containing Folder and Open Terminal Here use.
+Runtime: `gtk4` (4.18 or newer), `libadwaita` (1.9), `gtksourceview5` (5.18 or newer), `glib2`, `pcre2`, `fontconfig` and, for Check for Updates (1.5), `curl`. On Omarchy they are installed already, as are `xdg-utils` (`xdg-open`, `xdg-mime`) and `xdg-terminal-exec`, which the tab menu's Open Containing Folder and Open Terminal Here use.
 
 Building: Rust 1.92 or newer, `cargo` and `pkgconf`:
 
@@ -22,22 +22,26 @@ If Rust comes from rustup instead (`rustup default stable`), leave `rust` out of
 
 ## Install the released package
 
-The latest release, [v1.3.4](https://github.com/PixDevsApps/Stet/releases/tag/v1.3.4), has the Arch package attached; its SHA-256 is in the release notes. In a terminal (in Omarchy, **Super + Enter**):
+Every release on [GitHub](https://github.com/PixDevsApps/Stet/releases) has the Arch package attached; its SHA-256 is in the release notes. From 1.5.0 on, the file is always named `stet-x86_64.pkg.tar.zst`, which GitHub serves for the latest release at one address. In a terminal (in Omarchy, **Super + Enter**):
 
 ```sh
-curl -fLO https://github.com/PixDevsApps/Stet/releases/download/v1.3.4/stet-1.3.4-1-x86_64.pkg.tar.zst
-sha256sum stet-1.3.4-1-x86_64.pkg.tar.zst    # optional: compare with the release notes
-sudo pacman -U stet-1.3.4-1-x86_64.pkg.tar.zst
+curl -L -o /tmp/stet.pkg.tar.zst https://github.com/PixDevsApps/Stet/releases/latest/download/stet-x86_64.pkg.tar.zst && sudo pacman -U /tmp/stet.pkg.tar.zst
 ```
 
-`sudo` asks for your password (nothing shows while you type it), and pacman asks *Proceed with installation? [Y/n]*: press Enter. The package is also on the release page for a download in the browser, and `gh release download v1.3.4 --repo PixDevsApps/Stet --pattern 'stet-*.pkg.tar.zst'` fetches it with the GitHub CLI. Stet then starts from the app launcher (in Omarchy, **Super + Space**) or with `stet` in a terminal. pacman installs the dependencies from the Arch repositories. The package upgrades an installed Stet and leaves your sessions and drafts in `~/.local/state/stet` alone; quit Stet (Ctrl+Alt+Q) and start it again to run the new version.
+`sudo` asks for your password (nothing shows while you type it), and pacman asks *Proceed with installation? [Y/n]*: press Enter. Stet then starts from the app launcher (in Omarchy, **Super + Space**) or with `stet` in a terminal. pacman installs the dependencies from the Arch repositories.
+
+**To update**, run the same line again, or choose **Check for Updates…** in Stet's menu, which says whether a newer release is out and gives the line for it. The package upgrades an installed Stet and leaves your sessions and drafts in `~/.local/state/stet` alone; quit Stet (Ctrl+Alt+Q) and start it again to run the new version. To check the download first, `sha256sum /tmp/stet.pkg.tar.zst` and compare with the release notes before the `pacman -U`. The package is also on the release page for a download in the browser, and `gh release download --repo PixDevsApps/Stet --pattern 'stet-x86_64.pkg.tar.zst'` fetches it with the GitHub CLI.
+
+Releases before 1.5.0 have only the versioned file, for example [v1.3.4](https://github.com/PixDevsApps/Stet/releases/tag/v1.3.4)'s `stet-1.3.4-1-x86_64.pkg.tar.zst`.
+
+**To uninstall:** `sudo pacman -R stet`.
 
 ## Get the source
 
 ```sh
 git clone https://github.com/PixDevsApps/Stet.git stet
 cd stet
-git checkout v1.3.4    # a release tag, or stay on main
+git checkout v1.5.0    # a release tag, or stay on main
 ```
 
 The repository is public, so cloning needs no GitHub account.

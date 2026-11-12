@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-10-02
+Synced: 2026-11-12
 
 The repository docs are the canonical project memory ([ADR-012](#adr-012--repository-docs-as-canonical-project-memory-2026-09-30)). Dated entries describe the state at that date; newer entries and amendments take precedence.
 
@@ -859,6 +859,26 @@ The project folder stays `/home/fredrick/Projects/linux-apps/notes`.
 **Reason:** The user's request ([PLAN.md](PLAN.md#stet-120-names-for-untitled-tabs-without-saving--2026-10-01)).
 
 **Consequence:** One more field in the session ([ADR-006 amendment](#adr-006-amendment--names-for-untitled-tabs-12-2026-10-01)). Files keep their file name in the tab; giving a file's tab another name is not part of this. The 1.x list is unchanged.
+
+### ADR-013 amendment — Check for Updates (2026-11-12)
+
+**Status:** Accepted — user decision, 2026-11-12.
+
+**Decision:** At the user's request ("A check for updates link in the main menu (as we have in Sealwax)"), 1.5.0 has **Check for Updates…** on the menu's first page. It is not the auto-updater on the Never list, and it supersedes nothing there: Stet asks GitHub only when the user runs the command, never at startup or on a timer, installs nothing, and shows the pacman command that installs the newer release for the user to run. The request is one GET of `https://api.github.com/repos/PixDevsApps/Stet/releases/latest`, made by the system's `curl` on a worker thread (`-q`, so no `~/.curlrc`; HTTPS only; User-Agent `Stet`; no proxy, cookies or Referer; 20 s; at most 512 KiB), and only the answer's `tag_name` is read. A tag that isn't `v` and three plain numbers is refused, and the command is built from those numbers, never from the tag's text. From 1.5.0 on, every release carries its package as `stet-x86_64.pkg.tar.zst` only (the user's choice), which the command and the README's install line download ([BUILD.md](BUILD.md#releasing)).
+
+**Reason:** The user's request; Sealwax, the user's mail client, has the same command and install line. `curl` rather than an HTTP crate: the infrastructure crate does std I/O only, an HTTP and TLS stack would add its crates to the build and the license bundle, and `curl` is on every Arch system (pacman needs it). The package names it as a dependency.
+
+**Consequence:** The first network request in Stet, which the PRD's non-goals ("no telemetry, no auto-updater; updates come through pacman") still allow: it sends nothing about the user and changes nothing. The release's file has no version in its name; a release without it breaks the README's line and the command. The 1.x, Later and Never lists are unchanged.
+
+### ADR-013 amendment — The + after the last tab and submenus on hover (2026-11-12)
+
+**Status:** Accepted — user decision, 2026-11-12.
+
+**Decision:** At the user's request, 1.5.0 moves the + from right of the menu (1.4) to right after each strip's last tab (the user's choice when asked), and the menu's submenus open beside it when the pointer rests on them, as nested popovers, in place of 1.3.2's sliding pages.
+
+**Reason:** The user's requests ([PLAN.md](PLAN.md#stet-150-the--after-the-last-tab-hover-submenus-and-check-for-updates--2026-11-12)).
+
+**Consequence:** Like the double-click on a tab (1.1), the + after the last tab relies on libadwaita's internals: the tab strip's scrolled window, whose `hexpand` Stet turns off ([DESIGN.md](DESIGN.md#as-built-in-15--2026-11-12)). If an update builds the strip differently, Stet logs a warning and the + sits at the strip's far end; the self-test `new-tab-button` fails. A tab dropped on the empty part of a strip right of the + is no longer taken by that strip.
 
 ## ADR-014 — Syntax-highlighting size policy (2026-09-30)
 

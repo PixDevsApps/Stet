@@ -2,11 +2,26 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-07
+Synced: 2026-11-12
 
 The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). Dated entries describe the state at that date; newer entries take precedence.
 
 ---
+
+## As built in 1.5 — 2026-11-12
+
+Asked for by the user ([PLAN.md](PLAN.md#stet-150-the--after-the-last-tab-hover-submenus-and-check-for-updates--2026-11-12)):
+
+- **The + after the last tab.** Each tab strip has its own + (`list-add-symbolic`, flat, tooltip and accessible name "New Tab"), at the start of a box that is the strip's end action widget, followed by a filler that takes the strip's spare width; on the last strip on screen outside Hyprland the window controls follow the filler. libadwaita's `AdwTabBar` gives its unpinned tabs' scrolled window all the width the ends leave (`hexpand`); Stet turns that off and lets the scrolled window ask for its tabs' natural width (`propagate-natural-width`), so the + follows the last tab, about 5 px after it, and moves as tabs open and close. With more tabs than fit, the scrolled window shrinks to the room there is, the tabs scroll as before, and the + stays at the end of the tabs on screen. A click runs New in that strip's view. The scrolled window is libadwaita's internal widget, found as the strip's `GtkScrolledWindow` that expands; if a libadwaita update builds the strip differently, Stet logs a warning and the + sits at the strip's far end. A tab dragged onto the empty part of a strip right of the + is not taken by that strip; dropped on its tabs it is, as before.
+
+```
++------------------------------------------------------------------------------+
+| [=] | main.rs  x | ● notes.txt  x | Cargo.toml  x | [+]                      |  menu, tabs, new tab
++------------------------------------------------------------------------------+
+```
+
+- **Submenus on hover.** The hamburger menu's popover is a nested `GtkPopoverMenu` (`GTK_POPOVER_MENU_NESTED`, set when the menu is built): each submenu is its own popover beside its item, top-aligned with it, which GTK opens 80 ms after the pointer rests on the item (or with → or Enter), and each is as wide as its own items. This replaces 1.3.2's sliding pages and their stack, whose width Stet had to make follow the page shown. Each popover's height is limited, when it opens, to the room between its item (the main menu: its button) and the window's bottom edge, less 40 px, at least 160 px: a longer submenu, such as Edit or Search in a short window, scrolls.
+- **Check for Updates…** is the menu's first page's own item, below the nine submenus after a separator (`Menu::Main` in the registry; the palette lists it with the detail "Menu"). It opens an alert dialog, "Checking for updates…" with a spinner and Cancel, while a worker runs `curl` once for GitHub's latest release ([ADR-013 amendment](DECISIONS.md#adr-013-amendment--check-for-updates-2026-11-12)). The answer replaces the heading and body: "You have the latest version", "Stet X is available" with the command that installs it (selectable, the editor's font, wrapped at any character) and **Copy Command** (the focus goes there, so the command doesn't show selected), or "Couldn't check for updates" with what to do. Cancel becomes Close.
 
 ## As built in 1.4 — 2026-11-07
 

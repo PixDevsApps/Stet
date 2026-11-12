@@ -30,7 +30,7 @@ pub enum KeyScope {
     Editor,
 }
 
-/// The hamburger menu's submenus, in the order the menu lists them.
+/// The hamburger menu's submenus, in the order the menu lists them, and its first page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Menu {
     File,
@@ -42,9 +42,25 @@ pub enum Menu {
     Settings,
     Tools,
     Help,
+    /// The menu's first page itself, below its submenus (1.5): not one of [`Menu::ALL`].
+    Main,
 }
 
 impl Menu {
+    /// Every place in the menu, in its order: the submenus, then the first page's own items.
+    pub const PLACES: [Self; 10] = [
+        Self::File,
+        Self::Edit,
+        Self::Search,
+        Self::View,
+        Self::Encoding,
+        Self::Language,
+        Self::Settings,
+        Self::Tools,
+        Self::Help,
+        Self::Main,
+    ];
+
     pub const ALL: [Self; 9] = [
         Self::File,
         Self::Edit,
@@ -68,6 +84,7 @@ impl Menu {
             Self::Settings => "Settings",
             Self::Tools => "Tools",
             Self::Help => "Help",
+            Self::Main => "Menu",
         }
     }
 }
@@ -332,6 +349,7 @@ pub enum ActionId {
     ValidateXml,
     KeyboardShortcuts,
     About,
+    CheckForUpdates,
     // Column mode (M6).
     ColumnSelectLeft,
     ColumnSelectRight,
@@ -652,7 +670,7 @@ const fn with_encoding(
 }
 
 impl ActionId {
-    pub const ALL: [Self; 208] = [
+    pub const ALL: [Self; 209] = [
         Self::NewTab,
         Self::Open,
         Self::QuickOpen,
@@ -800,6 +818,7 @@ impl ActionId {
         Self::ValidateXml,
         Self::KeyboardShortcuts,
         Self::About,
+        Self::CheckForUpdates,
         Self::ColumnSelectLeft,
         Self::ColumnSelectRight,
         Self::ColumnSelectUp,
@@ -1685,6 +1704,12 @@ impl ActionId {
                 Keys::NONE,
             ),
             Self::About => command("about", "About Stet", MenuPlace::at(Help, 0), Keys::NONE),
+            Self::CheckForUpdates => command(
+                "check-for-updates",
+                "Check for Updates…",
+                MenuPlace::at(Main, 0),
+                Keys::NONE,
+            ),
             // Column selection on Alt+Shift takes over GtkSourceView's `move-viewport` bindings:
             // application accelerators run before the editor's own bindings (ADR-009, ADR-016).
             Self::ColumnSelectLeft => command(
@@ -2763,6 +2788,15 @@ mod tests {
             Some("File › Open Recent")
         );
         assert_eq!(ActionId::SetLanguage.menu_path(), None);
+        assert_eq!(
+            ActionId::CheckForUpdates.spec().menu,
+            MenuPlace::at(Menu::Main, 0)
+        );
+        assert_eq!(
+            ActionId::CheckForUpdates.menu_path().as_deref(),
+            Some("Menu")
+        );
+        assert!(!Menu::ALL.contains(&Menu::Main));
     }
 
     #[test]

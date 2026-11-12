@@ -12,6 +12,7 @@ pub mod replace_in_files;
 pub mod search;
 pub mod session_store;
 pub mod settings_files;
+pub mod updates;
 pub mod xdg;
 
 #[cfg(test)]

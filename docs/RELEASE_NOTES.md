@@ -2,6 +2,14 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
+## 1.5.0 — 2026-11-12
+
+- **The + follows the tabs.** The + that opens a new tab now sits right after the last tab, as in a web browser, instead of next to the menu. When there are more tabs than fit, it stays at the end of the tabs on screen. In split view each tab strip has its own +, which opens the tab in its own view.
+- **Submenus open when you point at them.** In the menu (☰), resting the pointer on File, Edit, Search or any other submenu opens it beside the menu; there is no need to click. Each submenu stays inside the window, and a long one scrolls.
+- **Check for Updates…**, at the bottom of the menu, asks GitHub which version is the latest and tells you whether yours is. When a newer one is out, it shows the command that installs it, with a button that copies it. Stet asks only when you choose the command, sends nothing about you, and never installs anything itself.
+- **A one-line install.** From this release on, every release carries its package as `stet-x86_64.pkg.tar.zst`, so the README's install line always installs the latest release and needs no change for a new version. Run the same line again to update.
+- The package now depends on `curl`, which Check for Updates uses (pacman needs it too, so it is installed already).
+
 ## 1.4.1 — 2026-11-07
 
 - **No change to Stet itself.** Its headless tests no longer read the desktop's GTK settings. On GTK 4.24 some of them stop because of a GTK bug, which is waiting for a fix from GTK.

@@ -638,6 +638,16 @@ impl Harness {
                     &self.window.inner.nav.quick_open.popover,
                 ];
                 popovers.extend(context.as_ref());
+                let menus: Vec<gtk::Popover> = self
+                    .window
+                    .menu_button()
+                    .popover()
+                    .map(|menu| crate::window::menus_in(menu.upcast_ref()))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|menu| menu.upcast())
+                    .collect();
+                popovers.extend(menus.iter());
                 screenshot::capture(self.window.window(), &popovers, Path::new(arg(0)))
             }
             "dump-layout" => {

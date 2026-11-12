@@ -170,17 +170,16 @@ impl Window {
         if other.start_action_widget().is_some() {
             other.set_start_action_widget(None::<&gtk::Widget>);
         }
-        let other = &inner.views[1 - last].bar;
-        if other.end_action_widget().is_some() {
-            other.set_end_action_widget(None::<&gtk::Widget>);
-        }
         let bar = &inner.views[first].bar;
         if bar.start_action_widget().is_none() {
             bar.set_start_action_widget(Some(&inner.start));
         }
-        let bar = &inner.views[last].bar;
-        if bar.end_action_widget().is_none() {
-            bar.set_end_action_widget(Some(&inner.end));
+        let trail = &inner.views[last].trail;
+        if inner.end.parent().as_ref() != Some(trail.upcast_ref()) {
+            if let Some(other) = inner.end.parent().and_downcast::<gtk::Box>() {
+                other.remove(&inner.end);
+            }
+            trail.append(&inner.end);
         }
         let split = counts.iter().all(|count| *count > 0);
         if split && !was_split {

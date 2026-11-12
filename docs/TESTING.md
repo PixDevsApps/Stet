@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-07
+Synced: 2026-11-12
 
 The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). Dated entries describe the state at that date; newer entries take precedence.
 
@@ -11,6 +11,22 @@ The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). 
 ## Evidence log
 
 Dated test and acceptance results go here, newest first. Spike results go to `docs/spikes/` and are linked from [RESEARCH.md](RESEARCH.md#m0-spike-results).
+
+### 2026-11-12 — 1.5.0: the + after the last tab, hover submenus and Check for Updates
+
+Run by the agent on the development machine (gtk4 4.24.1, libadwaita 1.10.0, curl 8.23.0), on `b0450f0` with the changes uncommitted; headless runs on display 73. No `gtk4-broadwayd` was left after the runs.
+
+| Command | Result |
+| --- | --- |
+| A scratch Python probe of `AdwTabBar` under `tools/headless.sh` (not committed), 1, 3 and 12 tabs | With the unpinned tabs' scrolled window not expanding and asking for its natural width, the + started 5 px after the last tab; with 12 tabs the scrolled window shrank to the room there was and the + sat at the strip's end (860–894 of 900). A first reading 300 ms after the change still showed the old layout: Broadway without a client lays out slowly. |
+| The same kind of probe of a nested `GtkPopoverMenu`, and GTK 4.24.1's `gtkmenusectionbox.c` and `gtkmodelbutton.c` from gitlab.gnome.org | Nested submenus are popovers beside their item, `valign` start; a pointer resting on an item opens its submenu after 80 ms (`OPEN_TIMEOUT`). A 60-item submenu was 768 px tall, more than the window. |
+| `cargo test -p stet-infrastructure updates` | 5 passed, 1 ignored: a server on 127.0.0.1 got `GET /repos/PixDevsApps/Stet/releases/latest`, User-Agent `Stet`, the GitHub Accept header and no Cookie, Referer or Authorization; 404, 403, 429, 500, bad tags, an answer over 512 KiB, nothing listening, non-HTTPS URLs and a missing `curl` each give their error. |
+| `cargo test -p stet-infrastructure updates::tests::github -- --ignored` | One real request: "the latest release is 1.3.4". |
+| `bash tools/ci.sh` (no `--ui`) | fmt and Clippy passed; tests: app 38, domain 456 (9 ignored), infrastructure 215 (5 ignored) passed; **`stet-spikes`' `main_loop_runs_until_done_or_timeout` failed** (the P2 follow-up of 2026-11-07), so the script stopped before its build step. Alone afterwards the spike tests passed 3 of 3 runs; `cargo build --workspace` passed. `cargo fmt --check` and Clippy passed again on the final code. |
+| `tools/headless.sh 73 target/debug/stet --self-test tests/selftest/<script>.stet-test`, one by one | **Pass**, 1,287 steps: new-tab-button 64/64, updates 33/33, split 141/141, registry 30/30, files 112/112, convert 121/121, about 7/7, pinned 69/69, split-session 6/6, switcher 93/93, theme 82/82, back-forward 88/88, compare 128/128, search 229/229, find 84/84. The full `--ui` run was not made: it stops at `column-clipboard` on GTK 4.24 (the P1 follow-up of 2026-11-07). |
+| `new-tab-button.stet-test`, first run | 63 of 64: the script expected "Untitled 4" where Stet reuses the freed "Untitled 2"; the script was wrong. |
+| `split.stet-test` with the new `assert-menu-submenus` | First 140 of 141 ("its submenu File: the menu spans 149–419 × -6–592"): the step read a submenu's popup position as relative to the window, where it is relative to its parent menu's popup. Fixed in the step, **141 of 141**. With the submenus' height limit turned off in a scratch build, 140 of 141 ("its submenu View: the menu spans 180–537 × 24–743 in a window 1024 × 720"), so the step catches a submenu that runs past the window. |
+| A scratch script (not committed): tokyo-night, two tabs, then nine, the menu with Edit open, the update dialog for a release v99.0.0 | Checked by eye: the + after the last tab, and at the strip's end with nine tabs; Edit beside the menu, cut off at the window's bottom with its items scrolling; Check for Updates… below Help after a separator; the dialog with the command and Copy Command. The first version showed the command with no padding, then fixed; a first run hung on a panic in the new `popup-submenu` step (a "text" property read from the menu button), fixed. |
 
 ### 2026-11-07 — the self-tests after the GTK 4.24 update
 
@@ -636,10 +652,14 @@ tools/headless.sh 20 target/debug/stet --self-test tests/selftest/files.stet-tes
 | `open`, `open-start` | command-line arguments | Opens files as a command line in the running instance would (`file:line:col`, `-n`, `-c`); `open` waits until they are loaded, `open-start` does not |
 | `choose-file` | path | Picks the file in the file chooser that Open or Save As shows (GTK's own, headless) and accepts it; for Save As it sets the folder and the name, since GTK 4.22's Save chooser keeps its suggested name when given a file |
 | `assert-chooser-name` | name | 1.2: the name the open Save As chooser proposes |
-| `assert-menu-at` | view (`1` or `2`) | 1.3: that view's tab strip has the menu at its start, left of its first tab, and the other strip doesn't; since 1.4 also the + button, between the menu and the first tab |
-| `click-new-tab` | — | 1.4: clicks the + button right of the menu (emits its `clicked`) and waits until the window settles |
+| `assert-menu-at` | view (`1` or `2`) | 1.3: that view's tab strip has the menu at its start, left of its first tab, and the other strip doesn't (1.4 also checked the + there; since 1.5 `assert-new-tab-at` does) |
+| `assert-new-tab-at` | view (`1` or `2`) | 1.5: that view's + lies right after its last tab (−1 to 12 px), or after the end of the tabs on screen when they scroll, and within the strip |
+| `click-new-tab` | view (`1` or `2`) | 1.4: clicks the + button (emits its `clicked`); since 1.5 the + of that view's strip, after its last tab; then waits until the window settles |
 | `assert-menu-within` | — | 1.3.1: the open menu lies within the window's width; since 1.3.2 also its height |
-| `assert-menu-pages` | — | 1.3.2: the open menu is as wide as the page it shows, not as its widest page, and lies within the window, across and down; on the main page, the widest page and the tallest (each shown as a click on its item does) and the main page again |
+| `assert-menu-submenus` | — | 1.5, in place of 1.3.2's `assert-menu-pages`: the open menu is nested, has one submenu per menu, and each of them and the tallest deeper submenu, shown as resting the pointer on its item does, lies within the window (its popup placed relative to its parent menu's) |
+| `popup-submenu` | submenu's label | 1.5: opens that submenu of the open menu, as resting the pointer on its item does |
+| `release-server` | HTTP status and body, or `none` | 1.5: a server on 127.0.0.1 answers Check for Updates' next request in GitHub's place, once; `none` gives a port where nothing listens |
+| `click-dialog-button` | label | 1.5: clicks the button with that label in the open alert dialog's own content (Copy Command) |
 | `assert-dialog-text`, `assert-dialog-lacks` | text | The open dialog has, or lacks, the text in its heading, body or labels: a question, or since 1.3.2 another dialog the window shows, such as About |
 | `click-tab` | tab number | What a click on a tab does: selects its page, then gives the page the focus |
 | `popup`, `popdown` | `palette`, `language`, `eol`, `encoding` or `menu` | Opens or closes the palette, a status-bar button's popover, or the hamburger menu |

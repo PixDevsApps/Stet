@@ -292,6 +292,19 @@ pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
         }
         root.append_submenu(Some(menu.label()), &submenu);
     }
+    // Below the submenus, the items of the first page itself (1.5).
+    let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
+    for id in ActionId::ALL {
+        if let Some(place) = id.spec().menu.filter(|place| place.menu == Menu::Main) {
+            sections
+                .entry(place.section)
+                .or_default()
+                .append_item(&item(id, keymap));
+        }
+    }
+    for section in sections.values() {
+        root.append_section(None, section);
+    }
     root
 }
 

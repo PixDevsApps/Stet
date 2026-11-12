@@ -20,25 +20,19 @@ Stet is a native GTK4 + libadwaita + GtkSourceView 5 editor with the features pe
 
 ## Install
 
-On Omarchy or Arch Linux:
+On Omarchy or Arch Linux, open a terminal (in Omarchy, **Super + Enter**), paste this line with **Ctrl + Shift + V** and press **Enter**:
 
-1. Open a terminal. In Omarchy, press **Super + Enter**.
-2. Copy these three lines, paste them into the terminal with **Ctrl + Shift + V**, and press **Enter**:
+```sh
+curl -L -o /tmp/stet.pkg.tar.zst https://github.com/PixDevsApps/Stet/releases/latest/download/stet-x86_64.pkg.tar.zst && sudo pacman -U /tmp/stet.pkg.tar.zst
+```
 
-   ```bash
-   curl -fLO https://github.com/PixDevsApps/Stet/releases/download/v1.3.4/stet-1.3.4-1-x86_64.pkg.tar.zst
-   sudo pacman -U stet-1.3.4-1-x86_64.pkg.tar.zst
-   rm stet-1.3.4-1-x86_64.pkg.tar.zst
-   ```
+It downloads the latest release and installs it. When the terminal asks for your password, type it and press **Enter**; nothing shows while you type, which is normal. When it asks *Proceed with installation? [Y/n]*, press **Enter**. Then start Stet from the app launcher (in Omarchy, **Super + Space** and type *Stet*), or type `stet` in a terminal.
 
-   The first line downloads Stet, the second installs it, and the third deletes the download. When the terminal asks for your password, type it and press **Enter**; nothing shows while you type, which is normal. When it asks *Proceed with installation? [Y/n]*, press **Enter**.
-3. Start Stet from the app launcher (in Omarchy, press **Super + Space** and type *Stet*), or type `stet` in a terminal and press **Enter**.
-
-To have your text files open in Stet, choose **Settings › Set as Default Editor…** in Stet's menu (**☰**, at the left of the tabs). To update when a new version is out, run the lines above again: they always name the [latest release](https://github.com/PixDevsApps/Stet/releases/latest). To remove Stet, run `sudo pacman -R stet`; your unsaved drafts stay in `~/.local/state/stet`.
+To have your text files open in Stet, choose **Settings › Set as Default Editor…** in Stet's menu (**☰**, at the left of the tabs). To update, run the same line again; **Check for Updates…** in Stet's menu says when there is a new version and gives you the line. To remove Stet, run `sudo pacman -R stet`; your unsaved drafts stay in `~/.local/state/stet`.
 
 ## Status
 
-**Stet 1.4.1** (2026-11-07) is the latest version; the latest release with a package on GitHub is 1.3.4, which the steps above install. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
+**Stet 1.5.0** (2026-11-12) is the latest version. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
 
 ## Build from source
 

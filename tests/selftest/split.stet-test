@@ -162,12 +162,12 @@ assert-tab-title 2 "c.txt"
 
 # The menu sits at the start of the first strip on screen (1.3): the main view's, or the second
 # view's while the main view has no tab. It opens into the window, from the button's left edge
-# (1.3.1). Each of its pages is as wide as its own items, not as the widest submenu, and a page
-# taller than the room below the button scrolls (1.3.2).
+# (1.3.1), and a menu taller than the room below the button scrolls (1.3.2). Its submenus open
+# beside it, each as wide as its own items and within the window (1.5).
 assert-menu-at 1
 popup menu
 assert-menu-within
-assert-menu-pages
+assert-menu-submenus
 popdown menu
 drag-tab 2
 assert-split true

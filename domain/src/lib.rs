@@ -21,4 +21,5 @@ pub mod settings;
 pub mod text;
 pub mod theme;
 pub mod untitled;
+pub mod updates;
 pub mod view;

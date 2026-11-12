@@ -211,3 +211,8 @@ toast {
 tabbar.stet-active-view tab:selected {
   box-shadow: inset 0 -2px var(--accent-bg-color);
 }
+
+/* Check for Updates' command (1.5). */
+.stet-update-command {
+  padding: 10px 12px;
+}

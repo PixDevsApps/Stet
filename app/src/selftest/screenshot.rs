@@ -25,15 +25,21 @@ pub fn capture(
     );
     let (window_x, window_y) = window.surface_transform();
     for popover in popovers.iter().filter(|popover| popover.is_visible()) {
-        let Some(popup) = popover
-            .surface()
-            .and_then(|surface| surface.downcast::<gdk::Popup>().ok())
-        else {
+        // A submenu's popup is placed relative to its parent menu's, that one's to the window.
+        let (mut popup_x, mut popup_y, mut popups) = (0, 0, 0);
+        let mut surface = popover.surface();
+        while let Some(popup) = surface.and_then(|surface| surface.downcast::<gdk::Popup>().ok()) {
+            popup_x += popup.position_x();
+            popup_y += popup.position_y();
+            popups += 1;
+            surface = popup.parent();
+        }
+        if popups == 0 {
             continue;
-        };
+        }
         let (inner_x, inner_y) = popover.surface_transform();
-        let x = f64::from(popup.position_x()) + inner_x - window_x;
-        let y = f64::from(popup.position_y()) + inner_y - window_y;
+        let x = f64::from(popup_x) + inner_x - window_x;
+        let y = f64::from(popup_y) + inner_y - window_y;
         snapshot.save();
         snapshot.translate(&graphene::Point::new(x as f32, y as f32));
         gtk::WidgetPaintable::new(Some(*popover)).snapshot(

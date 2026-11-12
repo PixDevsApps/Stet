@@ -258,7 +258,7 @@ pub fn default_keys_file() -> String {
             Some((_, ids)) => ids.push(id),
             None => groups.push((path, vec![id])),
         };
-    for menu in Menu::ALL {
+    for menu in Menu::PLACES {
         for id in ActionId::ALL {
             if id.spec().menu.is_some_and(|place| place.menu == menu) && is_rebindable(id) {
                 add(id.menu_path().unwrap_or_default(), id);
@@ -298,7 +298,7 @@ pub fn markdown_table() -> String {
         "| Menu | Command | Keys | Keys work | `keys.toml` name |\n| --- | --- | --- | --- | --- |\n",
     );
     let mut ids: Vec<ActionId> = Vec::new();
-    for menu in Menu::ALL {
+    for menu in Menu::PLACES {
         for id in ActionId::ALL {
             if id.spec().menu.is_some_and(|place| place.menu == menu)
                 && id.kind() != ActionKind::WithString

@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-07 (1.4)
+Synced: 2026-11-12 (1.5)
 
 This guide describes Stet 1.0: the MVP (M1–M5, 0.3), column mode (M6), bookmarks, Mark, split view and compare (M7), and navigation and Replace in Files (M8). Installing Stet is in [INSTALL.md](INSTALL.md); how it fits into Omarchy is in [INTEGRATIONS.md](INTEGRATIONS.md).
 
@@ -28,8 +28,8 @@ This guide describes Stet 1.0: the MVP (M1–M5, 0.3), column mode (M6), bookmar
 ```
 
 - **Tab strip.** One tab per document; `●` marks unsaved changes. Drag tabs to reorder them. Double-click a tab to rename it, as Rename… does: a file is renamed on disk; an untitled tab only gets the name, and nothing is saved. Right-click a tab for its menu: Close, Close Others, Close to the Right; Save, Save As…; Copy Full Path, Copy File Name, Copy Directory Path; Open Containing Folder (your file manager) and Open Terminal Here (your terminal, through `xdg-terminal-exec`); Rename… and Move to Trash…. These act on the tab you clicked.
-- **The menu** (☰, the left end of the tab strip) has nine submenus: File, Edit, Search, View, Encoding, Language, Settings, Tools, Help. Every command is also in the **command palette** (Ctrl+Shift+P or F1), with its keys.
-- **The + button**, right of the menu, opens a new untitled tab, as File › New (Ctrl+N) does. In split view it opens the tab in the view whose strip it is on.
+- **The menu** (☰, the left end of the tab strip) has nine submenus: File, Edit, Search, View, Encoding, Language, Settings, Tools, Help. Rest the pointer on one and it opens beside the menu (or press → on it). Below them, **Check for Updates…** says whether a newer Stet is out ([Updating](#updating)). Every command is also in the **command palette** (Ctrl+Shift+P or F1), with its keys.
+- **The + button**, right after the last tab, opens a new untitled tab, as File › New (Ctrl+N) does. With more tabs than fit, it stays at the end of the tabs on screen. In split view each strip has its own +, which opens the tab in its view.
 - **Banners** above the text say when something needs your attention: a file changed on disk, a read-only file, an encoding that could not be read back exactly, mixed line endings, a large file.
 - **The editor's context menu** (right-click) has GtkTextView's clipboard items and, below them, Convert Case to, Comment/Uncomment, Line Operations, Select and Find Next and Go to Matching Brace.
 - **The status bar** shows the caret's line and column and the selection (`Sel 12 | 2` is 12 characters on 2 lines), the document's lines and characters, the words if you ask for them (`word_count` in [config.toml](#configtoml)), and four buttons: the language (the language picker), the line ending (convert it), the encoding (reinterpret or convert), the indentation (below), then INS or OVR (the Insert key).
@@ -375,6 +375,7 @@ Stet's default keys are adapted to Omarchy: every F-key command also has a key w
 | Tools › Compare | Clear Compare | Ctrl+Alt+X | Window | `clear-compare` |
 | Help | Keyboard Shortcuts | — |  | `keyboard-shortcuts` |
 | Help | About Stet | — |  | `about` |
+| Menu | Check for Updates… | — |  | `check-for-updates` |
 | Palette | Replace Next | — |  | `replace-next` |
 | Palette | Replace All | — |  | `replace-all` |
 | Palette | Replace All in Open Documents | — |  | `replace-all-in-open-documents` |
@@ -407,3 +408,9 @@ Stet's default keys are adapted to Omarchy: every F-key command also has a key w
 - **Set as default editor**: **Settings › Set as Default Editor…** makes SUPER+SHIFT+N (`omarchy-launch-editor`) start Stet and makes Stet the default for the text types in its desktop entry, so a double-click in the file manager opens Stet. It says exactly what it will change, asks first, and reports what changed; [INTEGRATIONS.md](INTEGRATIONS.md#4-set-as-default-editor-built-in-m5) has the details and how to undo it.
 - **Terminal and folder**: Open Terminal Here uses `xdg-terminal-exec --dir=<folder>`, as Omarchy's own terminal launcher does; Open Containing Folder uses `xdg-open`.
 - `GIT_EDITOR="stet --wait"` and `SUDO_EDITOR="stet --wait"` arrive with M2.
+
+## Updating
+
+**Check for Updates…**, at the bottom of the menu (☰), asks GitHub which Stet release is the latest and says whether yours is. When a newer one is out, it shows the command that installs it, with **Copy Command**: paste it into a terminal and press Enter, type your password when asked, then quit Stet (Ctrl+Alt+Q) and start it again; your tabs and unsaved text come back. The command is the README's install line for that version.
+
+Stet asks only when you choose Check for Updates…, never on its own. The request is made with `curl`, carries the name "Stet" and nothing about you, and only the answer's version number is read. Stet never installs anything itself.

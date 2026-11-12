@@ -1,0 +1,47 @@
+# Check for Updates… (1.5), on the menu's first page below its submenus: Stet asks GitHub for its
+# latest release (here a server on this computer answers in GitHub's place) and says whether a
+# newer version is out. A newer one comes with the command that installs it and a button that
+# copies it; Stet installs nothing itself.
+# Run: tools/headless.sh 73 target/debug/stet --self-test tests/selftest/updates.stet-test
+
+assert-menu-contains "Check for Updates…"
+assert-menu
+
+# A newer release: its command, and Copy Command.
+release-server 200 "{\"tag_name\": \"v99.0.0\", \"name\": \"Stet 99.0.0\", \"body\": \"Notes\"}"
+action check-for-updates
+wait-until assert-dialog-text "Stet 99.0.0 is available"
+assert-dialog-text "press Ctrl+Alt+Q to quit Stet"
+assert-dialog-text "curl -L -o /tmp/stet.pkg.tar.zst https://github.com/PixDevsApps/Stet/releases/download/v99.0.0/stet-x86_64.pkg.tar.zst && sudo pacman -U /tmp/stet.pkg.tar.zst"
+click-dialog-button "Copy Command"
+assert-clipboard-contains "releases/download/v99.0.0/stet-x86_64.pkg.tar.zst && sudo pacman -U"
+assert-dialog-text "Copied"
+respond close
+assert-focus editor
+
+# An older release than this build: nothing to install.
+release-server 200 "{\"tag_name\": \"v1.0.0\"}"
+action check-for-updates
+wait-until assert-dialog-text "You have the latest version"
+assert-dialog-text "is newer than the latest release, 1.0.0"
+assert-dialog-lacks "sudo pacman"
+respond close
+
+# A tag that isn't a plain version never reaches a command.
+release-server 200 "{\"tag_name\": \"v99.0.0; rm -rf ~\"}"
+action check-for-updates
+wait-until assert-dialog-text "Couldn't check for updates"
+assert-dialog-text "GitHub's answer couldn't be read"
+assert-dialog-lacks "sudo pacman"
+respond close
+
+# GitHub limiting requests, and no answer at all.
+release-server 403 "{}"
+action check-for-updates
+wait-until assert-dialog-text "limiting requests"
+respond close
+release-server none
+action check-for-updates
+wait-until assert-dialog-text "couldn't be reached"
+respond close
+assert-focus editor

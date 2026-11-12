@@ -33,6 +33,7 @@ mod status;
 mod tabs;
 mod tool_dialogs;
 mod toolbox;
+mod updates;
 
 use crate::actions;
 use crate::config::AppConfig;
@@ -205,6 +206,14 @@ pub struct Window {
 pub struct ViewPane {
     pub tabs: adw::TabView,
     pub bar: adw::TabBar,
+    /// Opens a new tab in this view (1.4), right after the strip's last tab (1.5).
+    pub new_tab: gtk::Button,
+    /// The strip's end: the + and, on the last strip on screen outside Hyprland, the window
+    /// controls at the far end.
+    trail: gtk::Box,
+    /// The strip's tabs, as wide as they are, so that the + follows them (1.5). `None` if
+    /// libadwaita's tab strip is built differently: the + then sits at the strip's far end.
+    tab_scroller: Option<gtk::ScrolledWindow>,
 }
 
 impl ViewPane {
@@ -217,8 +226,62 @@ impl ViewPane {
             .expand_tabs(false)
             .build();
         bar.add_css_class("stet-mono");
-        Self { tabs, bar }
+        let new_tab = gtk::Button::builder()
+            .icon_name("list-add-symbolic")
+            .tooltip_text("New Tab")
+            .focus_on_click(false)
+            .valign(gtk::Align::Center)
+            .build();
+        new_tab.add_css_class("flat");
+        new_tab.update_property(&[gtk::accessible::Property::Label("New Tab")]);
+        let trail = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        trail.append(&new_tab);
+        // libadwaita gives the strip's tabs all the room the ends leave. Sized to the tabs
+        // instead, they leave it to a filler after the +, which keeps the + right after the
+        // last tab, and at the strip's end once the tabs scroll.
+        let tab_scroller = tab_scroller(&bar);
+        if let Some(scroller) = &tab_scroller {
+            scroller.set_hexpand(false);
+            scroller.set_propagate_natural_width(true);
+            trail.append(&gtk::Box::builder().hexpand(true).build());
+        } else {
+            tracing::warn!("the tab strip has no tab scroller: the + sits at its end");
+        }
+        bar.set_end_action_widget(Some(&trail));
+        Self {
+            tabs,
+            bar,
+            new_tab,
+            trail,
+            tab_scroller,
+        }
     }
+
+    /// The strip's visible tabs end here, in its coordinates.
+    pub fn tabs_end(&self) -> Option<f32> {
+        let scroller = self.tab_scroller.as_ref()?;
+        let bounds = scroller.compute_bounds(&self.bar)?;
+        Some(bounds.x() + bounds.width())
+    }
+}
+
+/// The scrolled window in a tab strip that holds its unpinned tabs: the one of its two that
+/// expands (the pinned tabs' doesn't).
+fn tab_scroller(bar: &adw::TabBar) -> Option<gtk::ScrolledWindow> {
+    let mut widgets = vec![bar.clone().upcast::<gtk::Widget>()];
+    while let Some(widget) = widgets.pop() {
+        if let Some(scroller) = widget.downcast_ref::<gtk::ScrolledWindow>()
+            && scroller.hexpands()
+        {
+            return Some(scroller.clone());
+        }
+        let mut child = widget.first_child();
+        while let Some(next) = child {
+            child = next.next_sibling();
+            widgets.push(next);
+        }
+    }
+    None
 }
 
 pub struct Inner {
@@ -232,17 +295,15 @@ pub struct Inner {
     /// The views side by side, divided where the tab strips above them are (`top_paned` in
     /// [`Window::new`]).
     views_paned: gtk::Paned,
-    /// The hamburger menu, the new-tab button right of it (1.4) and, outside Hyprland,
-    /// the window controls the decoration layout puts first, at the start of the first strip
-    /// on screen (1.3).
+    /// The hamburger menu and, outside Hyprland, the window controls the decoration layout
+    /// puts first, at the start of the first strip on screen (1.3).
     start: gtk::Box,
-    /// The window controls outside Hyprland, at the end of the last strip on screen.
+    /// The window controls outside Hyprland, at the end of the last strip on screen, after its
+    /// + and filler.
     end: gtk::Box,
     content: gtk::Box,
     toasts: adw::ToastOverlay,
     menu_button: gtk::MenuButton,
-    /// Opens a new tab in the view whose strip it is on (1.4).
-    new_tab_button: gtk::Button,
     pub status: StatusBar,
     pub find: FindBar,
     pub results: Rc<ResultsPanel>,
@@ -284,6 +345,8 @@ pub struct Inner {
     pub(crate) comparing: compare::CompareState,
     /// Mark's options and the last Mark's statistics (M7).
     pub(crate) marking: marking::MarkState,
+    /// Check for Updates (1.5).
+    updates: updates::UpdateState,
 }
 
 impl Window {
@@ -294,13 +357,6 @@ impl Window {
             .tooltip_text("Menu")
             .build();
         menu_button.add_css_class("flat");
-        let new_tab_button = gtk::Button::builder()
-            .icon_name("list-add-symbolic")
-            .tooltip_text("New Tab")
-            .focus_on_click(false)
-            .build();
-        new_tab_button.add_css_class("flat");
-        new_tab_button.update_property(&[gtk::accessible::Property::Label("New Tab")]);
         let start = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let end = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let tiling = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
@@ -311,9 +367,8 @@ impl Window {
             end.append(&gtk::WindowControls::new(gtk::PackType::End));
         }
         start.append(&menu_button);
-        start.append(&new_tab_button);
         views[0].bar.set_start_action_widget(Some(&start));
-        views[0].bar.set_end_action_widget(Some(&end));
+        views[0].trail.append(&end);
         // The strips sit side by side over the views, divided where the views are (M7).
         let split_paned = |start: &gtk::Widget, end: &gtk::Widget| {
             gtk::Paned::builder()
@@ -407,7 +462,6 @@ impl Window {
                 content,
                 toasts,
                 menu_button,
-                new_tab_button,
                 status,
                 find,
                 results,
@@ -438,6 +492,7 @@ impl Window {
                 split: split::SplitState::default(),
                 comparing: compare::CompareState::default(),
                 marking: marking::MarkState::default(),
+                updates: updates::UpdateState::default(),
             }),
         };
         actions::install_window_actions(&this);
@@ -513,18 +568,18 @@ impl Window {
                 move |_| Window { inner }.on_view_selected(index)
             ));
         }
-        inner.new_tab_button.connect_clicked(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_| {
-                let window = Window { inner };
-                if let Some(view) = window.menu_view() {
-                    window.set_active_view(view, false);
+        for (index, view) in inner.views.iter().enumerate() {
+            view.new_tab.connect_clicked(glib::clone!(
+                #[weak(rename_to = inner)]
+                self.inner,
+                move |_| {
+                    let window = Window { inner };
+                    window.set_active_view(index, false);
+                    let name = ActionId::NewTab.detailed_name();
+                    let _ = WidgetExt::activate_action(&window.inner.window, &name, None);
                 }
-                let name = ActionId::NewTab.detailed_name();
-                let _ = WidgetExt::activate_action(&window.inner.window, &name, None);
-            }
-        ));
+            ));
+        }
         inner.window.connect_close_request(glib::clone!(
             #[weak(rename_to = inner)]
             self.inner,
@@ -1444,6 +1499,7 @@ impl Window {
             | ActionId::ConvertEncoding
             | ActionId::ChooseEncoding => self.run_encoding_action(id, param),
             ActionId::About => self.show_about(),
+            ActionId::CheckForUpdates => self.check_for_updates(),
             ActionId::CloseOthers
             | ActionId::CloseToTheRight
             | ActionId::CopyFullPath
@@ -1710,9 +1766,9 @@ impl Window {
         &self.inner.menu_button
     }
 
-    /// The button right of the menu that opens a new tab (1.4).
-    pub fn new_tab_button(&self) -> &gtk::Button {
-        &self.inner.new_tab_button
+    /// The + after view `index`'s last tab, which opens a new tab there (1.4, 1.5).
+    pub fn new_tab_button(&self, index: usize) -> &gtk::Button {
+        &self.inner.views[index].new_tab
     }
 
     /// The view whose tab strip has the menu at its start.
@@ -1742,34 +1798,46 @@ impl Window {
         if button.menu_model().is_none() {
             let recent = self.inner.shared.recent();
             button.set_menu_model(Some(&actions::menu_model(recent.paths(), &self.keymap())));
-            if let Some(popover) = button.popover() {
+            if let Some(popover) = button
+                .popover()
+                .and_then(|popover| popover.downcast::<gtk::PopoverMenu>().ok())
+            {
                 // From the button's left edge into the window (1.3.1): centred on the button at
                 // the window's left end, half the menu hung outside the window.
                 popover.set_halign(gtk::Align::Start);
-                // Each page as wide as its own items (1.3.2), not as the widest submenu.
-                if let Some(pages) = menu_part::<gtk::Stack>(&popover) {
-                    pages.set_hhomogeneous(false);
+                // Submenus open beside the menu when the pointer rests on their item (1.5),
+                // each as wide as its own items, rather than in its place on a click.
+                popover.set_flags(gtk::PopoverMenuFlags::NESTED);
+                for menu in menus_in(popover.upcast_ref()) {
+                    menu.connect_show(glib::clone!(
+                        #[weak(rename_to = inner)]
+                        self.inner,
+                        move |menu| Window { inner }.fit_menu(menu.upcast_ref())
+                    ));
                 }
-                popover.connect_show(glib::clone!(
-                    #[weak(rename_to = inner)]
-                    self.inner,
-                    move |popover| Window { inner }.fit_menu(popover)
-                ));
             }
         }
     }
 
-    /// Keeps the menu above the window's bottom edge too (1.3.2): a page taller than the room
-    /// below the button scrolls.
+    /// Keeps the menu and its submenus above the window's bottom edge (1.3.2): one taller than
+    /// the room below its button or item scrolls.
     fn fit_menu(&self, popover: &gtk::Popover) {
         let window = self.inner.window.upcast_ref::<gtk::Widget>();
-        let (Some(scroller), Some(button)) = (
+        let anchor = popover
+            .parent()
+            .unwrap_or_else(|| self.inner.menu_button.clone().upcast());
+        let (Some(scroller), Some(bounds)) = (
             menu_part::<gtk::ScrolledWindow>(popover),
-            self.inner.menu_button.compute_bounds(window),
+            anchor.compute_bounds(window),
         ) else {
             return;
         };
-        let below = window.height() - (button.y() + button.height()).ceil() as i32;
+        let top = if anchor.is::<gtk::MenuButton>() {
+            bounds.y() + bounds.height()
+        } else {
+            bounds.y()
+        };
+        let below = window.height() - top.ceil() as i32;
         scroller.set_max_content_height((below - MENU_MARGIN).max(MENU_MIN_HEIGHT));
     }
 
@@ -1884,9 +1952,8 @@ const MENU_MARGIN: i32 = 40;
 
 const MENU_MIN_HEIGHT: i32 = 160;
 
-/// The first widget of type `T` in a popover menu: its scrolled window, or the stack of its
-/// pages (the main one and one per submenu, as wide as the widest unless told otherwise). GTK
-/// builds both inside the popover with no API to reach them.
+/// The first widget of type `T` in a popover menu, such as its scrolled window, which GTK
+/// builds inside the popover with no API to reach it.
 pub fn menu_part<T: IsA<gtk::Widget>>(popover: &gtk::Popover) -> Option<T> {
     let mut widgets = vec![popover.clone().upcast::<gtk::Widget>()];
     while let Some(widget) = widgets.pop() {
@@ -1900,6 +1967,23 @@ pub fn menu_part<T: IsA<gtk::Widget>>(popover: &gtk::Popover) -> Option<T> {
         }
     }
     None
+}
+
+/// A nested popover menu and its submenus' popovers, which GTK makes children of their items.
+pub fn menus_in(menu: &gtk::Widget) -> Vec<gtk::PopoverMenu> {
+    let mut menus = Vec::new();
+    let mut widgets = vec![menu.clone()];
+    while let Some(widget) = widgets.pop() {
+        if let Some(menu) = widget.downcast_ref::<gtk::PopoverMenu>() {
+            menus.push(menu.clone());
+        }
+        let mut child = widget.first_child();
+        while let Some(next) = child {
+            child = next.next_sibling();
+            widgets.push(next);
+        }
+    }
+    menus
 }
 
 /// The tabs of one view, in order.

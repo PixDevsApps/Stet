@@ -399,6 +399,14 @@ pub fn click_response(dialog: &adw::AlertDialog, response: &str) -> bool {
     })
 }
 
+/// Clicks the button labelled `label` in the dialog's own content, such as Copy Command.
+pub fn click_button(dialog: &adw::AlertDialog, label: &str) -> bool {
+    find_button(dialog.upcast_ref(), label).is_some_and(|button| {
+        button.emit_clicked();
+        true
+    })
+}
+
 fn find_button(widget: &gtk::Widget, label: &str) -> Option<gtk::Button> {
     if let Some(button) = widget.downcast_ref::<gtk::Button>()
         && button.label().as_deref() == Some(label)
