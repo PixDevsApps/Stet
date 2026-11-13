@@ -58,15 +58,6 @@ impl Motion {
     }
 }
 
-/// Runs a column-mode registry action on `view`.
-pub fn run_action(view: &StetView, id: ActionId) {
-    if let Some(motion) = Motion::of(id) {
-        view.extend(motion);
-    } else if id == ActionId::ColumnBeginEndSelect {
-        view.begin_end_select();
-    }
-}
-
 /// Called before every registry action on the current editor: the typing burst closes first
 /// (ADR-016), and an action that does not know about columns ends column mode, leaving the
 /// rectangle's corners as a stream selection, so a find or a line operation works on the

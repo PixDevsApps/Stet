@@ -70,52 +70,84 @@ pub struct MarkState {
 /// A bookmarked-line operation, run on a snapshot: the edit, and text for the clipboard.
 type LineOp = Box<dyn FnOnce(&str, &LineIndex, &Bookmarks) -> (LineEdit, Option<String>) + Send>;
 
+/// The commands of Search › Bookmark, the find bar's Mark row and Search › Style All
+/// Occurrences of Token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum MarkCommand {
+    ToggleBookmark,
+    NextBookmark,
+    PreviousBookmark,
+    ClearBookmarks,
+    CutBookmarkedLines,
+    CopyBookmarkedLines,
+    PasteToBookmarkedLines,
+    RemoveBookmarkedLines,
+    RemoveUnbookmarkedLines,
+    InverseBookmarks,
+    /// Opens the find bar's Mark row.
+    Mark,
+    MarkAll,
+    ClearMarks,
+    CopyMarkedText,
+    /// Styles every occurrence of the token at the caret in a token style.
+    StyleToken(MarkStyle),
+    /// Clears one style.
+    ClearStyle(MarkStyle),
+    /// Clears the five token styles.
+    ClearAllStyles,
+    /// Jumps to the next text in a style, `down` or up.
+    JumpToStyle {
+        style: MarkStyle,
+        down: bool,
+    },
+}
+
 impl Window {
-    pub(super) fn run_mark_action(&self, id: ActionId) {
-        match id {
-            ActionId::ToggleBookmark => self.toggle_bookmark(),
-            ActionId::NextBookmark | ActionId::PreviousBookmark => {
-                self.jump_to_bookmark(id == ActionId::NextBookmark);
-            }
-            ActionId::ClearBookmarks => {
+    /// Runs a bookmark, Mark or style-token command.
+    pub(super) fn run_mark(&self, command: MarkCommand) {
+        match command {
+            MarkCommand::ToggleBookmark => self.toggle_bookmark(),
+            MarkCommand::NextBookmark => self.jump_to_bookmark(true),
+            MarkCommand::PreviousBookmark => self.jump_to_bookmark(false),
+            MarkCommand::ClearBookmarks => {
                 if let Some(page) = self.current_page() {
                     page.set_bookmarks(&Bookmarks::new());
                     self.update_mark_actions();
                 }
             }
-            ActionId::InverseBookmarks => {
+            MarkCommand::InverseBookmarks => {
                 if let Some(page) = self.current_page() {
                     let lines = page.buffer().line_count().max(1) as usize;
                     page.set_bookmarks(&page.bookmarks().inverted(lines));
                     self.update_mark_actions();
                 }
             }
-            ActionId::CopyBookmarkedLines => self.copy_bookmarked_lines(),
-            ActionId::CutBookmarkedLines => self.run_line_op(
+            MarkCommand::CopyBookmarkedLines => self.copy_bookmarked_lines(),
+            MarkCommand::CutBookmarkedLines => self.run_line_op(
                 Box::new(|text, index, bookmarks| {
                     let cut = marks::cut_bookmarked_lines(text, index, bookmarks);
                     (cut.edit, Some(cut.clipboard))
                 }),
                 "Cut Bookmarked Lines",
             ),
-            ActionId::RemoveBookmarkedLines => self.run_line_op(
+            MarkCommand::RemoveBookmarkedLines => self.run_line_op(
                 Box::new(|_, index, bookmarks| {
                     (marks::delete_bookmarked_lines(index, bookmarks), None)
                 }),
                 "Remove Bookmarked Lines",
             ),
-            ActionId::RemoveUnbookmarkedLines => self.run_line_op(
+            MarkCommand::RemoveUnbookmarkedLines => self.run_line_op(
                 Box::new(|_, index, bookmarks| {
                     (marks::delete_unbookmarked_lines(index, bookmarks), None)
                 }),
                 "Remove Non-Bookmarked Lines",
             ),
-            ActionId::PasteToBookmarkedLines => self.paste_to_bookmarked_lines(),
-            ActionId::Mark => self.show_find_mode(BarMode::Mark),
-            ActionId::MarkAll => self.mark_all(),
-            ActionId::ClearMarks => self.clear_marks(),
-            ActionId::CopyMarkedText => self.copy_marked_text(),
-            ActionId::ClearAllStyles => {
+            MarkCommand::PasteToBookmarkedLines => self.paste_to_bookmarked_lines(),
+            MarkCommand::Mark => self.show_find_mode(BarMode::Mark),
+            MarkCommand::MarkAll => self.mark_all(),
+            MarkCommand::ClearMarks => self.clear_marks(),
+            MarkCommand::CopyMarkedText => self.copy_marked_text(),
+            MarkCommand::ClearAllStyles => {
                 if let Some(page) = self.current_page() {
                     page.marks().update_marks(|marks| {
                         for style in MarkStyle::TOKENS {
@@ -126,21 +158,15 @@ impl Window {
                     self.update_mark_actions();
                 }
             }
-            _ => {
-                if let Some(style) = token_style(id, &STYLE_TOKENS) {
-                    self.style_token(style);
-                } else if let Some(style) = token_style(id, &CLEAR_STYLES) {
-                    if let Some(page) = self.current_page() {
-                        page.marks().update_marks(|marks| marks.clear(style));
-                        page.retag_marks();
-                        self.update_mark_actions();
-                    }
-                } else if let Some(style) = token_style(id, &JUMPS_DOWN) {
-                    self.jump_to_style(style, true);
-                } else if let Some(style) = token_style(id, &JUMPS_UP) {
-                    self.jump_to_style(style, false);
+            MarkCommand::StyleToken(style) => self.style_token(style),
+            MarkCommand::ClearStyle(style) => {
+                if let Some(page) = self.current_page() {
+                    page.marks().update_marks(|marks| marks.clear(style));
+                    page.retag_marks();
+                    self.update_mark_actions();
                 }
             }
+            MarkCommand::JumpToStyle { style, down } => self.jump_to_style(style, down),
         }
     }
 
@@ -374,12 +400,12 @@ impl Window {
             purge: mark.purge,
             range: Some(range),
         };
-        self.run_mark(&page, matcher, request, "Mark");
+        self.mark_matches(&page, matcher, request, "Mark");
     }
 
     /// Finds the matches of `matcher` in `page` (on a worker when the document is large) and
     /// marks them as `request` says.
-    fn run_mark(
+    fn mark_matches(
         &self,
         page: &EditorPage,
         matcher: Arc<Matcher>,
@@ -587,7 +613,7 @@ impl Window {
             purge: false,
             range: None,
         };
-        self.run_mark(&page, matcher, request, "Style");
+        self.mark_matches(&page, matcher, request, "Style");
     }
 
     /// Jump Down (`down`) or Up to the next text in `style`, wrapping around; a jump to come
@@ -668,44 +694,6 @@ struct MarkRequest {
     bookmark: bool,
     purge: bool,
     range: Option<Range<usize>>,
-}
-
-const STYLE_TOKENS: [ActionId; 5] = [
-    ActionId::StyleToken1,
-    ActionId::StyleToken2,
-    ActionId::StyleToken3,
-    ActionId::StyleToken4,
-    ActionId::StyleToken5,
-];
-const CLEAR_STYLES: [ActionId; 5] = [
-    ActionId::ClearStyle1,
-    ActionId::ClearStyle2,
-    ActionId::ClearStyle3,
-    ActionId::ClearStyle4,
-    ActionId::ClearStyle5,
-];
-const JUMPS_DOWN: [ActionId; 6] = [
-    ActionId::JumpDown1,
-    ActionId::JumpDown2,
-    ActionId::JumpDown3,
-    ActionId::JumpDown4,
-    ActionId::JumpDown5,
-    ActionId::JumpDownMark,
-];
-const JUMPS_UP: [ActionId; 6] = [
-    ActionId::JumpUp1,
-    ActionId::JumpUp2,
-    ActionId::JumpUp3,
-    ActionId::JumpUp4,
-    ActionId::JumpUp5,
-    ActionId::JumpUpMark,
-];
-
-/// The style `id` acts on when it is one of `ids`: the five tokens in order, then the Find
-/// Mark Style.
-fn token_style(id: ActionId, ids: &[ActionId]) -> Option<MarkStyle> {
-    let index = ids.iter().position(|each| *each == id)?;
-    Some(MarkStyle::token(index + 1).unwrap_or(MarkStyle::Mark))
 }
 
 /// The selection, when it is on one line, else the word at the caret (as a whole word).

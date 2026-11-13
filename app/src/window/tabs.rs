@@ -22,6 +22,34 @@ use stet_infrastructure::fs::rename_no_replace;
 /// The response that renames.
 pub const RENAME: &str = "rename";
 
+/// The commands of the tab strip: switching, moving, closing every tab and reopening one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TabCommand {
+    Next,
+    Previous,
+    MoveForward,
+    MoveBackward,
+    /// Closes every tab but the pinned ones.
+    CloseAll,
+    RestoreClosed,
+}
+
+/// The tab menu's commands, which act on the tab that was clicked, else on the current one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TabTool {
+    Close,
+    CloseOthers,
+    CloseToTheRight,
+    CopyFullPath,
+    CopyFileName,
+    CopyDirectoryPath,
+    OpenContainingFolder,
+    OpenTerminalHere,
+    /// Renames the file, or names an untitled tab.
+    Rename,
+    MoveToTrash,
+}
+
 impl Window {
     pub(super) fn connect_tab_menu(&self) {
         let menu = actions::tab_menu(&self.keymap());
@@ -176,17 +204,61 @@ impl Window {
         }
     }
 
-    pub(super) fn run_tab_tool(&self, id: ActionId) {
+    /// Runs a command of the tab strip.
+    pub(super) fn run_tab(&self, command: TabCommand) {
+        match command {
+            TabCommand::Next => self.cycle_tabs(true),
+            TabCommand::Previous => self.cycle_tabs(false),
+            TabCommand::MoveForward => {
+                let tabs = self.active_tabs();
+                if let Some(tab_page) = tabs.selected_page() {
+                    tabs.reorder_forward(&tab_page);
+                }
+            }
+            TabCommand::MoveBackward => {
+                let tabs = self.active_tabs();
+                if let Some(tab_page) = tabs.selected_page() {
+                    tabs.reorder_backward(&tab_page);
+                }
+            }
+            TabCommand::CloseAll => {
+                let window = self.clone();
+                self.spawn(async move { window.close_all().await });
+            }
+            TabCommand::RestoreClosed => self.restore_closed(),
+        }
+    }
+
+    fn cycle_tabs(&self, forward: bool) {
+        let tabs = self.active_tabs();
+        let count = tabs.n_pages();
+        let Some(selected) = tabs.selected_page() else {
+            return;
+        };
+        if count < 2 {
+            return;
+        }
+        let position = tabs.page_position(&selected);
+        let next = if forward {
+            (position + 1) % count
+        } else {
+            (position + count - 1) % count
+        };
+        tabs.set_selected_page(&tabs.nth_page(next));
+    }
+
+    /// Runs a command of the tab menu on the tab that was clicked, else on the current one.
+    pub(super) fn run_tab_tool(&self, tool: TabTool) {
         let Some(page) = self.context_page() else {
             return;
         };
-        match id {
-            ActionId::CloseTab => {
+        match tool {
+            TabTool::Close => {
                 if let Some((view, tab_page)) = self.locate(&page) {
                     self.inner.views[view].tabs.close_page(&tab_page);
                 }
             }
-            ActionId::CloseOthers | ActionId::CloseToTheRight => {
+            TabTool::CloseOthers | TabTool::CloseToTheRight => {
                 let Some(view) = self.view_of(&page) else {
                     return;
                 };
@@ -198,7 +270,7 @@ impl Window {
                     .into_iter()
                     .enumerate()
                     .filter(|(index, _)| {
-                        if id == ActionId::CloseOthers {
+                        if tool == TabTool::CloseOthers {
                             *index != position
                         } else {
                             *index > position
@@ -211,40 +283,47 @@ impl Window {
                 let window = self.clone();
                 self.spawn(async move { window.close_pages(closing, &page).await });
             }
-            ActionId::CopyFullPath | ActionId::CopyFileName | ActionId::CopyDirectoryPath => {
-                let text = match (id, page.path()) {
-                    (ActionId::CopyFileName, _) => page.name(),
-                    (ActionId::CopyFullPath, Some(path)) => path.display().to_string(),
-                    (_, Some(path)) => path
+            TabTool::CopyFileName => self.copy_path_text(&page, &page.name()),
+            TabTool::CopyFullPath => {
+                if let Some(path) = page.path() {
+                    self.copy_path_text(&page, &path.display().to_string());
+                }
+            }
+            TabTool::CopyDirectoryPath => {
+                if let Some(path) = page.path() {
+                    let dir = path
                         .parent()
                         .map(|dir| dir.display().to_string())
-                        .unwrap_or_default(),
-                    (_, None) => return,
-                };
-                page.view().clipboard().set_text(&text);
-                self.toast(&format!("Copied “{text}”"));
+                        .unwrap_or_default();
+                    self.copy_path_text(&page, &dir);
+                }
             }
-            ActionId::OpenContainingFolder | ActionId::OpenTerminalHere => {
+            TabTool::OpenContainingFolder | TabTool::OpenTerminalHere => {
                 let Some(dir) = page
                     .path()
                     .and_then(|path| path.parent().map(Path::to_path_buf))
                 else {
                     return;
                 };
-                let terminal = id == ActionId::OpenTerminalHere;
+                let terminal = tool == TabTool::OpenTerminalHere;
                 let window = self.clone();
                 self.spawn(async move { window.open_externally(dir, terminal).await });
             }
-            ActionId::RenameFile => {
+            TabTool::Rename => {
                 let window = self.clone();
                 self.spawn(async move { window.rename(&page).await });
             }
-            ActionId::MoveToTrash => {
+            TabTool::MoveToTrash => {
                 let window = self.clone();
                 self.spawn(async move { window.move_to_trash(&page).await });
             }
-            _ => {}
         }
+    }
+
+    /// Puts `text`, the tab's name or part of its path, on the clipboard.
+    fn copy_path_text(&self, page: &EditorPage, text: &str) {
+        page.view().clipboard().set_text(text);
+        self.toast(&format!("Copied “{text}”"));
     }
 
     /// Closes `pages`, asking once about the unsaved ones, as Close All does. `keep` stays

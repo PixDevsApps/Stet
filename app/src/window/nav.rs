@@ -186,6 +186,27 @@ fn line_of(page: &EditorPage, offset: usize) -> usize {
     usize::try_from(page.buffer().iter_at_offset(offset).line()).unwrap_or(0)
 }
 
+/// The navigation commands: the Ctrl+Tab switcher's steps, and back and forward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum NavCommand {
+    NextRecentTab,
+    PreviousRecentTab,
+    Back,
+    Forward,
+}
+
+impl Window {
+    /// Runs a navigation command.
+    pub(super) fn run_nav(&self, command: NavCommand) {
+        match command {
+            NavCommand::NextRecentTab => self.switch_recent(true),
+            NavCommand::PreviousRecentTab => self.switch_recent(false),
+            NavCommand::Back => self.navigate(true),
+            NavCommand::Forward => self.navigate(false),
+        }
+    }
+}
+
 impl Window {
     pub(super) fn connect_nav(&self) {
         let inner = &self.inner;

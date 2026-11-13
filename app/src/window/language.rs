@@ -1,6 +1,7 @@
 //! The language picker: a filterable list of GtkSourceView's languages, opened from the status
 //! bar or with "Set Language…".
 
+use super::Window;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -250,4 +251,37 @@ fn row(name: &str, section: &str) -> gtk::ListBoxRow {
     content.append(&name);
     content.append(&section);
     gtk::ListBoxRow::builder().child(&content).build()
+}
+
+/// Set Language…, and a language chosen by id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum LanguageCommand {
+    /// Opens the language picker.
+    Choose,
+    /// Gives the current document the language with this id; none or empty is Plain Text.
+    Set(Option<String>),
+}
+
+impl Window {
+    /// Runs a language command.
+    pub(super) fn run_language(&self, command: LanguageCommand) {
+        match command {
+            LanguageCommand::Choose => self.choose_language(),
+            LanguageCommand::Set(id) => {
+                if let Some(page) = self.current_page() {
+                    let id = id.filter(|id| !id.is_empty());
+                    self.set_language(&page, id.as_deref());
+                }
+            }
+        }
+    }
+
+    fn choose_language(&self) {
+        let current = self
+            .current_page()
+            .and_then(|page| page.language())
+            .map(|language| language.id().to_string());
+        self.inner.status.language.popup();
+        self.inner.languages.select(current.as_deref());
+    }
 }

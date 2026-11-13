@@ -16,6 +16,13 @@ use stet_domain::actions::ActionId;
 /// have no title for the dirty dot.
 const DIRTY_ICON: &str = "media-record-symbolic";
 
+/// The tab menu's Pin Tab and Unpin Tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PinCommand {
+    Pin,
+    Unpin,
+}
+
 impl Window {
     /// The tab a pin command acts on: the one whose menu is open, else the current one.
     fn pin_target(&self) -> Option<EditorPage> {
@@ -42,9 +49,9 @@ impl Window {
     }
 
     /// Pin Tab and Unpin Tab.
-    pub(super) fn run_pin_action(&self, id: ActionId) {
+    pub(super) fn run_pin(&self, command: PinCommand) {
         if let Some(page) = self.pin_target() {
-            self.set_pinned(&page, id == ActionId::PinTab);
+            self.set_pinned(&page, command == PinCommand::Pin);
         }
     }
 

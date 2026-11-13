@@ -83,44 +83,65 @@ pub struct CompareState {
     last: Cell<Option<CompareRun>>,
 }
 
+/// The commands of View › Compare.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CompareCommand {
+    /// Compares the two views' documents.
+    WithOtherView,
+    /// Compares the current document with a file the user chooses.
+    WithFile,
+    WithClipboard,
+    /// Compares the current document with its file on disk.
+    WithSaved,
+    NextDifference,
+    PreviousDifference,
+    IgnoreWhitespace,
+    IgnoreCase,
+    Clear,
+}
+
 impl Window {
-    pub(super) fn run_compare_action(&self, id: ActionId) {
-        match id {
-            ActionId::Compare => self.compare_with_other_view(),
-            ActionId::CompareWithFile => {
+    /// Runs a comparison command.
+    pub(super) fn run_compare(&self, command: CompareCommand) {
+        match command {
+            CompareCommand::WithOtherView => self.compare_with_other_view(),
+            CompareCommand::WithFile => {
                 let window = self.clone();
                 self.spawn(async move { window.compare_with_chosen_file().await });
             }
-            ActionId::CompareWithClipboard => {
+            CompareCommand::WithClipboard => {
                 let window = self.clone();
                 self.spawn(async move { window.compare_with_clipboard().await });
             }
-            ActionId::CompareWithSaved => {
+            CompareCommand::WithSaved => {
                 if let Some(page) = self.current_page() {
                     let window = self.clone();
                     self.spawn(async move { window.compare_with_saved(page).await });
                 }
             }
-            ActionId::NextDifference | ActionId::PreviousDifference => {
-                self.step_difference(id == ActionId::NextDifference);
-            }
-            ActionId::CompareIgnoreWhitespace | ActionId::CompareIgnoreCase => {
-                let state = &self.inner.comparing;
-                let cell = if id == ActionId::CompareIgnoreWhitespace {
-                    &state.ignore_whitespace
-                } else {
-                    &state.ignore_case
-                };
-                cell.set(!cell.get());
-                if let Some(action) = self.action(id) {
-                    action.set_state(&cell.get().to_variant());
-                }
-                if self.comparing() {
-                    self.recompare();
-                }
-            }
-            ActionId::ClearCompare => self.clear_compare(),
-            _ => {}
+            CompareCommand::NextDifference => self.step_difference(true),
+            CompareCommand::PreviousDifference => self.step_difference(false),
+            CompareCommand::IgnoreWhitespace => self.toggle_compare_option(
+                &self.inner.comparing.ignore_whitespace,
+                ActionId::CompareIgnoreWhitespace,
+            ),
+            CompareCommand::IgnoreCase => self.toggle_compare_option(
+                &self.inner.comparing.ignore_case,
+                ActionId::CompareIgnoreCase,
+            ),
+            CompareCommand::Clear => self.clear_compare(),
+        }
+    }
+
+    /// Turns one of the comparison's options on or off, with its check mark, and compares
+    /// again.
+    fn toggle_compare_option(&self, cell: &Cell<bool>, id: ActionId) {
+        cell.set(!cell.get());
+        if let Some(action) = self.action(id) {
+            action.set_state(&cell.get().to_variant());
+        }
+        if self.comparing() {
+            self.recompare();
         }
     }
 

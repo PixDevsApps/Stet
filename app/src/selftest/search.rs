@@ -5,7 +5,7 @@ use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
 use crate::page_search::OWN_MATCH_TAG;
 use crate::runtime::worker;
-use crate::window::Field;
+use crate::window::{Field, SearchCommand};
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -17,7 +17,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
-use stet_domain::actions::ActionId;
 use stet_domain::search::{History, SearchHistory, SearchMode, translate};
 use stet_infrastructure::search::{Matcher, parity};
 
@@ -194,7 +193,7 @@ impl Harness {
                 waited
             }
             "fif-stop" => {
-                self.window.run_search_action(ActionId::StopFindInFiles);
+                self.window.run_search(SearchCommand::StopFindInFiles);
                 Ok(())
             }
             "report-fif" => self.report_fif(),
@@ -548,7 +547,7 @@ impl Harness {
     async fn fif_start(&self) -> StepResult {
         let window = &self.window;
         if window.find_bar_mode() != crate::window::BarMode::Files || !window.find_open() {
-            window.run_search_action(ActionId::FindInFiles);
+            window.run_search(SearchCommand::FindInFiles);
         }
         window.clear_find_message();
         window.click_find_in_files();
@@ -617,7 +616,7 @@ impl Harness {
         let (rss_before, _) = memory();
         let heartbeat = Heartbeat::start();
         let started = Instant::now();
-        self.window.run_search_action(ActionId::ReplaceAll);
+        self.window.run_search(SearchCommand::ReplaceAll);
         let limit = Duration::from_secs(600);
         while window.replace_stats().is_none() {
             if started.elapsed() > limit {

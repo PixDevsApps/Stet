@@ -8,11 +8,13 @@
 //! with a tag in the scheme's search-match colours. Nothing here replaces text through
 //! GtkSourceView (ADR-005).
 
-use super::bar::{BarMode, Field, FieldKey, Tone};
+use super::SearchCommand;
+use super::bar::{BarCommand, BarMode, Field, FieldKey, Tone};
 use crate::editor::EditorPage;
 use crate::page_search::{Compiled, OwnMatches};
 use crate::runtime::worker;
 use crate::window::Window;
+use crate::window::marking::MarkCommand;
 use crate::window::snapshot::PageSnapshot;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -21,7 +23,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use stet_domain::actions::ActionId;
 use stet_domain::search::SearchHistory;
 
 /// Matches our own matcher collects for counting and highlighting in one document.
@@ -63,14 +64,26 @@ impl Window {
         find.connect_command(glib::clone!(
             #[weak(rename_to = inner)]
             self.inner,
-            move |id| {
+            move |command| {
                 let window = Window { inner };
-                match id {
-                    ActionId::FindInFiles => window.start_find_in_files(),
-                    ActionId::MarkAll | ActionId::ClearMarks | ActionId::CopyMarkedText => {
-                        window.run_mark_action(id);
+                match command {
+                    BarCommand::Count => window.run_search(SearchCommand::Count),
+                    BarCommand::FindAllInDocument => {
+                        window.run_search(SearchCommand::FindAllInDocument);
                     }
-                    _ => window.run_search_action(id),
+                    BarCommand::FindAllInOpenDocuments => {
+                        window.run_search(SearchCommand::FindAllInOpenDocuments);
+                    }
+                    BarCommand::ReplaceNext => window.run_search(SearchCommand::ReplaceNext),
+                    BarCommand::ReplaceAll => window.run_search(SearchCommand::ReplaceAll),
+                    BarCommand::ReplaceAllInOpenDocuments => {
+                        window.run_search(SearchCommand::ReplaceAllInOpenDocuments);
+                    }
+                    BarCommand::FindInFiles => window.start_find_in_files(),
+                    BarCommand::ReplaceInFiles => window.run_search(SearchCommand::ReplaceInFiles),
+                    BarCommand::MarkAll => window.run_mark(MarkCommand::MarkAll),
+                    BarCommand::ClearMarks => window.run_mark(MarkCommand::ClearMarks),
+                    BarCommand::CopyMarkedText => window.run_mark(MarkCommand::CopyMarkedText),
                 }
             }
         ));

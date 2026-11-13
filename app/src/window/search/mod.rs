@@ -10,7 +10,6 @@ mod results;
 
 use crate::window::Window;
 use bar::BarMode;
-use stet_domain::actions::ActionId;
 
 pub use bar::FindBar;
 pub use files::FilesSearch;
@@ -18,30 +17,60 @@ pub use files::FilesSearch;
 pub use replace::ReplaceState;
 pub use results::ResultsPanel;
 
+/// The commands of the Search menu, the find bar and the results panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchCommand {
+    /// Opens the find bar.
+    Find,
+    FindNext,
+    FindPrevious,
+    /// Opens the find bar with the replace rows.
+    Replace,
+    /// Opens the find bar with the Find in Files rows.
+    FindInFiles,
+    ReplaceNext,
+    ReplaceAll,
+    ReplaceAllInOpenDocuments,
+    Count,
+    FindAllInDocument,
+    FindAllInOpenDocuments,
+    StopFindInFiles,
+    ReplaceInFiles,
+    /// Moves the focus between the editor and the results panel.
+    SearchResults,
+    NextResult,
+    PreviousResult,
+    CopyResults,
+    ClearResults,
+    CloseResults,
+}
+
 impl Window {
     /// The find bar's commands and the results panel's.
-    pub fn run_search_action(&self, id: ActionId) {
-        match id {
-            ActionId::Replace => self.show_find_mode(BarMode::Replace),
-            ActionId::FindInFiles => self.show_find_mode(BarMode::Files),
-            ActionId::ReplaceNext => self.replace_next(true),
-            ActionId::ReplaceAll => self.replace_all(),
-            ActionId::ReplaceAllInOpenDocuments => {
+    pub fn run_search(&self, command: SearchCommand) {
+        match command {
+            SearchCommand::Find => self.show_find(),
+            SearchCommand::FindNext => self.find_step(true),
+            SearchCommand::FindPrevious => self.find_step(false),
+            SearchCommand::Replace => self.show_find_mode(BarMode::Replace),
+            SearchCommand::FindInFiles => self.show_find_mode(BarMode::Files),
+            SearchCommand::ReplaceNext => self.replace_next(true),
+            SearchCommand::ReplaceAll => self.replace_all(),
+            SearchCommand::ReplaceAllInOpenDocuments => {
                 let window = self.clone();
                 self.spawn(async move { window.replace_all_in_open_documents().await });
             }
-            ActionId::Count => self.count(),
-            ActionId::FindAllInDocument => self.find_all(false),
-            ActionId::FindAllInOpenDocuments => self.find_all(true),
-            ActionId::StopFindInFiles => self.stop_files_searches(),
-            ActionId::ReplaceInFiles => self.replace_in_files(),
-            ActionId::SearchResults => self.toggle_results_focus(),
-            ActionId::NextSearchResult => self.step_result(true),
-            ActionId::PreviousSearchResult => self.step_result(false),
-            ActionId::CopySearchResults => self.copy_results(),
-            ActionId::ClearSearchResults => self.clear_results(),
-            ActionId::CloseSearchResults => self.hide_results(),
-            _ => {}
+            SearchCommand::Count => self.count(),
+            SearchCommand::FindAllInDocument => self.find_all(false),
+            SearchCommand::FindAllInOpenDocuments => self.find_all(true),
+            SearchCommand::StopFindInFiles => self.stop_files_searches(),
+            SearchCommand::ReplaceInFiles => self.replace_in_files(),
+            SearchCommand::SearchResults => self.toggle_results_focus(),
+            SearchCommand::NextResult => self.step_result(true),
+            SearchCommand::PreviousResult => self.step_result(false),
+            SearchCommand::CopyResults => self.copy_results(),
+            SearchCommand::ClearResults => self.clear_results(),
+            SearchCommand::CloseResults => self.hide_results(),
         }
     }
 }

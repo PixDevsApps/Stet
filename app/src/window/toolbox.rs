@@ -66,11 +66,90 @@ pub enum Reach {
     Document,
 }
 
+/// Declares [`TextTool`] with one variant per text-tool action, named as the action is, and
+/// the way back to the action, whose label names the tool in messages.
+macro_rules! text_tools {
+    ($($tool:ident),+ $(,)?) => {
+        /// The text tools of the Edit menu and the editor's context menu.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub(super) enum TextTool {
+            $($tool,)+
+        }
+
+        impl TextTool {
+            /// The registry action that runs the tool.
+            const fn action(self) -> ActionId {
+                match self {
+                    $(Self::$tool => ActionId::$tool,)+
+                }
+            }
+        }
+    };
+}
+
+text_tools! {
+    Uppercase,
+    Lowercase,
+    ProperCase,
+    ProperCaseBlend,
+    SentenceCase,
+    SentenceCaseBlend,
+    InvertCase,
+    DuplicateLine,
+    CutLine,
+    CopyLine,
+    DeleteLine,
+    TransposeLine,
+    MoveLineUp,
+    MoveLineDown,
+    JoinLines,
+    BlankLineAbove,
+    BlankLineBelow,
+    RemoveDuplicateLines,
+    RemoveConsecutiveDuplicateLines,
+    RemoveEmptyLines,
+    RemoveBlankLines,
+    ReverseLines,
+    SortLexicalAscending,
+    SortLexicalDescending,
+    SortIgnoreCaseAscending,
+    SortIgnoreCaseDescending,
+    SortIntegerAscending,
+    SortIntegerDescending,
+    SortDecimalCommaAscending,
+    SortDecimalCommaDescending,
+    SortDecimalDotAscending,
+    SortDecimalDotDescending,
+    SortLengthAscending,
+    SortLengthDescending,
+    ToggleComment,
+    CommentLines,
+    UncommentLines,
+    ToggleBlockComment,
+    TrimTrailing,
+    TrimLeading,
+    TrimBoth,
+    TabsToSpaces,
+    SpacesToTabs,
+    SpacesToTabsLeading,
+    AddPrefixSuffix,
+    InsertNumbers,
+    GoToMatchingBrace,
+    SelectToMatchingBrace,
+    SelectAndFindNext,
+    SelectAndFindPrevious,
+    FormatJson,
+    MinifyJson,
+    ValidateJson,
+    FormatXml,
+    ValidateXml,
+}
+
 type Operation = Box<dyn FnOnce(&str, Target) -> Result<Change, SyntaxError> + Send>;
 
 impl Window {
     /// Runs one of the text tools on the current tab.
-    pub(super) fn run_text_tool(&self, id: ActionId) {
+    pub(super) fn run_text_tool(&self, tool: TextTool) {
         let Some(page) = self.current_page() else {
             return;
         };
@@ -78,40 +157,40 @@ impl Window {
         let simple = |op: fn(&str, &Target) -> Change| -> Operation {
             Box::new(move |text, target| Ok(op(text, &target)))
         };
-        let (reach, operation): (Reach, Operation) = match id {
-            ActionId::Uppercase => Self::case_tool(Case::Upper),
-            ActionId::Lowercase => Self::case_tool(Case::Lower),
-            ActionId::ProperCase => Self::case_tool(Case::Proper),
-            ActionId::ProperCaseBlend => Self::case_tool(Case::ProperBlend),
-            ActionId::SentenceCase => Self::case_tool(Case::Sentence),
-            ActionId::SentenceCaseBlend => Self::case_tool(Case::SentenceBlend),
-            ActionId::InvertCase => Self::case_tool(Case::Invert),
-            ActionId::DuplicateLine => (Reach::Caret, simple(lines::duplicate)),
-            ActionId::DeleteLine => (Reach::Caret, simple(lines::delete)),
-            ActionId::MoveLineUp => (Reach::Caret, simple(lines::move_up)),
-            ActionId::MoveLineDown => (Reach::Caret, simple(lines::move_down)),
-            ActionId::JoinLines => (Reach::Caret, simple(lines::join)),
-            ActionId::BlankLineAbove => (Reach::Caret, simple(lines::insert_blank_above)),
-            ActionId::BlankLineBelow => (Reach::Caret, simple(lines::insert_blank_below)),
-            ActionId::TransposeLine => (Reach::Caret, simple(transpose)),
-            ActionId::CutLine => {
+        let (reach, operation): (Reach, Operation) = match tool {
+            TextTool::Uppercase => Self::case_tool(Case::Upper),
+            TextTool::Lowercase => Self::case_tool(Case::Lower),
+            TextTool::ProperCase => Self::case_tool(Case::Proper),
+            TextTool::ProperCaseBlend => Self::case_tool(Case::ProperBlend),
+            TextTool::SentenceCase => Self::case_tool(Case::Sentence),
+            TextTool::SentenceCaseBlend => Self::case_tool(Case::SentenceBlend),
+            TextTool::InvertCase => Self::case_tool(Case::Invert),
+            TextTool::DuplicateLine => (Reach::Caret, simple(lines::duplicate)),
+            TextTool::DeleteLine => (Reach::Caret, simple(lines::delete)),
+            TextTool::MoveLineUp => (Reach::Caret, simple(lines::move_up)),
+            TextTool::MoveLineDown => (Reach::Caret, simple(lines::move_down)),
+            TextTool::JoinLines => (Reach::Caret, simple(lines::join)),
+            TextTool::BlankLineAbove => (Reach::Caret, simple(lines::insert_blank_above)),
+            TextTool::BlankLineBelow => (Reach::Caret, simple(lines::insert_blank_below)),
+            TextTool::TransposeLine => (Reach::Caret, simple(transpose)),
+            TextTool::CutLine => {
                 if Self::copy_lines(&page) {
                     (Reach::Caret, simple(lines::delete))
                 } else {
                     return;
                 }
             }
-            ActionId::CopyLine => {
+            TextTool::CopyLine => {
                 Self::copy_lines(&page);
                 return;
             }
-            ActionId::RemoveDuplicateLines => (
+            TextTool::RemoveDuplicateLines => (
                 Reach::Document,
                 Box::new(|text, target| {
                     Ok(lines::remove_duplicates(text, &target, Duplicates::All))
                 }),
             ),
-            ActionId::RemoveConsecutiveDuplicateLines => (
+            TextTool::RemoveConsecutiveDuplicateLines => (
                 Reach::Document,
                 Box::new(|text, target| {
                     Ok(lines::remove_duplicates(
@@ -121,52 +200,57 @@ impl Window {
                     ))
                 }),
             ),
-            ActionId::RemoveEmptyLines => (
+            TextTool::RemoveEmptyLines => (
                 Reach::Document,
                 Box::new(|text, target| Ok(lines::remove_empty(text, &target, EmptyLines::Empty))),
             ),
-            ActionId::RemoveBlankLines => (
+            TextTool::RemoveBlankLines => (
                 Reach::Document,
                 Box::new(|text, target| Ok(lines::remove_empty(text, &target, EmptyLines::Blank))),
             ),
-            ActionId::ReverseLines => (Reach::Document, simple(lines::reverse)),
-            ActionId::SortLexicalAscending => sort(SortKey::Lexical, Order::Ascending),
-            ActionId::SortLexicalDescending => sort(SortKey::Lexical, Order::Descending),
-            ActionId::SortIgnoreCaseAscending => sort(SortKey::LexicalIgnoreCase, Order::Ascending),
-            ActionId::SortIgnoreCaseDescending => {
+            TextTool::ReverseLines => (Reach::Document, simple(lines::reverse)),
+            TextTool::SortLexicalAscending => sort(SortKey::Lexical, Order::Ascending),
+            TextTool::SortLexicalDescending => sort(SortKey::Lexical, Order::Descending),
+            TextTool::SortIgnoreCaseAscending => sort(SortKey::LexicalIgnoreCase, Order::Ascending),
+            TextTool::SortIgnoreCaseDescending => {
                 sort(SortKey::LexicalIgnoreCase, Order::Descending)
             }
-            ActionId::SortIntegerAscending => sort(SortKey::Integer, Order::Ascending),
-            ActionId::SortIntegerDescending => sort(SortKey::Integer, Order::Descending),
-            ActionId::SortDecimalCommaAscending => sort(SortKey::DecimalComma, Order::Ascending),
-            ActionId::SortDecimalCommaDescending => sort(SortKey::DecimalComma, Order::Descending),
-            ActionId::SortDecimalDotAscending => sort(SortKey::DecimalDot, Order::Ascending),
-            ActionId::SortDecimalDotDescending => sort(SortKey::DecimalDot, Order::Descending),
-            ActionId::SortLengthAscending => sort(SortKey::Length, Order::Ascending),
-            ActionId::SortLengthDescending => sort(SortKey::Length, Order::Descending),
-            ActionId::ToggleComment
-            | ActionId::CommentLines
-            | ActionId::UncommentLines
-            | ActionId::ToggleBlockComment => {
-                let Some(tokens) = self.comment_tokens(&page) else {
+            TextTool::SortIntegerAscending => sort(SortKey::Integer, Order::Ascending),
+            TextTool::SortIntegerDescending => sort(SortKey::Integer, Order::Descending),
+            TextTool::SortDecimalCommaAscending => sort(SortKey::DecimalComma, Order::Ascending),
+            TextTool::SortDecimalCommaDescending => sort(SortKey::DecimalComma, Order::Descending),
+            TextTool::SortDecimalDotAscending => sort(SortKey::DecimalDot, Order::Ascending),
+            TextTool::SortDecimalDotDescending => sort(SortKey::DecimalDot, Order::Descending),
+            TextTool::SortLengthAscending => sort(SortKey::Length, Order::Ascending),
+            TextTool::SortLengthDescending => sort(SortKey::Length, Order::Descending),
+            TextTool::ToggleComment => {
+                let Some(tool) = self.comment_tool(&page, comment::toggle_line) else {
                     return;
                 };
-                let operation: Operation = Box::new(move |text, target| {
-                    Ok(match id {
-                        ActionId::ToggleComment => comment::toggle_line(text, &target, &tokens),
-                        ActionId::CommentLines => comment::comment_lines(text, &target, &tokens),
-                        ActionId::UncommentLines => {
-                            comment::uncomment_lines(text, &target, &tokens)
-                        }
-                        _ => comment::toggle_block(text, &target, &tokens),
-                    })
-                });
-                (Reach::Caret, operation)
+                tool
             }
-            ActionId::TrimTrailing => trim(Trim::Trailing),
-            ActionId::TrimLeading => trim(Trim::Leading),
-            ActionId::TrimBoth => trim(Trim::Both),
-            ActionId::TabsToSpaces => (
+            TextTool::CommentLines => {
+                let Some(tool) = self.comment_tool(&page, comment::comment_lines) else {
+                    return;
+                };
+                tool
+            }
+            TextTool::UncommentLines => {
+                let Some(tool) = self.comment_tool(&page, comment::uncomment_lines) else {
+                    return;
+                };
+                tool
+            }
+            TextTool::ToggleBlockComment => {
+                let Some(tool) = self.comment_tool(&page, comment::toggle_block) else {
+                    return;
+                };
+                tool
+            }
+            TextTool::TrimTrailing => trim(Trim::Trailing),
+            TextTool::TrimLeading => trim(Trim::Leading),
+            TextTool::TrimBoth => trim(Trim::Both),
+            TextTool::TabsToSpaces => (
                 Reach::Document,
                 Box::new(move |text, target| {
                     Ok(lines::tabs_to_spaces(
@@ -177,8 +261,8 @@ impl Window {
                     ))
                 }),
             ),
-            ActionId::SpacesToTabs | ActionId::SpacesToTabsLeading => {
-                let scope = if id == ActionId::SpacesToTabs {
+            TextTool::SpacesToTabs | TextTool::SpacesToTabsLeading => {
+                let scope = if tool == TextTool::SpacesToTabs {
                     Columns::All
                 } else {
                     Columns::Leading
@@ -190,18 +274,18 @@ impl Window {
                     }),
                 )
             }
-            ActionId::AddPrefixSuffix => {
+            TextTool::AddPrefixSuffix => {
                 let window = self.clone();
                 self.spawn(async move { window.ask_prefix_suffix(&page).await });
                 return;
             }
-            ActionId::InsertNumbers => {
+            TextTool::InsertNumbers => {
                 let window = self.clone();
                 self.spawn(async move { window.ask_numbers(&page).await });
                 return;
             }
-            ActionId::GoToMatchingBrace | ActionId::SelectToMatchingBrace => {
-                let select = id == ActionId::SelectToMatchingBrace;
+            TextTool::GoToMatchingBrace | TextTool::SelectToMatchingBrace => {
+                let select = tool == TextTool::SelectToMatchingBrace;
                 self.note_jump();
                 page.view().emit_move_to_matching_bracket(select);
                 let buffer = page.buffer();
@@ -217,42 +301,38 @@ impl Window {
                 page.view().scroll_mark_onscreen(&buffer.get_insert());
                 return;
             }
-            ActionId::SelectAndFindNext => {
+            TextTool::SelectAndFindNext => {
                 self.select_and_find(&page, true);
                 return;
             }
-            ActionId::SelectAndFindPrevious => {
+            TextTool::SelectAndFindPrevious => {
                 self.select_and_find(&page, false);
                 return;
             }
-            ActionId::FormatJson => {
+            TextTool::FormatJson => {
                 let indent = indent_unit(page.indentation());
                 (
                     Reach::Document,
                     Box::new(move |text, target| json::format_target(text, &target, indent)),
                 )
             }
-            ActionId::MinifyJson => (
+            TextTool::MinifyJson => (
                 Reach::Document,
                 Box::new(|text, target| json::minify_target(text, &target)),
             ),
-            ActionId::FormatXml => {
+            TextTool::FormatXml => {
                 let indent = indent_unit(page.indentation());
                 (
                     Reach::Document,
                     Box::new(move |text, target| xml::format_target(text, &target, indent)),
                 )
             }
-            ActionId::ValidateJson | ActionId::ValidateXml => {
-                self.validate(&page, id == ActionId::ValidateJson);
-                return;
-            }
-            other => {
-                tracing::warn!(?other, "not a text tool");
+            TextTool::ValidateJson | TextTool::ValidateXml => {
+                self.validate(&page, tool == TextTool::ValidateJson);
                 return;
             }
         };
-        self.run_tool(&page, reach, operation, describe(id));
+        self.run_tool(&page, reach, operation, describe(tool));
     }
 
     fn case_tool(case: Case) -> (Reach, Operation) {
@@ -260,6 +340,20 @@ impl Window {
             Reach::Caret,
             Box::new(move |text, target| Ok(case::convert(text, &target, case))),
         )
+    }
+
+    /// A comment tool, when the document's language has comment syntax; a toast says when
+    /// it has none.
+    fn comment_tool(
+        &self,
+        page: &EditorPage,
+        apply: fn(&str, &Target, &CommentTokens) -> Change,
+    ) -> Option<(Reach, Operation)> {
+        let tokens = self.comment_tokens(page)?;
+        Some((
+            Reach::Caret,
+            Box::new(move |text, target| Ok(apply(text, &target, &tokens))),
+        ))
     }
 
     /// Whether a tool may change `page` now; a toast says why not.
@@ -666,7 +760,7 @@ impl Window {
                         }
                         let window = Window { inner };
                         if cut {
-                            window.run_text_tool(ActionId::CutLine);
+                            window.run_text_tool(TextTool::CutLine);
                         } else {
                             Self::copy_lines(&page);
                         }
@@ -749,12 +843,12 @@ fn pieces_of(text: &str, size: usize) -> impl Iterator<Item = &str> {
 }
 
 /// The tool's name for messages.
-fn describe(id: ActionId) -> &'static str {
-    match id {
-        ActionId::FormatJson => "Format JSON",
-        ActionId::MinifyJson => "Minify JSON",
-        ActionId::FormatXml => "Format XML",
-        other => other.label(),
+fn describe(tool: TextTool) -> &'static str {
+    match tool {
+        TextTool::FormatJson => "Format JSON",
+        TextTool::MinifyJson => "Minify JSON",
+        TextTool::FormatXml => "Format XML",
+        other => other.action().label(),
     }
 }
 

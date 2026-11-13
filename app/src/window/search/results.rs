@@ -4,6 +4,7 @@
 //! jumps to it; Next/Previous Search Result step through the newest search's matches. A
 //! `GtkListView` over a `GtkTreeListModel` keeps large result sets cheap.
 
+use super::SearchCommand;
 use crate::editor::{EditorPage, JUMP_LOAD_WAIT};
 use crate::window::{Location, Window};
 use gtk4 as gtk;
@@ -731,16 +732,16 @@ impl Window {
             glib::Propagation::Proceed,
             move |_, key, _, state| Window { inner }.on_results_key(key, state)
         ));
-        for (button, id) in [
-            (&results.stop, ActionId::StopFindInFiles),
-            (&results.copy, ActionId::CopySearchResults),
-            (&results.clear, ActionId::ClearSearchResults),
-            (&results.close, ActionId::CloseSearchResults),
+        for (button, command) in [
+            (&results.stop, SearchCommand::StopFindInFiles),
+            (&results.copy, SearchCommand::CopyResults),
+            (&results.clear, SearchCommand::ClearResults),
+            (&results.close, SearchCommand::CloseResults),
         ] {
             button.connect_clicked(glib::clone!(
                 #[weak(rename_to = inner)]
                 self.inner,
-                move |_| Window { inner }.run_search_action(id)
+                move |_| Window { inner }.run_search(command)
             ));
         }
         let appearance = &self.inner.shared.appearance;

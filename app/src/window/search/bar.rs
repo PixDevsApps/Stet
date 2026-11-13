@@ -12,7 +12,6 @@ use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use stet_domain::actions::ActionId;
 use stet_domain::document::expand_home;
 use stet_domain::marks::MarkStyle;
 use stet_domain::search::report::template_warning;
@@ -29,6 +28,23 @@ pub enum BarMode {
     Files,
     /// The Mark row.
     Mark,
+}
+
+/// What a button of the bar asks the window to run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BarCommand {
+    Count,
+    FindAllInDocument,
+    FindAllInOpenDocuments,
+    ReplaceNext,
+    ReplaceAll,
+    ReplaceAllInOpenDocuments,
+    /// Starts the search the Find in Files rows describe.
+    FindInFiles,
+    ReplaceInFiles,
+    MarkAll,
+    ClearMarks,
+    CopyMarkedText,
 }
 
 /// The mode drop-down's entries, in order.
@@ -710,23 +726,23 @@ impl FindBar {
     /// `on_command` runs with the command of the bar's button that was clicked: Count, Find
     /// All, Replace, Find in Files, Replace in Files or one of Mark's. A button in a popover
     /// closes it first.
-    pub fn connect_command(&self, on_command: impl Fn(ActionId) + 'static) {
+    pub fn connect_command(&self, on_command: impl Fn(BarCommand) + 'static) {
         let on_command = Rc::new(on_command);
-        for (button, id) in [
-            (&self.count_button, ActionId::Count),
-            (&self.find_all_document, ActionId::FindAllInDocument),
-            (&self.find_all_open, ActionId::FindAllInOpenDocuments),
-            (&self.replace_button, ActionId::ReplaceNext),
-            (&self.replace_all_button, ActionId::ReplaceAll),
+        for (button, command) in [
+            (&self.count_button, BarCommand::Count),
+            (&self.find_all_document, BarCommand::FindAllInDocument),
+            (&self.find_all_open, BarCommand::FindAllInOpenDocuments),
+            (&self.replace_button, BarCommand::ReplaceNext),
+            (&self.replace_all_button, BarCommand::ReplaceAll),
             (
                 &self.replace_open_button,
-                ActionId::ReplaceAllInOpenDocuments,
+                BarCommand::ReplaceAllInOpenDocuments,
             ),
-            (&self.find_in_files, ActionId::FindInFiles),
-            (&self.replace_in_files, ActionId::ReplaceInFiles),
-            (&self.mark_all, ActionId::MarkAll),
-            (&self.clear_marks, ActionId::ClearMarks),
-            (&self.copy_marked, ActionId::CopyMarkedText),
+            (&self.find_in_files, BarCommand::FindInFiles),
+            (&self.replace_in_files, BarCommand::ReplaceInFiles),
+            (&self.mark_all, BarCommand::MarkAll),
+            (&self.clear_marks, BarCommand::ClearMarks),
+            (&self.copy_marked, BarCommand::CopyMarkedText),
         ] {
             let on_command = Rc::clone(&on_command);
             button.connect_clicked(move |button| {
@@ -736,7 +752,7 @@ impl FindBar {
                 {
                     popover.popdown();
                 }
-                on_command(id);
+                on_command(command);
             });
         }
     }

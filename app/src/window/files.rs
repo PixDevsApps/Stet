@@ -44,6 +44,74 @@ pub(super) enum Caret {
     Keep(Position, f64),
 }
 
+/// The File menu's commands on documents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum FileCommand {
+    /// A new untitled tab.
+    NewTab,
+    /// Opens files chosen in the file chooser.
+    Open,
+    /// Opens a file of File › Open Recent.
+    OpenRecent(PathBuf),
+    ClearRecent,
+    /// Saves the tab the tab menu was opened on, else the current one.
+    Save,
+    /// Save As… on the tab the tab menu was opened on, else the current one.
+    SaveAs,
+    SaveAll,
+    /// Reads the current document from disk again.
+    ReloadFromDisk,
+}
+
+impl Window {
+    /// Runs a File-menu command.
+    pub(super) fn run_file(&self, command: FileCommand) {
+        match command {
+            FileCommand::NewTab => {
+                self.new_untitled();
+            }
+            FileCommand::Open => {
+                let window = self.clone();
+                self.spawn(async move { window.open_with_dialog().await });
+            }
+            FileCommand::OpenRecent(path) => {
+                self.open_locations(vec![Location {
+                    path,
+                    position: None,
+                    create: false,
+                }]);
+            }
+            FileCommand::ClearRecent => self.inner.shared.clear_recent(),
+            FileCommand::Save => {
+                if let Some(page) = self.context_page() {
+                    let window = self.clone();
+                    self.spawn(async move {
+                        window.save(&page).await;
+                    });
+                }
+            }
+            FileCommand::SaveAs => {
+                if let Some(page) = self.context_page() {
+                    let window = self.clone();
+                    self.spawn(async move {
+                        window.save_as(&page).await;
+                    });
+                }
+            }
+            FileCommand::SaveAll => {
+                let window = self.clone();
+                self.spawn(async move { window.save_all().await });
+            }
+            FileCommand::ReloadFromDisk => {
+                if let Some(page) = self.current_page() {
+                    let window = self.clone();
+                    self.spawn(async move { window.reload_requested(&page).await });
+                }
+            }
+        }
+    }
+}
+
 impl Window {
     /// Opens `locations` as tabs, or selects the tabs that show them already, and returns
     /// those tabs in order.

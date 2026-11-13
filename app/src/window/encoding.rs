@@ -8,57 +8,85 @@ use super::snapshot::PageSnapshot;
 use super::{PickerMode, Window};
 use crate::editor::{EditorPage, ReadOnly};
 use crate::runtime::worker;
-use stet_domain::actions::ActionId;
 use stet_domain::text::Eol;
 use stet_infrastructure::encoding::{
     ENCODINGS, EncodingEntry, check_encodable, entry_for_id, status_label,
 };
 use stet_infrastructure::fs::{DocumentFormat, EncodingChoice};
 
-/// The fixed entries of the Encoding menu, by their [`EncodingEntry::id`].
-fn fixed_entry(id: ActionId) -> Option<&'static EncodingEntry> {
-    let entry = match id {
-        ActionId::EncodeUtf8 | ActionId::ConvertToUtf8 => "UTF-8",
-        ActionId::EncodeUtf8Bom | ActionId::ConvertToUtf8Bom => "UTF-8+bom",
-        ActionId::EncodeUtf16BeBom | ActionId::ConvertToUtf16BeBom => "UTF-16BE+bom",
-        ActionId::EncodeUtf16LeBom | ActionId::ConvertToUtf16LeBom => "UTF-16LE+bom",
-        ActionId::ConvertToAnsi => "windows-1252",
-        _ => return None,
-    };
-    entry_for_id(entry)
+/// The encodings the Encoding menu names by item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FixedEncoding {
+    Utf8,
+    Utf8Bom,
+    Utf16BeBom,
+    Utf16LeBom,
+    /// Windows-1252.
+    Ansi,
+}
+
+impl FixedEncoding {
+    /// Its entry, by its [`EncodingEntry::id`].
+    fn entry(self) -> Option<&'static EncodingEntry> {
+        entry_for_id(match self {
+            Self::Utf8 => "UTF-8",
+            Self::Utf8Bom => "UTF-8+bom",
+            Self::Utf16BeBom => "UTF-16BE+bom",
+            Self::Utf16LeBom => "UTF-16LE+bom",
+            Self::Ansi => "windows-1252",
+        })
+    }
+}
+
+/// The commands of the Encoding menu, Character Sets and the status bar's line-ending menu.
+/// An encoding named by id comes from Character Sets or the picker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum EncodingCommand {
+    /// Saves the current document with these line endings.
+    SetEol(Eol),
+    /// Opens the status bar's encoding picker.
+    Choose,
+    /// Reads the file again in a fixed encoding.
+    Encode(FixedEncoding),
+    /// Reads the file again in the encoding with this id.
+    Reinterpret(Option<String>),
+    /// Makes the next save write a fixed encoding.
+    ConvertTo(FixedEncoding),
+    /// Makes the next save write the encoding with this id.
+    Convert(Option<String>),
 }
 
 impl Window {
-    /// Runs an Encoding-menu or line-ending action; `param` is an encoding id.
-    pub(super) fn run_encoding_action(&self, id: ActionId, param: Option<&str>) {
+    /// Runs an Encoding-menu or line-ending command on the current document.
+    pub(super) fn run_encoding(&self, command: EncodingCommand) {
         let Some(page) = self.current_page() else {
             return;
         };
-        let entry = match id {
-            ActionId::Reinterpret | ActionId::ConvertEncoding => param.and_then(entry_for_id),
-            _ => fixed_entry(id),
-        };
-        match id {
-            ActionId::EolCrLf => self.convert_eol(&page, Eol::CrLf),
-            ActionId::EolLf => self.convert_eol(&page, Eol::Lf),
-            ActionId::EolCr => self.convert_eol(&page, Eol::Cr),
-            ActionId::ChooseEncoding => self.choose_encoding(None),
-            ActionId::EncodeUtf8
-            | ActionId::EncodeUtf8Bom
-            | ActionId::EncodeUtf16BeBom
-            | ActionId::EncodeUtf16LeBom
-            | ActionId::Reinterpret => {
-                if let Some(entry) = entry {
-                    let window = self.clone();
-                    self.spawn(async move { window.reinterpret(&page, entry).await });
-                }
+        match command {
+            EncodingCommand::SetEol(eol) => self.convert_eol(&page, eol),
+            EncodingCommand::Choose => self.choose_encoding(None),
+            EncodingCommand::Encode(fixed) => self.spawn_reinterpret(page, fixed.entry()),
+            EncodingCommand::Reinterpret(id) => {
+                self.spawn_reinterpret(page, id.as_deref().and_then(entry_for_id));
             }
-            _ => {
-                if let Some(entry) = entry {
-                    let window = self.clone();
-                    self.spawn(async move { window.convert(&page, entry).await });
-                }
+            EncodingCommand::ConvertTo(fixed) => self.spawn_convert(page, fixed.entry()),
+            EncodingCommand::Convert(id) => {
+                self.spawn_convert(page, id.as_deref().and_then(entry_for_id));
             }
+        }
+    }
+
+    fn spawn_reinterpret(&self, page: EditorPage, entry: Option<&'static EncodingEntry>) {
+        if let Some(entry) = entry {
+            let window = self.clone();
+            self.spawn(async move { window.reinterpret(&page, entry).await });
+        }
+    }
+
+    fn spawn_convert(&self, page: EditorPage, entry: Option<&'static EncodingEntry>) {
+        if let Some(entry) = entry {
+            let window = self.clone();
+            self.spawn(async move { window.convert(&page, entry).await });
         }
     }
 

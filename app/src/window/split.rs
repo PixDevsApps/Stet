@@ -37,6 +37,17 @@ pub struct SplitState {
     pub(super) position: Cell<Option<i32>>,
 }
 
+/// The commands of View › Split and the tab menu's moves to the other view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SplitCommand {
+    MoveToOtherView,
+    CloneToOtherView,
+    /// Moves the focus to the other view.
+    SwitchView,
+    SyncVerticalScrolling,
+    SyncHorizontalScrolling,
+}
+
 impl Window {
     pub(super) fn connect_split(&self) {
         let inner = &self.inner;
@@ -238,39 +249,45 @@ impl Window {
         }
     }
 
-    pub(super) fn run_split_action(&self, id: ActionId) {
-        match id {
-            ActionId::MoveToOtherView => {
+    /// Runs a split-view command.
+    pub(super) fn run_split(&self, command: SplitCommand) {
+        match command {
+            SplitCommand::MoveToOtherView => {
                 if let Some(page) = self.context_page() {
                     self.move_to_other_view(&page);
                 }
             }
-            ActionId::CloneToOtherView => {
+            SplitCommand::CloneToOtherView => {
                 if let Some(page) = self.context_page() {
                     self.clone_to_other_view(&page);
                 }
             }
-            ActionId::SwitchView => {
+            SplitCommand::SwitchView => {
                 if self.is_split() {
                     self.set_active_view(1 - self.inner.active.get(), false);
                     self.focus_editor();
                 }
             }
-            ActionId::SyncVerticalScrolling | ActionId::SyncHorizontalScrolling => {
-                let split = &self.inner.split;
-                let cell = if id == ActionId::SyncVerticalScrolling {
-                    &split.vertical
-                } else {
-                    &split.horizontal
-                };
-                cell.set(!cell.get());
-                if let Some(action) = self.action(id) {
-                    action.set_state(&cell.get().to_variant());
-                }
-                self.reset_scroll_sync();
+            SplitCommand::SyncVerticalScrolling => {
+                self.toggle_scroll_sync(
+                    &self.inner.split.vertical,
+                    ActionId::SyncVerticalScrolling,
+                );
             }
-            _ => {}
+            SplitCommand::SyncHorizontalScrolling => self.toggle_scroll_sync(
+                &self.inner.split.horizontal,
+                ActionId::SyncHorizontalScrolling,
+            ),
         }
+    }
+
+    /// Turns one of the scroll syncs on or off, with its check mark.
+    fn toggle_scroll_sync(&self, cell: &Cell<bool>, id: ActionId) {
+        cell.set(!cell.get());
+        if let Some(action) = self.action(id) {
+            action.set_state(&cell.get().to_variant());
+        }
+        self.reset_scroll_sync();
     }
 
     /// Move to Other View: the tab goes to the other view, or closes when the other view shows

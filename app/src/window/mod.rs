@@ -9,6 +9,8 @@ mod compare;
 mod default_editor;
 pub mod dialogs;
 mod disk;
+mod dispatch;
+mod editing;
 mod encoding;
 mod encoding_picker;
 mod files;
@@ -33,6 +35,7 @@ mod tabs;
 mod tool_dialogs;
 mod toolbox;
 mod updates;
+mod view;
 
 use crate::actions;
 use crate::config::AppConfig;
@@ -68,6 +71,8 @@ pub use indentation::IndentChoice;
 pub use indentation::IndentPicker;
 pub use language::LanguagePicker;
 pub use palette::{Command as PaletteCommand, Palette};
+#[cfg(feature = "selftest")]
+pub use search::SearchCommand;
 #[cfg(feature = "selftest")]
 pub use search::bar::{BarMode, Field};
 pub use search::{FindBar, ResultsPanel};
@@ -1385,334 +1390,6 @@ impl Window {
 
     // ----- actions ---------------------------------------------------------------------------
 
-    /// Runs a window action. `param` is the string parameter of `WithString` actions.
-    #[expect(
-        clippy::match_same_arms,
-        reason = "the arms follow the menus; actions with the same runner stay in their menu's group"
-    )]
-    pub fn run_action(&self, id: ActionId, param: Option<String>) {
-        let page = self.current_page();
-        // Column mode closes its typing burst first, and ends for actions that don't know
-        // about columns.
-        if let Some(page) = &page
-            && crate::column::before_action(page.column_view(), id)
-        {
-            return;
-        }
-        match id {
-            ActionId::NewTab => {
-                self.new_untitled();
-            }
-            ActionId::Open => {
-                let window = self.clone();
-                self.spawn(async move { window.open_with_dialog().await });
-            }
-            ActionId::QuickOpen => self.open_quick_open(""),
-            ActionId::NextRecentTab | ActionId::PreviousRecentTab => {
-                self.switch_recent(id == ActionId::NextRecentTab);
-            }
-            ActionId::GoBack | ActionId::GoForward => self.navigate(id == ActionId::GoBack),
-            ActionId::PinTab | ActionId::UnpinTab => self.run_pin_action(id),
-            ActionId::OpenRecent => {
-                if let Some(path) = param {
-                    self.open_locations(vec![Location {
-                        path: PathBuf::from(path),
-                        position: None,
-                        create: false,
-                    }]);
-                }
-            }
-            ActionId::ClearRecent => self.inner.shared.clear_recent(),
-            // From the tab menu, the tab that was clicked.
-            ActionId::Save | ActionId::SaveAs => {
-                if let Some(page) = self.context_page() {
-                    let window = self.clone();
-                    self.spawn(async move {
-                        if id == ActionId::Save {
-                            window.save(&page).await;
-                        } else {
-                            window.save_as(&page).await;
-                        }
-                    });
-                }
-            }
-            ActionId::SaveAll => {
-                let window = self.clone();
-                self.spawn(async move { window.save_all().await });
-            }
-            ActionId::CloseTab => self.run_tab_tool(id),
-            ActionId::CloseAll => {
-                let window = self.clone();
-                self.spawn(async move { window.close_all().await });
-            }
-            ActionId::RestoreClosedTab => self.restore_closed(),
-            ActionId::ForgetDrafts => self.forget_drafts(),
-            ActionId::Quit => self.inner.window.close(),
-            ActionId::Undo
-            | ActionId::Redo
-            | ActionId::Cut
-            | ActionId::Copy
-            | ActionId::Paste
-            | ActionId::Delete
-            | ActionId::SelectAll => {
-                if let Some(page) = page {
-                    edit(&page, id);
-                }
-            }
-            ActionId::Find => self.show_find(),
-            ActionId::FindNext => self.find_step(true),
-            ActionId::FindPrevious => self.find_step(false),
-            ActionId::FindInFiles
-            | ActionId::Replace
-            | ActionId::ReplaceNext
-            | ActionId::ReplaceAll
-            | ActionId::ReplaceAllInOpenDocuments
-            | ActionId::Count
-            | ActionId::FindAllInDocument
-            | ActionId::FindAllInOpenDocuments
-            | ActionId::StopFindInFiles
-            | ActionId::ReplaceInFiles
-            | ActionId::SearchResults
-            | ActionId::NextSearchResult
-            | ActionId::PreviousSearchResult
-            | ActionId::CopySearchResults
-            | ActionId::ClearSearchResults
-            | ActionId::CloseSearchResults => self.run_search_action(id),
-            ActionId::GoToLine => self.open_palette(":"),
-            ActionId::WordWrap | ActionId::ShowWhitespace => self.toggle_setting(id),
-            ActionId::ZoomIn | ActionId::ZoomOut | ActionId::ZoomReset => {
-                let appearance = &self.inner.shared.appearance;
-                let zoom = appearance.zoom();
-                appearance.set_zoom(match id {
-                    ActionId::ZoomIn => zoom.zoom_in(),
-                    ActionId::ZoomOut => zoom.zoom_out(),
-                    _ => stet_domain::view::Zoom::default(),
-                });
-            }
-            ActionId::FullScreen => {
-                let window = &self.inner.window;
-                if window.is_fullscreen() {
-                    window.unfullscreen();
-                } else {
-                    window.fullscreen();
-                }
-            }
-            ActionId::NextTab | ActionId::PreviousTab => self.cycle_tabs(id == ActionId::NextTab),
-            ActionId::MoveTabForward | ActionId::MoveTabBackward => {
-                let tabs = self.active_tabs();
-                if let Some(tab_page) = tabs.selected_page() {
-                    if id == ActionId::MoveTabForward {
-                        tabs.reorder_forward(&tab_page);
-                    } else {
-                        tabs.reorder_backward(&tab_page);
-                    }
-                }
-            }
-            ActionId::CommandPalette => self.open_palette(""),
-            ActionId::ChooseLanguage => self.choose_language(),
-            ActionId::SetLanguage => {
-                if let Some(page) = page {
-                    let id = param.filter(|id| !id.is_empty());
-                    self.set_language(&page, id.as_deref());
-                }
-            }
-            ActionId::ReloadFromDisk => {
-                if let Some(page) = page {
-                    let window = self.clone();
-                    self.spawn(async move { window.reload_requested(&page).await });
-                }
-            }
-            ActionId::EolCrLf
-            | ActionId::EolLf
-            | ActionId::EolCr
-            | ActionId::EncodeUtf8
-            | ActionId::EncodeUtf8Bom
-            | ActionId::EncodeUtf16BeBom
-            | ActionId::EncodeUtf16LeBom
-            | ActionId::Reinterpret
-            | ActionId::ConvertToAnsi
-            | ActionId::ConvertToUtf8
-            | ActionId::ConvertToUtf8Bom
-            | ActionId::ConvertToUtf16BeBom
-            | ActionId::ConvertToUtf16LeBom
-            | ActionId::ConvertEncoding
-            | ActionId::ChooseEncoding => self.run_encoding_action(id, param.as_deref()),
-            ActionId::About => self.show_about(),
-            ActionId::CheckForUpdates => self.check_for_updates(),
-            ActionId::CloseOthers
-            | ActionId::CloseToTheRight
-            | ActionId::CopyFullPath
-            | ActionId::CopyFileName
-            | ActionId::CopyDirectoryPath
-            | ActionId::OpenContainingFolder
-            | ActionId::OpenTerminalHere
-            | ActionId::RenameFile
-            | ActionId::MoveToTrash => self.run_tab_tool(id),
-            ActionId::Uppercase
-            | ActionId::Lowercase
-            | ActionId::ProperCase
-            | ActionId::ProperCaseBlend
-            | ActionId::SentenceCase
-            | ActionId::SentenceCaseBlend
-            | ActionId::InvertCase
-            | ActionId::DuplicateLine
-            | ActionId::CutLine
-            | ActionId::CopyLine
-            | ActionId::DeleteLine
-            | ActionId::TransposeLine
-            | ActionId::MoveLineUp
-            | ActionId::MoveLineDown
-            | ActionId::JoinLines
-            | ActionId::BlankLineAbove
-            | ActionId::BlankLineBelow
-            | ActionId::RemoveDuplicateLines
-            | ActionId::RemoveConsecutiveDuplicateLines
-            | ActionId::RemoveEmptyLines
-            | ActionId::RemoveBlankLines
-            | ActionId::ReverseLines
-            | ActionId::SortLexicalAscending
-            | ActionId::SortLexicalDescending
-            | ActionId::SortIgnoreCaseAscending
-            | ActionId::SortIgnoreCaseDescending
-            | ActionId::SortIntegerAscending
-            | ActionId::SortIntegerDescending
-            | ActionId::SortDecimalCommaAscending
-            | ActionId::SortDecimalCommaDescending
-            | ActionId::SortDecimalDotAscending
-            | ActionId::SortDecimalDotDescending
-            | ActionId::SortLengthAscending
-            | ActionId::SortLengthDescending
-            | ActionId::ToggleComment
-            | ActionId::CommentLines
-            | ActionId::UncommentLines
-            | ActionId::ToggleBlockComment
-            | ActionId::TrimTrailing
-            | ActionId::TrimLeading
-            | ActionId::TrimBoth
-            | ActionId::TabsToSpaces
-            | ActionId::SpacesToTabs
-            | ActionId::SpacesToTabsLeading
-            | ActionId::AddPrefixSuffix
-            | ActionId::InsertNumbers
-            | ActionId::GoToMatchingBrace
-            | ActionId::SelectToMatchingBrace
-            | ActionId::SelectAndFindNext
-            | ActionId::SelectAndFindPrevious
-            | ActionId::FormatJson
-            | ActionId::MinifyJson
-            | ActionId::ValidateJson
-            | ActionId::FormatXml
-            | ActionId::ValidateXml => self.run_text_tool(id),
-            ActionId::DocumentMap => self.toggle_setting(id),
-            ActionId::ChooseIndentation => self.choose_indentation(),
-            ActionId::DetectIndentation => self.detect_indentation(),
-            ActionId::OpenSettings => self.open_settings_file(false),
-            ActionId::OpenKeyboardShortcuts => self.open_settings_file(true),
-            ActionId::SetAsDefaultEditor => {
-                let window = self.clone();
-                self.spawn(async move { window.set_as_default_editor().await });
-            }
-            ActionId::KeyboardShortcuts => self.show_keyboard_shortcuts(),
-            ActionId::ColumnSelectLeft
-            | ActionId::ColumnSelectRight
-            | ActionId::ColumnSelectUp
-            | ActionId::ColumnSelectDown
-            | ActionId::ColumnSelectLineStart
-            | ActionId::ColumnSelectLineEnd
-            | ActionId::ColumnSelectPageUp
-            | ActionId::ColumnSelectPageDown
-            | ActionId::ColumnBeginEndSelect => {
-                if let Some(page) = page {
-                    crate::column::run_action(page.column_view(), id);
-                }
-            }
-            ActionId::ColumnEditor => {
-                if let Some(page) = page {
-                    crate::column::dialog::open(self, page.column_view());
-                }
-            }
-            ActionId::ToggleBookmark
-            | ActionId::NextBookmark
-            | ActionId::PreviousBookmark
-            | ActionId::ClearBookmarks
-            | ActionId::CutBookmarkedLines
-            | ActionId::CopyBookmarkedLines
-            | ActionId::PasteToBookmarkedLines
-            | ActionId::RemoveBookmarkedLines
-            | ActionId::RemoveUnbookmarkedLines
-            | ActionId::InverseBookmarks
-            | ActionId::Mark
-            | ActionId::MarkAll
-            | ActionId::ClearMarks
-            | ActionId::CopyMarkedText
-            | ActionId::StyleToken1
-            | ActionId::StyleToken2
-            | ActionId::StyleToken3
-            | ActionId::StyleToken4
-            | ActionId::StyleToken5
-            | ActionId::ClearStyle1
-            | ActionId::ClearStyle2
-            | ActionId::ClearStyle3
-            | ActionId::ClearStyle4
-            | ActionId::ClearStyle5
-            | ActionId::ClearAllStyles
-            | ActionId::JumpUp1
-            | ActionId::JumpUp2
-            | ActionId::JumpUp3
-            | ActionId::JumpUp4
-            | ActionId::JumpUp5
-            | ActionId::JumpUpMark
-            | ActionId::JumpDown1
-            | ActionId::JumpDown2
-            | ActionId::JumpDown3
-            | ActionId::JumpDown4
-            | ActionId::JumpDown5
-            | ActionId::JumpDownMark => self.run_mark_action(id),
-            ActionId::MoveToOtherView
-            | ActionId::CloneToOtherView
-            | ActionId::SwitchView
-            | ActionId::SyncVerticalScrolling
-            | ActionId::SyncHorizontalScrolling => self.run_split_action(id),
-            ActionId::Compare
-            | ActionId::CompareWithFile
-            | ActionId::CompareWithClipboard
-            | ActionId::CompareWithSaved
-            | ActionId::PreviousDifference
-            | ActionId::NextDifference
-            | ActionId::CompareIgnoreWhitespace
-            | ActionId::CompareIgnoreCase
-            | ActionId::ClearCompare => self.run_compare_action(id),
-        }
-    }
-
-    fn cycle_tabs(&self, forward: bool) {
-        let tabs = self.active_tabs();
-        let count = tabs.n_pages();
-        let Some(selected) = tabs.selected_page() else {
-            return;
-        };
-        if count < 2 {
-            return;
-        }
-        let position = tabs.page_position(&selected);
-        let next = if forward {
-            (position + 1) % count
-        } else {
-            (position + count - 1) % count
-        };
-        tabs.set_selected_page(&tabs.nth_page(next));
-    }
-
-    fn toggle_setting(&self, id: ActionId) {
-        let mut settings = self.inner.settings.get();
-        match id {
-            ActionId::WordWrap => settings.wrap = !settings.wrap,
-            ActionId::DocumentMap => settings.map = !settings.map,
-            _ => settings.whitespace = !settings.whitespace,
-        }
-        self.set_view_settings(settings);
-    }
-
     /// Applies the window's view settings to every editor and the View menu's check marks.
     fn set_view_settings(&self, settings: ViewSettings) {
         self.inner.settings.set(settings);
@@ -1728,15 +1405,6 @@ impl Window {
                 action.set_state(&on.to_variant());
             }
         }
-    }
-
-    fn choose_language(&self) {
-        let current = self
-            .current_page()
-            .and_then(|page| page.language())
-            .map(|language| language.id().to_string());
-        self.inner.status.language.popup();
-        self.inner.languages.select(current.as_deref());
     }
 
     /// Enables the actions that have something to act on.
@@ -2002,26 +1670,6 @@ fn view_pages(tabs: &adw::TabView) -> Vec<EditorPage> {
     (0..tabs.n_pages())
         .map(|index| page_of(&tabs.nth_page(index)))
         .collect()
-}
-
-/// Undo, redo and the clipboard on the editor, for the menu and the palette. The same keys
-/// reach the focused widget directly.
-fn edit(page: &EditorPage, id: ActionId) {
-    let view = page.view();
-    let buffer = page.buffer();
-    match id {
-        ActionId::Undo if buffer.can_undo() => buffer.undo(),
-        ActionId::Redo if buffer.can_redo() => buffer.redo(),
-        ActionId::Cut => view.emit_cut_clipboard(),
-        ActionId::Copy => view.emit_copy_clipboard(),
-        ActionId::Paste => view.emit_paste_clipboard(),
-        ActionId::Delete => {
-            buffer.delete_selection(true, view.is_editable());
-        }
-        ActionId::SelectAll => view.emit_select_all(true),
-        _ => {}
-    }
-    view.grab_focus();
 }
 
 /// One command-line argument: the literal path when it exists; otherwise a `:line[:col]`
