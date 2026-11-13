@@ -147,7 +147,7 @@ Environment variables:
 bash tools/ci.sh
 ```
 
-The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` and `cargo build --workspace`. Run it before every change is proposed.
+The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo doc --workspace --no-deps` with warnings as errors, and `cargo build --workspace` (plus the check that the Flatpak's crate list matches `Cargo.lock`). Run it before every change is proposed.
 
 ```sh
 bash tools/ci.sh --ui
