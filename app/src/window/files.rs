@@ -9,7 +9,7 @@ use crate::editor::{
     DiskState, DocState, EditorPage, ReadOnly, TextOrigin, Unwritable, read_only_message,
 };
 use crate::loader;
-use crate::worker;
+use crate::runtime::worker;
 use gtk4::gio;
 use sourceview5::prelude::*;
 use std::path::{Path, PathBuf};

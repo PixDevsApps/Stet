@@ -21,13 +21,14 @@
 use super::Window;
 use super::quick_open::QuickOpen;
 use super::rif::{RifRun, RifStats};
-use crate::editor::EditorPage;
+use crate::editor::{EditorPage, JUMP_LOAD_WAIT};
+use crate::runtime::{Debounce, Latest};
 use gtk4 as gtk;
 use gtk4::{gdk, glib, pango};
 use libadwaita::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use stet_domain::document::tilde;
 use stet_domain::document::{extension_from_globs, save_file_name};
 use stet_domain::nav::{History, Location, Mru};
@@ -35,9 +36,6 @@ use stet_domain::text::TextEdit;
 
 /// How long Ctrl+Tab has to be held before the switcher shows, so a quick tap never flashes it.
 pub const SWITCHER_DELAY: Duration = Duration::from_millis(120);
-
-/// How long going back waits for a restored tab to load before it places the caret.
-const LOAD_WAIT: Duration = Duration::from_secs(10);
 
 /// The Ctrl+Tab overlay: the tabs in most-recently-used order, the selection highlighted. It
 /// never takes the focus; the window's key controller drives it.
@@ -143,7 +141,7 @@ pub struct Nav {
     /// Back or forward is moving the caret; that is not a jump to record.
     navigating: Cell<bool>,
     ctrl_held: Cell<bool>,
-    show_pending: RefCell<Option<glib::SourceId>>,
+    show_pending: Debounce,
     pub switcher: Switcher,
     /// The window's key controller for the switcher (Ctrl released, Escape, Enter), in the
     /// capture phase; the self-test emits key events on it.
@@ -152,7 +150,7 @@ pub struct Nav {
     pub forward_button: gtk::GestureClick,
     pub quick_open: Rc<QuickOpen>,
     pub(super) rif: RefCell<Option<RifRun>>,
-    pub(super) rif_runs: Cell<u64>,
+    pub(super) rif_runs: Latest,
     pub(super) rif_stats: RefCell<Option<RifStats>>,
 }
 
@@ -172,14 +170,14 @@ impl Nav {
             shown: glib::WeakRef::new(),
             navigating: Cell::new(false),
             ctrl_held: Cell::new(false),
-            show_pending: RefCell::new(None),
+            show_pending: Debounce::default(),
             switcher: Switcher::new(),
             keys,
             back_button: button(8),
             forward_button: button(9),
             quick_open: QuickOpen::new(),
             rif: RefCell::new(None),
-            rif_runs: Cell::new(0),
+            rif_runs: Latest::default(),
             rif_stats: RefCell::new(None),
         }
     }
@@ -384,10 +382,7 @@ impl Window {
             if !window.ensure_loaded(&page).await {
                 return;
             }
-            let started = Instant::now();
-            while page.is_loading() && started.elapsed() < LOAD_WAIT {
-                glib::timeout_future(Duration::from_millis(10)).await;
-            }
+            page.loaded(JUMP_LOAD_WAIT).await;
             if window.tab_page(&page).is_none() {
                 return;
             }
@@ -446,17 +441,15 @@ impl Window {
             return;
         }
         self.refresh_switcher();
-        if !nav.switcher.is_shown() && nav.show_pending.borrow().is_none() {
+        if !nav.switcher.is_shown() && !nav.show_pending.is_pending() {
             let weak = Rc::downgrade(&self.inner);
-            let source = glib::timeout_add_local_once(SWITCHER_DELAY, move || {
-                if let Some(inner) = weak.upgrade() {
-                    inner.nav.show_pending.replace(None);
-                    if inner.nav.mru.borrow().is_switching() {
-                        inner.nav.switcher.root.set_visible(true);
-                    }
+            nav.show_pending.schedule(SWITCHER_DELAY, move || {
+                if let Some(inner) = weak.upgrade()
+                    && inner.nav.mru.borrow().is_switching()
+                {
+                    inner.nav.switcher.root.set_visible(true);
                 }
             });
-            nav.show_pending.replace(Some(source));
         }
     }
 
@@ -502,9 +495,7 @@ impl Window {
 
     fn hide_switcher(&self) {
         let nav = &self.inner.nav;
-        if let Some(source) = nav.show_pending.take() {
-            source.remove();
-        }
+        nav.show_pending.cancel();
         nav.switcher.root.set_visible(false);
     }
 

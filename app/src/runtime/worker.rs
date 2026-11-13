@@ -1,24 +1,19 @@
-//! Blocking work off the GTK thread: file I/O and subprocesses run on a plain thread, and the
-//! result comes back through an async channel awaited on the GTK main loop.
+//! Blocking work off the GTK thread: file I/O and subprocesses run on GLib's thread pool, and
+//! the result comes back on the GTK main loop.
 
-/// Runs `job` on a new thread. Resolves on the GTK thread with its result, or `None` if the
-/// job panicked.
+use gtk4::gio;
+
+/// Runs `job` on GLib's thread pool ([`gio::spawn_blocking`]). Resolves on the GTK thread with
+/// its result, or `None` if the job panicked.
+///
+/// The pool is GIO's, shared with its own async I/O: it starts at ten threads and adds more
+/// while jobs wait. No job waits for another job (the session store's flush waits for its own
+/// writer thread, its lock for another process), so a busy pool only delays work, it cannot
+/// deadlock.
 pub async fn run<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    let (sender, receiver) = async_channel::bounded(1);
     #[cfg(feature = "selftest")]
     let _pending = probe::Pending::start();
-    let spawned = std::thread::Builder::new()
-        .name("stet-worker".into())
-        .spawn(move || {
-            let _ = sender.send_blocking(job());
-        });
-    match spawned {
-        Ok(_) => receiver.recv().await.ok(),
-        Err(error) => {
-            tracing::error!(%error, "could not start a worker thread");
-            None
-        }
-    }
+    gio::spawn_blocking(job).await.ok()
 }
 
 #[cfg(feature = "selftest")]

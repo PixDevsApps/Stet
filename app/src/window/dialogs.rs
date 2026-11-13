@@ -2,6 +2,7 @@
 
 use super::Window;
 use crate::editor::EditorPage;
+use crate::runtime::connect_once;
 use gtk4 as gtk;
 use gtk4::{gio, glib};
 use libadwaita as adw;
@@ -10,6 +11,7 @@ use std::cell::Cell;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::time::Duration;
 use stet_domain::ops::pretty::FormatKind;
 use stet_domain::search::report::plural;
 use stet_domain::text::{LONG_LINE_CHARS, LongestLine};
@@ -428,15 +430,23 @@ fn keep_focus_through_popover(dialog: &adw::AlertDialog, answered: Rc<Cell<bool>
     let Some(wanted) = dialog.focus() else {
         return;
     };
+    let mapped = (!dialog.is_mapped()).then(|| {
+        let (sender, mapped) = async_channel::bounded(1);
+        connect_once(
+            dialog,
+            |dialog, run| dialog.connect_map(run),
+            move |_| {
+                let _ = sender.try_send(());
+            },
+        );
+        mapped
+    });
     let dialog = dialog.clone();
     glib::spawn_future_local(async move {
-        for _ in 0..200 {
-            if dialog.is_mapped() {
-                break;
-            }
-            glib::timeout_future(std::time::Duration::from_millis(5)).await;
+        if let Some(mapped) = mapped {
+            let _ = glib::future_with_timeout(Duration::from_secs(1), mapped.recv()).await;
         }
-        glib::timeout_future(std::time::Duration::from_millis(80)).await;
+        glib::timeout_future(Duration::from_millis(80)).await;
         if answered.get() || !dialog.is_mapped() {
             return;
         }

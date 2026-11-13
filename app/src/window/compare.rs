@@ -15,8 +15,8 @@
 //! the two sides' lines stay level.
 
 use super::Window;
-use crate::editor::{DocState, EditorPage, ReadOnly};
-use crate::worker;
+use crate::editor::{DocState, EditorPage, LOAD_WAIT, ReadOnly};
+use crate::runtime::{Debounce, Latest, Ticket, connect_once, worker};
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
 
@@ -75,9 +75,9 @@ pub struct CompareState {
     active: RefCell<Option<Comparing>>,
     ignore_whitespace: Cell<bool>,
     ignore_case: Cell<bool>,
-    /// Bumped by every run and by Clear Compare: older results are dropped.
-    generation: Cell<u64>,
-    pending: RefCell<Option<glib::SourceId>>,
+    /// A ticket per run; Clear Compare invalidates them: older results are dropped.
+    runs: Latest,
+    pending: Debounce,
     /// A run's diff is on its way.
     running: Cell<bool>,
     last: Cell<Option<CompareRun>>,
@@ -327,10 +327,7 @@ impl Window {
             if !self.ensure_loaded(page).await {
                 return;
             }
-            let started = Instant::now();
-            while page.is_loading() && started.elapsed() < Duration::from_secs(30) {
-                glib::timeout_future(Duration::from_millis(10)).await;
-            }
+            page.loaded(LOAD_WAIT).await;
             if page.large_file_mode() {
                 self.toast("Large files can't be compared");
                 return;
@@ -363,18 +360,15 @@ impl Window {
 
     /// Runs the comparison again shortly after the last edit.
     fn schedule_recompare(&self) {
-        let state = &self.inner.comparing;
-        if let Some(source) = state.pending.take() {
-            source.remove();
-        }
         let weak = Rc::downgrade(&self.inner);
-        let source = glib::timeout_add_local_once(RECOMPARE_DELAY, move || {
-            if let Some(inner) = weak.upgrade() {
-                inner.comparing.pending.replace(None);
-                Window { inner }.recompare();
-            }
-        });
-        state.pending.replace(Some(source));
+        self.inner
+            .comparing
+            .pending
+            .schedule(RECOMPARE_DELAY, move || {
+                if let Some(inner) = weak.upgrade() {
+                    Window { inner }.recompare();
+                }
+            });
     }
 
     /// Diffs snapshots of both documents on a worker and shows the result, unless either
@@ -390,8 +384,7 @@ impl Window {
             return;
         };
         let started = Instant::now();
-        let generation = state.generation.get() + 1;
-        state.generation.set(generation);
+        let ticket = state.runs.next();
         state.running.set(true);
         let (old_text, new_text) = (old.text(), new.text());
         let snapshot = started.elapsed();
@@ -407,7 +400,7 @@ impl Window {
             .await;
             let diff_time = diffing.elapsed();
             let state = &window.inner.comparing;
-            if state.generation.get() != generation {
+            if !ticket.is_current() {
                 return;
             }
             state.running.set(false);
@@ -444,7 +437,7 @@ impl Window {
                 painted: None,
                 runs,
             }));
-            window.note_painted(generation, started);
+            window.note_painted(ticket, started);
             if runs == 1 {
                 window.toast(&summary);
                 Self::show_first_difference(&new, &comparison);
@@ -454,31 +447,28 @@ impl Window {
         });
     }
 
-    /// Records when the first frame after run `generation`'s presentation is painted.
-    fn note_painted(&self, generation: u64, started: Instant) {
+    /// Records when the first frame after the presentation of `ticket`'s run is painted.
+    fn note_painted(&self, ticket: Ticket, started: Instant) {
         let Some(clock) = self.inner.window.frame_clock() else {
             return;
         };
-        let handler = Rc::new(RefCell::new(None));
-        let id = clock.connect_after_paint(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            #[strong]
-            handler,
-            move |clock| {
-                if let Some(id) = handler.take() {
-                    clock.disconnect(id);
+        connect_once(
+            &clock,
+            |clock, run| clock.connect_after_paint(run),
+            glib::clone!(
+                #[weak(rename_to = inner)]
+                self.inner,
+                move |_| {
+                    let state = &inner.comparing;
+                    if ticket.is_current()
+                        && let Some(mut run) = state.last.get()
+                    {
+                        run.painted = Some(started.elapsed());
+                        state.last.set(Some(run));
+                    }
                 }
-                let state = &inner.comparing;
-                if state.generation.get() == generation
-                    && let Some(mut run) = state.last.get()
-                {
-                    run.painted = Some(started.elapsed());
-                    state.last.set(Some(run));
-                }
-            }
-        ));
-        handler.replace(Some(id));
+            ),
+        );
         self.inner.window.queue_draw();
     }
 
@@ -589,11 +579,9 @@ impl Window {
     /// Clears the comparison, closing the texts it opened except those in `keep`.
     fn clear_compare_keeping(&self, keep: &[EditorPage]) {
         let state = &self.inner.comparing;
-        state.generation.set(state.generation.get() + 1);
+        state.runs.invalidate();
         state.running.set(false);
-        if let Some(source) = state.pending.take() {
-            source.remove();
-        }
+        state.pending.cancel();
         let Some(active) = state.active.take() else {
             return;
         };
@@ -665,7 +653,7 @@ impl Window {
     #[cfg(feature = "selftest")]
     pub fn compare_busy(&self) -> bool {
         let state = &self.inner.comparing;
-        state.running.get() || state.pending.borrow().is_some()
+        state.running.get() || state.pending.is_pending()
     }
 
     /// The comparison on screen, with the old and the new document.

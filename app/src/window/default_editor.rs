@@ -6,7 +6,7 @@
 //! changes nothing: it says how to do it instead (INTEGRATIONS.md "Flatpak").
 
 use super::Window;
-use crate::worker;
+use crate::runtime::worker;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use stet_domain::document::tilde;

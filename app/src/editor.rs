@@ -10,6 +10,7 @@ use crate::column::StetView;
 use crate::marks::DocMarks;
 use crate::monitor::FileWatch;
 use crate::page_search::{OWN_MATCH_TAG, PageSearch, style_tag};
+use crate::runtime::{Debounce, Notify, connect_once, wait_until};
 use crate::session::TabSession;
 use crate::tabstops::TabStops;
 use crate::theme::scheme::{BOOKMARK_STYLE, SEARCH_CURRENT_STYLE};
@@ -41,6 +42,12 @@ const MATCH_END_MARK: &str = "stet-match-end";
 /// The pause between two inserted pieces of a file (S1: a 16 ms timer loads 100 MB in about
 /// a second and leaves room for frames; an idle is starved by GtkTextView's validation).
 pub const CHUNK_INTERVAL: Duration = Duration::from_millis(16);
+
+/// How long an operation on documents' text (Compare, Replace in Files) waits for one to load.
+pub const LOAD_WAIT: Duration = Duration::from_secs(30);
+
+/// How long a jump to a place in a document (going back, a search result) waits for it to load.
+pub const JUMP_LOAD_WAIT: Duration = Duration::from_secs(10);
 
 /// Why the editor refuses edits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -243,7 +250,10 @@ pub struct Document {
     /// Bookmarks across Undo and Redo, and the Mark and style-token ranges.
     marks: DocMarks,
     /// The marks' tags follow the views in an idle once something moved them.
-    retag: RefCell<Option<glib::SourceId>>,
+    retag: Debounce,
+    /// Wakes whoever waits for the document's text: it started or stopped loading, a piece of
+    /// it went in, its session record changed, or a tab of it closed.
+    load_changed: Notify,
     /// The pages that show it, in the order they were made.
     pages: RefCell<Vec<glib::WeakRef<EditorPage>>>,
     /// The page whose caret and selection the buffer has.
@@ -284,7 +294,8 @@ impl Document {
             last_change: Cell::new(None),
             first_line: RefCell::new(None),
             marks: DocMarks::default(),
-            retag: RefCell::new(None),
+            retag: Debounce::default(),
+            load_changed: Notify::default(),
             pages: RefCell::new(Vec::new()),
             caret_owner: glib::WeakRef::new(),
             pending_insert: Cell::new(None),
@@ -363,17 +374,15 @@ impl Document {
 
     /// Tags the marks around what the views show, once the main loop is idle.
     fn schedule_retag(self: &Rc<Self>) {
-        if self.retag.borrow().is_some() || self.marks.marks().is_empty() {
+        if self.retag.is_pending() || self.marks.marks().is_empty() {
             return;
         }
         let weak = Rc::downgrade(self);
-        let source = glib::idle_add_local_once(move || {
+        self.retag.schedule_idle(move || {
             if let Some(document) = weak.upgrade() {
-                document.retag.replace(None);
                 document.retag_now();
             }
         });
-        self.retag.replace(Some(source));
     }
 
     fn retag_now(&self) {
@@ -766,7 +775,9 @@ impl EditorPage {
     }
 
     pub fn update_session<R>(&self, update: impl FnOnce(&mut TabSession) -> R) -> R {
-        update(&mut self.document().session.borrow_mut())
+        let result = update(&mut self.document().session.borrow_mut());
+        self.document().load_changed.notify();
+        result
     }
 
     /// This tab's own id in the session when it is a clone, made on first use.
@@ -815,6 +826,25 @@ impl EditorPage {
     pub fn set_loading(&self, loading: bool) {
         self.update_state(|state| state.loading = loading);
         self.sync_editable();
+        self.document().load_changed.notify();
+    }
+
+    /// Wakes whoever waits for the document's text when it starts or stops loading, a piece of
+    /// it goes in, its session record changes, or a tab of it closes; subscribe with
+    /// [`Notify::notified`].
+    pub fn load_changed(&self) -> &Notify {
+        &self.document().load_changed
+    }
+
+    /// Resolves once the document is not loading (at once when it is not) or `limit` has
+    /// passed; true when it is not loading.
+    pub async fn loaded(&self, limit: Duration) -> bool {
+        wait_until(
+            Some(limit),
+            || !self.is_loading(),
+            || self.load_changed().notified(),
+        )
+        .await
     }
 
     /// A text tool is changing the document across main-loop iterations (a large result
@@ -1228,6 +1258,7 @@ impl EditorPage {
         let mut stats = self.document().load_stats.get();
         update(&mut stats);
         self.document().load_stats.set(stats);
+        self.document().load_changed.notify();
     }
 
     /// After the first piece of a load: waits (up to a second) until the window is shown, then
@@ -1235,11 +1266,16 @@ impl EditorPage {
     /// its lines starves idles until it is done (S1: about 40 s for 1M lines), and GTK's
     /// accessibility registration of a new window is one of them.
     async fn settle_before_streaming(&self) {
-        let started = Instant::now();
-        while started.elapsed() < Duration::from_secs(1)
-            && !self.root().is_some_and(|root| root.is_mapped())
-        {
-            glib::timeout_future(Duration::from_millis(5)).await;
+        if let Some(root) = self.root().filter(|root| !root.is_mapped()) {
+            let (mapped, on_map) = async_channel::bounded(1);
+            connect_once(
+                &root,
+                |root, run| root.connect_map(run),
+                move |_| {
+                    let _ = mapped.try_send(());
+                },
+            );
+            let _ = glib::future_with_timeout(Duration::from_secs(1), on_map.recv()).await;
         }
         let (sender, receiver) = async_channel::bounded(1);
         glib::idle_add_local_once(move || {
@@ -1304,20 +1340,15 @@ impl EditorPage {
         let Some(clock) = self.view().frame_clock() else {
             return;
         };
-        let handler = Rc::new(RefCell::new(None));
-        let id = clock.connect_after_paint(glib::clone!(
-            #[weak(rename_to = page)]
-            self,
-            #[strong]
-            handler,
-            move |clock| {
-                if let Some(id) = handler.take() {
-                    clock.disconnect(id);
-                }
-                page.update_load_stats(|stats| stats.first_frame = Some(Instant::now()));
-            }
-        ));
-        handler.replace(Some(id));
+        connect_once(
+            &clock,
+            |clock, run| clock.connect_after_paint(run),
+            glib::clone!(
+                #[weak(rename_to = page)]
+                self,
+                move |_| page.update_load_stats(|stats| stats.first_frame = Some(Instant::now()))
+            ),
+        );
         self.view().queue_draw();
     }
 

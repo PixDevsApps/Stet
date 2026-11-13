@@ -3,11 +3,12 @@
 //! highlighting, applied when Stet starts and whenever a file changes. Also the palette's
 //! Open Settings and Open Keyboard Shortcuts, and the read-only Keyboard Shortcuts overview.
 
+use super::snapshot::{PageSnapshot, run_sized};
 use super::{Location, Window};
 use crate::actions;
 use crate::editor::{EditorPage, IndentSource};
 use crate::preferences::Update;
-use crate::worker;
+use crate::runtime::worker;
 use gtk4::glib;
 use libadwaita as adw;
 use libadwaita::prelude::*;
@@ -110,7 +111,7 @@ impl Window {
                     self.refresh_indentation(&page);
                 }
                 if !settings.smart_highlight {
-                    page.search().cancel_smart_timeout();
+                    page.search().smart_update.cancel();
                     page.search().set_smart(&page.buffer(), None, None);
                 }
             }
@@ -150,39 +151,33 @@ impl Window {
             return;
         }
         status.set_words(None);
-        if let Some(pending) = self.inner.tools.words_pending.take() {
-            pending.remove();
-        }
         let window = self.clone();
         let page = page.clone();
-        let source = glib::timeout_add_local_once(WORD_COUNT_DELAY, move || {
-            window.inner.tools.words_pending.replace(None);
-            if page.revision() != revision || window.tab_page(&page).is_none() {
-                return;
-            }
-            let text = page.text();
-            let inner = window.clone();
-            window.spawn(async move {
-                let words = if text.len() <= super::SYNC_BYTES {
-                    Some(count_words(&text))
-                } else {
-                    worker::run(move || count_words(&text)).await
-                };
-                if let Some(words) = words
-                    && page.revision() == revision
-                {
-                    inner
-                        .inner
-                        .tools
-                        .words
-                        .replace(Some((page.downgrade(), revision, words)));
-                    if inner.current_page().as_ref() == Some(&page) {
-                        inner.inner.status.set_words(Some(words));
-                    }
+        self.inner
+            .tools
+            .words_pending
+            .schedule(WORD_COUNT_DELAY, move || {
+                if page.revision() != revision || window.tab_page(&page).is_none() {
+                    return;
                 }
+                let (snapshot, text) = PageSnapshot::take(&page);
+                let inner = window.clone();
+                window.spawn(async move {
+                    let words = run_sized(text, count_words).await;
+                    if let Some(words) = words
+                        && !snapshot.edited()
+                    {
+                        inner
+                            .inner
+                            .tools
+                            .words
+                            .replace(Some((page.downgrade(), revision, words)));
+                        if inner.current_page().as_ref() == Some(&page) {
+                            inner.inner.status.set_words(Some(words));
+                        }
+                    }
+                });
             });
-        });
-        self.inner.tools.words_pending.replace(Some(source));
     }
 
     /// Open Settings and Open Keyboard Shortcuts: the file in a tab, created with every

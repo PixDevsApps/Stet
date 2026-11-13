@@ -7,11 +7,12 @@
 
 use super::Window;
 use super::files::Caret;
+use super::snapshot::{PageSnapshot, Stale};
 use crate::banner::BannerKind;
 use crate::editor::{DiskState, EditorPage, TextOrigin};
 use crate::loader::CHUNK_BYTES;
 use crate::monitor::FileWatch;
-use crate::worker;
+use crate::runtime::worker;
 use gtk4::prelude::*;
 use std::io;
 use std::path::PathBuf;
@@ -245,8 +246,7 @@ impl Window {
         if state.large() || state.origin != TextOrigin::File {
             return self.reload_full(page, choice).await;
         }
-        let old = page.text();
-        let revision = page.revision();
+        let (snapshot, old) = PageSnapshot::take(page);
         let bookmarked = page.has_bookmarks();
         page.set_loading(true);
         let result = worker::run(move || -> Result<Reloaded, LoadError> {
@@ -264,15 +264,16 @@ impl Window {
         })
         .await;
         page.set_loading(false);
-        if self.tab_page(page).is_none() {
-            return false;
-        }
-        if page.revision() != revision {
-            if quiet {
-                page.update_state(|state| state.disk = DiskState::Changed);
-                self.refresh_banners(page);
+        match self.check_snapshot(&snapshot) {
+            Ok(()) => {}
+            Err(Stale::Closed) => return false,
+            Err(_) => {
+                if quiet {
+                    page.update_state(|state| state.disk = DiskState::Changed);
+                    self.refresh_banners(page);
+                }
+                return false;
             }
-            return false;
         }
         match result {
             Some(Ok(Reloaded::Edit { info, edit, index })) => {

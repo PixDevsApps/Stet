@@ -8,7 +8,7 @@ use super::Window;
 use super::find::{BarMode, Field, Tone};
 use super::results::{FileNode, FileTarget, SearchNode};
 use crate::editor::DocState;
-use crate::worker;
+use crate::runtime::{Ticket, worker};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
@@ -30,7 +30,6 @@ const LINES_PER_DRAIN: usize = 1_000;
 
 /// A Find in Files search in progress.
 pub struct FifRun {
-    id: u64,
     handle: FifHandle,
     receiver: async_channel::Receiver<FileHits>,
     search: Rc<SearchNode>,
@@ -223,10 +222,8 @@ impl Window {
         }
         self.inner.find.set_message("", Tone::Info);
         self.show_results(false);
-        let id = self.inner.fif_runs.get() + 1;
-        self.inner.fif_runs.set(id);
+        let ticket = self.inner.fif_runs.next();
         self.inner.fif.replace(Some(FifRun {
-            id,
             handle,
             receiver,
             search,
@@ -246,16 +243,17 @@ impl Window {
                 self.inner,
                 #[upgrade_or]
                 glib::ControlFlow::Break,
-                move || Window { inner }.drain_find_in_files(id)
+                move || Window { inner }.drain_find_in_files(&ticket)
             ),
         );
     }
 
     /// Moves streamed files into the panel; finishes the run once the search has ended. After
     /// Stop, files still waiting in the channel are dropped, so the panel stops at once.
-    fn drain_find_in_files(&self, id: u64) -> glib::ControlFlow {
+    /// Only `ticket`'s run, the newest, is in the slot.
+    fn drain_find_in_files(&self, ticket: &Ticket) -> glib::ControlFlow {
         let mut slot = self.inner.fif.borrow_mut();
-        let Some(run) = slot.as_mut().filter(|run| run.id == id) else {
+        let Some(run) = slot.as_mut().filter(|_| ticket.is_current()) else {
             return glib::ControlFlow::Break;
         };
         let finished = run.handle.is_finished();

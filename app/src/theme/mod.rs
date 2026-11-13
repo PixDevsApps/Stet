@@ -9,14 +9,14 @@ mod fixtures;
 pub mod scheme;
 
 use crate::monitor::{DirWatch, TriggerRule};
-use crate::worker;
+use crate::runtime::{Latest, Notify, Ticket, wait_until, worker};
 use gtk4 as gtk;
 use gtk4::{gdk, gio, glib};
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use stet_domain::theme::{EditorTheme, Mode, Palette};
 use stet_domain::view::{DEFAULT_FONT_SIZE_PT, Zoom};
 use stet_infrastructure::omarchy::{CurrentTheme, font, read_current_theme};
@@ -52,7 +52,10 @@ pub struct Appearance {
     base_size: Cell<i32>,
     zoom: Cell<Zoom>,
     forced: Cell<Option<Mode>>,
-    generation: Cell<u64>,
+    /// A ticket per theme reload: the newest wins.
+    loads: Latest,
+    /// Wakes [`Self::ready`]'s waiters when a scheme or a font family is in.
+    applied: Notify,
     reloads: Cell<u32>,
     font_reloads: Cell<u32>,
     scheme_listeners: RefCell<Vec<SchemeListener>>,
@@ -96,7 +99,8 @@ impl Appearance {
             base_size: Cell::new(DEFAULT_FONT_SIZE_PT),
             zoom: Cell::new(Zoom::default()),
             forced: Cell::new(None),
-            generation: Cell::new(0),
+            loads: Latest::default(),
+            applied: Notify::default(),
             reloads: Cell::new(0),
             font_reloads: Cell::new(0),
             scheme_listeners: RefCell::new(Vec::new()),
@@ -148,12 +152,12 @@ impl Appearance {
 
     /// Resolves once the first theme and font are applied, or after `timeout`.
     pub async fn ready(&self, timeout: Duration) {
-        let started = Instant::now();
-        while (self.scheme.borrow().is_none() || self.family.borrow().is_none())
-            && started.elapsed() < timeout
-        {
-            glib::timeout_future(Duration::from_millis(2)).await;
-        }
+        wait_until(
+            Some(timeout),
+            || self.scheme.borrow().is_some() && self.family.borrow().is_some(),
+            || self.applied.notified(),
+        )
+        .await;
     }
 
     pub fn scheme(&self) -> Option<sourceview5::StyleScheme> {
@@ -215,13 +219,12 @@ impl Appearance {
     }
 
     fn reload_theme(self: &Rc<Self>) {
-        let generation = self.generation.get() + 1;
-        self.generation.set(generation);
+        let ticket = self.loads.next();
         let current = self.current_dir.clone();
         let this = self.clone();
         glib::spawn_future_local(async move {
             let loaded = worker::run(move || load_omarchy(&current)).await.flatten();
-            if this.generation.get() != generation {
+            if !ticket.is_current() {
                 return;
             }
             let (palette, source) = match loaded {
@@ -242,11 +245,11 @@ impl Appearance {
                     (Palette::builtin(mode), ThemeSource::Builtin(mode))
                 }
             };
-            this.apply(palette, source, generation).await;
+            this.apply(palette, source, &ticket).await;
         });
     }
 
-    async fn apply(&self, palette: Palette, source: ThemeSource, generation: u64) {
+    async fn apply(&self, palette: Palette, source: ThemeSource, ticket: &Ticket) {
         let theme = EditorTheme::new(&palette);
         let unchanged = self.theme.borrow().as_ref() == Some(&theme)
             && self.source.borrow().as_ref() == Some(&source);
@@ -264,7 +267,7 @@ impl Appearance {
         let styles_dir = self.styles_dir.clone();
         let file_id = id.clone();
         let written = worker::run(move || write_scheme(&styles_dir, &file_id, &xml)).await;
-        if self.generation.get() != generation {
+        if !ticket.is_current() {
             return;
         }
         let path = match written {
@@ -297,6 +300,7 @@ impl Appearance {
         }
 
         self.scheme.replace(Some(scheme.clone()));
+        self.applied.notify();
         self.scheme_file.replace(Some(path));
         tracing::info!(theme = %name, "theme applied");
         self.theme.replace(Some(theme));
@@ -328,6 +332,7 @@ impl Appearance {
             if this.family.borrow().as_deref() != Some(family.as_str()) {
                 tracing::info!(%family, "editor font");
                 this.family.replace(Some(family));
+                this.applied.notify();
                 this.apply_font_css();
             }
         });

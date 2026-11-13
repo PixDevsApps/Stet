@@ -35,7 +35,7 @@ Never invent measurements, acceptance evidence, commit references or links. Reco
   - `domain/`: pure logic. No I/O, no GTK, no threads.
   - `infrastructure/`: std I/O only, testable headless.
   - `app/`: the only production crate that links GTK, libadwaita and GtkSourceView.
-- Nothing blocks the GTK thread. File I/O, encoding, search, backups and formatting run on worker threads with owned snapshots; results return through `async-channel` and stale results are dropped.
+- Nothing blocks the GTK thread. File I/O, encoding, search, backups and formatting run on GLib's worker pool (`app/src/runtime/worker.rs`) with owned snapshots; stale results are dropped (`runtime::Latest`, `window::snapshot`). Streams of results (loading, Find and Replace in Files) come back through `async-channel`.
 - Every user-visible command is an `ActionId`. The hamburger menu, F1 palette and accelerators are generated from the action registry.
 - The GtkSourceView buffer is the source of truth; an operation of more than about 2,000 edits is applied as one bulk edit ([ADR-003](docs/DECISIONS.md)).
 - Every replace runs through our own `pcre2` engine. Never call `SearchContext::replace_all` or `SearchContext::replace` ([ADR-005](docs/DECISIONS.md), [upstream bug](docs/upstream/sourceview5-replace-all.md)).

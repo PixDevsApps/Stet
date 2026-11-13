@@ -3,6 +3,7 @@
 //! run (ADR-005 amendment). Each tab has its own search settings, so a query reaches a tab's
 //! context only when the tab is shown, and hidden tabs never rescan.
 
+use crate::runtime::{Debounce, Latest};
 use crate::theme::scheme::SMART_HIGHLIGHT_STYLE;
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -58,16 +59,17 @@ pub struct PageSearch {
     /// The compiled query whose pattern the find context holds.
     applied: Cell<Option<u64>>,
     pub own: RefCell<Option<OwnMatches>>,
-    /// Bumped for every own-matcher search, so stale results are dropped.
-    pub own_generation: Cell<u64>,
+    /// A ticket per own-matcher search, so stale results are dropped.
+    pub own_searches: Latest,
     /// The query and revision of the search in progress.
     pub own_pending: Cell<Option<(u64, u64)>>,
     pub own_cancel: RefCell<Option<Arc<AtomicBool>>>,
     /// The character range our match tag currently covers.
     tagged: Cell<Option<(i32, i32)>>,
     /// The pending search after an edit.
-    pub own_timeout: RefCell<Option<gtk4::glib::SourceId>>,
-    pub smart_timeout: RefCell<Option<gtk4::glib::SourceId>>,
+    pub own_refresh: Debounce,
+    /// Smart highlighting's pending update.
+    pub smart_update: Debounce,
 }
 
 impl Default for PageSearch {
@@ -86,12 +88,12 @@ impl Default for PageSearch {
             smart: RefCell::new(None),
             applied: Cell::new(None),
             own: RefCell::new(None),
-            own_generation: Cell::new(0),
+            own_searches: Latest::default(),
             own_pending: Cell::new(None),
             own_cancel: RefCell::new(None),
             tagged: Cell::new(None),
-            own_timeout: RefCell::new(None),
-            smart_timeout: RefCell::new(None),
+            own_refresh: Debounce::default(),
+            smart_update: Debounce::default(),
         }
     }
 }
@@ -209,7 +211,7 @@ impl PageSearch {
         if let Some(cancel) = self.own_cancel.take() {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
-        self.own_generation.set(self.own_generation.get() + 1);
+        self.own_searches.invalidate();
         self.own_pending.set(None);
         self.own.replace(None);
         self.untag(buffer);
@@ -282,13 +284,6 @@ impl PageSearch {
             .get(index)
             .filter(|found| found.start == start && found.end == end)
             .map(|_| index + 1)
-    }
-
-    /// Ends smart highlighting's pending update.
-    pub fn cancel_smart_timeout(&self) {
-        if let Some(source) = self.smart_timeout.take() {
-            source.remove();
-        }
     }
 }
 

@@ -6,9 +6,10 @@
 //! painting (ADR-003 amendment on text tools).
 
 use super::Window;
+use super::snapshot::{PageSnapshot, Stale, is_small, run_sized};
 use crate::editor::{EditorPage, read_only_message};
 use crate::edits;
-use crate::worker;
+use crate::runtime::Debounce;
 use gtk4::glib;
 use gtk4::prelude::*;
 use sourceview5::prelude::*;
@@ -27,9 +28,6 @@ use stet_domain::ops::{Change, Indent, SyntaxError, Target, json, xml};
 use stet_domain::search::SearchMode;
 use stet_domain::text::{LineIndex, TextEdit};
 
-/// Documents up to this many bytes are changed at once on the GTK thread; larger ones on a
-/// worker, as an integer sort of a million lines takes about 0.6 s.
-pub const SYNC_BYTES: usize = 512 * 1024;
 /// A result larger than this is inserted in pieces of about this size, 16 ms apart, inside
 /// the one user action, so a 20 MB JSON file formats without blocking the window.
 pub const PIECE_BYTES: usize = 1024 * 1024;
@@ -60,7 +58,7 @@ pub struct ToolState {
     pub stats: RefCell<Option<ToolStats>>,
     /// The status bar's word count: the document and revision it was counted for.
     pub words: RefCell<Option<(glib::WeakRef<EditorPage>, u64, usize)>>,
-    pub words_pending: RefCell<Option<glib::SourceId>>,
+    pub words_pending: Debounce,
 }
 
 /// What a tool works on when nothing is selected.
@@ -319,44 +317,45 @@ impl Window {
             return;
         }
         let started = Instant::now();
-        let text = page.text();
-        if text.len() <= SYNC_BYTES {
+        let (snapshot, text) = PageSnapshot::take(page);
+        if is_small(&text) {
             let result = operation(&text, target);
             self.finish_tool(page, &text, result, started, false, what);
             return;
         }
-        let revision = page.revision();
         page.set_busy(true);
         let window = self.clone();
         let page = page.clone();
         self.spawn(async move {
-            let computed = worker::run(move || {
-                let result = operation(&text, target);
-                // A bulk change, or one with a large result, becomes one replacement here,
-                // off the GTK thread.
-                let bulk = match &result {
-                    Ok(change) if change.is_bulk() || inserted_bytes(change) > PIECE_BYTES => {
-                        change.coalesce(&text)
-                    }
-                    _ => None,
-                };
-                (text, result, bulk)
-            })
-            .await;
+            let computed = window
+                .on_snapshot(&snapshot, move || {
+                    let result = operation(&text, target);
+                    // A bulk change, or one with a large result, becomes one replacement here,
+                    // off the GTK thread.
+                    let bulk = match &result {
+                        Ok(change) if change.is_bulk() || inserted_bytes(change) > PIECE_BYTES => {
+                            change.coalesce(&text)
+                        }
+                        _ => None,
+                    };
+                    (text, result, bulk)
+                })
+                .await;
             page.set_busy(false);
-            let Some((text, result, bulk)) = computed else {
-                window.toast(&format!("{what} failed"));
-                return;
+            let (text, result, bulk) = match computed {
+                Ok(computed) => computed,
+                Err(Stale::Panicked) => {
+                    window.toast(&format!("{what} failed"));
+                    return;
+                }
+                Err(Stale::Closed) => return,
+                Err(Stale::Edited) => {
+                    window.toast(&format!(
+                        "The document changed while {what} ran; nothing was changed"
+                    ));
+                    return;
+                }
             };
-            if window.tab_page(&page).is_none() {
-                return;
-            }
-            if page.revision() != revision {
-                window.toast(&format!(
-                    "The document changed while {what} ran; nothing was changed"
-                ));
-                return;
-            }
             match (result, bulk) {
                 (Ok(change), Some(edit)) if edit.insert.len() > PIECE_BYTES => {
                     // The bookmarks need the old text's lines; the text itself can go.
@@ -535,11 +534,7 @@ impl Window {
         let window = self.clone();
         let page = page.clone();
         self.spawn(async move {
-            let checked = if text.len() <= SYNC_BYTES {
-                Some(operation(&text, target))
-            } else {
-                worker::run(move || operation(&text, target)).await
-            };
+            let checked = run_sized(text, move |text| operation(text, target)).await;
             match checked {
                 Some(Ok(_)) => window.toast(if is_json {
                     "Valid JSON"

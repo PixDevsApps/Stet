@@ -7,8 +7,8 @@
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
 use crate::config::APP_ID_ENV;
+use crate::runtime::worker;
 use crate::window::{Location, SessionPhase, Window};
-use crate::worker;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
 use std::collections::HashMap;

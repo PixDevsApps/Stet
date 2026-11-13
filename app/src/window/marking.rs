@@ -14,9 +14,10 @@
 
 use super::Window;
 use super::find::{BarMode, Tone};
+use super::snapshot::{PageSnapshot, Stale, is_small};
 use crate::editor::EditorPage;
 use crate::edits;
-use crate::worker;
+use crate::runtime::worker;
 use gtk4::prelude::*;
 
 use std::cell::Cell;
@@ -243,8 +244,8 @@ impl Window {
             return;
         }
         let started = Instant::now();
-        let text = page.text();
-        if text.len() <= super::SYNC_BYTES {
+        let (snapshot, text) = PageSnapshot::take(&page);
+        if is_small(&text) {
             let index = LineIndex::new(&text);
             let (edit, clipboard) = op(&text, &index, &bookmarks);
             let bulk = (edit.edits.len() > BULK_EDIT_THRESHOLD)
@@ -261,33 +262,34 @@ impl Window {
             );
             return;
         }
-        let revision = page.revision();
         page.set_busy(true);
         let window = self.clone();
         self.spawn(async move {
-            let computed = worker::run(move || {
-                let index = LineIndex::new(&text);
-                let (edit, clipboard) = op(&text, &index, &bookmarks);
-                let bulk = (edit.edits.len() > BULK_EDIT_THRESHOLD)
-                    .then(|| coalesce(&edit.edits, &text))
-                    .flatten();
-                (text, edit, bulk, clipboard)
-            })
-            .await;
+            let computed = window
+                .on_snapshot(&snapshot, move || {
+                    let index = LineIndex::new(&text);
+                    let (edit, clipboard) = op(&text, &index, &bookmarks);
+                    let bulk = (edit.edits.len() > BULK_EDIT_THRESHOLD)
+                        .then(|| coalesce(&edit.edits, &text))
+                        .flatten();
+                    (text, edit, bulk, clipboard)
+                })
+                .await;
             page.set_busy(false);
-            let Some((text, edit, bulk, clipboard)) = computed else {
-                window.toast(&format!("{what} failed"));
-                return;
+            let (text, edit, bulk, clipboard) = match computed {
+                Ok(computed) => computed,
+                Err(Stale::Panicked) => {
+                    window.toast(&format!("{what} failed"));
+                    return;
+                }
+                Err(Stale::Closed) => return,
+                Err(Stale::Edited) => {
+                    window.toast(&format!(
+                        "The document changed while {what} ran; nothing was changed"
+                    ));
+                    return;
+                }
             };
-            if window.tab_page(&page).is_none() {
-                return;
-            }
-            if page.revision() != revision {
-                window.toast(&format!(
-                    "The document changed while {what} ran; nothing was changed"
-                ));
-                return;
-            }
             window.finish_line_op(&page, &text, &edit, bulk.as_ref(), clipboard, started, true);
         });
     }
@@ -387,7 +389,7 @@ impl Window {
         what: &'static str,
     ) {
         let started = Instant::now();
-        let text = page.text();
+        let (snapshot, text) = PageSnapshot::take(page);
         let bookmark = request.bookmark;
         let range = request.range.clone();
         let search = move |text: &str| {
@@ -412,12 +414,11 @@ impl Window {
                     }
                 })
         };
-        if text.len() <= super::SYNC_BYTES {
+        if is_small(&text) {
             let found = search(&text);
             self.finish_mark(page, &request, found, started, false, what);
             return;
         }
-        let revision = page.revision();
         self.inner
             .find
             .set_message(&format!("{what}: searching…"), Tone::Info);
@@ -425,15 +426,16 @@ impl Window {
         let page = page.clone();
         self.spawn(async move {
             let found = worker::run(move || search(&text)).await;
-            if window.tab_page(&page).is_none() {
-                return;
-            }
-            if page.revision() != revision {
-                window.inner.find.set_message(
-                    &format!("The document changed while {what} ran; nothing was marked"),
-                    Tone::Error,
-                );
-                return;
+            match window.check_snapshot(&snapshot) {
+                Ok(()) => {}
+                Err(Stale::Closed) => return,
+                Err(_) => {
+                    window.inner.find.set_message(
+                        &format!("The document changed while {what} ran; nothing was marked"),
+                        Tone::Error,
+                    );
+                    return;
+                }
             }
             match found {
                 Some(found) => window.finish_mark(&page, &request, found, started, true, what),

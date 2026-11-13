@@ -4,9 +4,10 @@
 //! the buffer holds LF.
 
 use super::dialogs::{Purpose, UnmappableChoice};
+use super::snapshot::PageSnapshot;
 use super::{PickerMode, Window};
 use crate::editor::{EditorPage, ReadOnly};
-use crate::worker;
+use crate::runtime::worker;
 use stet_domain::actions::ActionId;
 use stet_domain::text::Eol;
 use stet_infrastructure::encoding::{
@@ -107,12 +108,11 @@ impl Window {
             self.toast(&format!("“{}” is already {label}", page.name()));
             return;
         }
-        let text = page.text();
-        let revision = page.revision();
+        let (snapshot, text) = PageSnapshot::take(page);
         let encoding = entry.encoding;
         let map_placeholder = format.map_placeholder;
         let checked = worker::run(move || check_encodable(&text, encoding, map_placeholder)).await;
-        if page.revision() != revision {
+        if snapshot.edited() {
             self.toast("The text changed while it was checked; convert again");
             return;
         }

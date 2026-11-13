@@ -4,7 +4,6 @@
 
 use super::Window;
 use crate::editor::EditorPage;
-use gtk4::glib;
 use gtk4::prelude::*;
 use std::time::Duration;
 use stet_domain::search::{SmartHighlight, translate};
@@ -17,15 +16,11 @@ const SMART_MAX_CHARS: i32 = 1_000;
 impl Window {
     /// The selection of `page` changed: smart highlighting follows it shortly after.
     pub(super) fn on_selection_changed(&self, page: &EditorPage) {
-        let state = page.search();
-        state.cancel_smart_timeout();
         let window = self.clone();
         let target = page.clone();
-        let source = glib::timeout_add_local_once(SMART_DELAY, move || {
-            target.search().smart_timeout.replace(None);
-            window.update_smart_highlight(&target);
-        });
-        state.smart_timeout.replace(Some(source));
+        page.search()
+            .smart_update
+            .schedule(SMART_DELAY, move || window.update_smart_highlight(&target));
     }
 
     pub(super) fn update_smart_highlight(&self, page: &EditorPage) {

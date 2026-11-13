@@ -316,7 +316,7 @@ impl Harness {
         let started = std::time::Instant::now();
         loop {
             self.wait_idle().await?;
-            if !self.page()?.is_busy() && crate::worker::pending() == 0 {
+            if !self.page()?.is_busy() && crate::runtime::worker::pending() == 0 {
                 return Ok(());
             }
             if started.elapsed() > super::IDLE_TIMEOUT {

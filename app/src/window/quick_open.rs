@@ -11,6 +11,7 @@
 
 use super::{Location, Window};
 use crate::editor::EditorPage;
+use crate::runtime::Debounce;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib, pango};
@@ -111,7 +112,6 @@ struct State {
     rows: Vec<Row>,
     opened: Option<Instant>,
     last_request: Option<Instant>,
-    rerank_pending: Option<glib::SourceId>,
     stats: QuickOpenStats,
 }
 
@@ -125,6 +125,8 @@ pub struct QuickOpen {
     /// What the walk has found, under the list.
     pub note: gtk::Label,
     state: RefCell<State>,
+    /// The next ranking while files stream in.
+    rerank: Debounce,
     requests: mpsc::Sender<RankRequest>,
     on_choose: RefCell<Option<OnChoose>>,
 }
@@ -177,6 +179,7 @@ impl QuickOpen {
             scrolled,
             note,
             state: RefCell::new(State::default()),
+            rerank: Debounce::default(),
             requests,
             on_choose: RefCell::new(None),
         });
@@ -400,34 +403,32 @@ impl QuickOpen {
             cancel.cancel();
         }
         state.walking = false;
-        if let Some(source) = state.rerank_pending.take() {
-            source.remove();
-        }
+        drop(state);
+        self.rerank.cancel();
     }
 
     /// Ranks again at most every [`RERANK_INTERVAL`] while files stream in.
     fn rerank_soon(self: &Rc<Self>) {
-        let wait = {
-            let state = self.state.borrow();
-            if state.rerank_pending.is_some() {
-                return;
-            }
-            state.last_request.map_or(Duration::ZERO, |last| {
+        if self.rerank.is_pending() {
+            return;
+        }
+        let wait = self
+            .state
+            .borrow()
+            .last_request
+            .map_or(Duration::ZERO, |last| {
                 RERANK_INTERVAL.saturating_sub(last.elapsed())
-            })
-        };
+            });
         if wait.is_zero() {
             self.request_rank();
             return;
         }
         let weak = Rc::downgrade(self);
-        let source = glib::timeout_add_local_once(wait, move || {
+        self.rerank.schedule(wait, move || {
             if let Some(quick_open) = weak.upgrade() {
-                quick_open.state.borrow_mut().rerank_pending = None;
                 quick_open.request_rank();
             }
         });
-        self.state.borrow_mut().rerank_pending = Some(source);
     }
 
     /// Asks the ranking thread for the field's query over everything listed so far.
@@ -807,7 +808,7 @@ impl Window {
                 // Finding the project root looks at the disk: on a worker, then the popup.
                 let text = text.to_owned();
                 self.spawn(async move {
-                    let root = crate::worker::run(move || project_root(&folder)).await;
+                    let root = crate::runtime::worker::run(move || project_root(&folder)).await;
                     quick_open.open(&parent, open, recent, known, root, &text);
                 });
             }

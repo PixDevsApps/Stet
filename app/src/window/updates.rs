@@ -73,9 +73,10 @@ impl Window {
         let keymap = self.keymap();
         let window = self.clone();
         self.spawn(async move {
-            let result = crate::worker::run(move || stet_infrastructure::updates::latest(&url))
-                .await
-                .unwrap_or(Err(UpdateError::Offline));
+            let result =
+                crate::runtime::worker::run(move || stet_infrastructure::updates::latest(&url))
+                    .await
+                    .unwrap_or(Err(UpdateError::Offline));
             if window.inner.dialog.borrow().as_ref() != Some(&dialog) {
                 return;
             }

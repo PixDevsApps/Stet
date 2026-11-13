@@ -6,10 +6,11 @@
 use super::Window;
 use super::find::{BarMode, Field, Tone};
 use super::results::{FileNode, FileTarget, Jump};
-use crate::editor::{EditorPage, read_only_message};
+use super::snapshot::{PageSnapshot, Stale};
+use crate::editor::{EditorPage, JUMP_LOAD_WAIT, read_only_message};
 use crate::edits;
 use crate::page_search::Compiled;
-use crate::worker;
+use crate::runtime::worker;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib};
 use libadwaita as adw;
@@ -34,8 +35,6 @@ use stet_infrastructure::search::{Match, SearchError, document_hits};
 
 const SCOPE_START_MARK: &str = "stet-scope-start";
 const SCOPE_END_MARK: &str = "stet-scope-end";
-/// How long a jump waits for a file it opened to finish loading.
-const LOAD_WAIT: Duration = Duration::from_secs(10);
 /// The results panel's height when it first opens.
 pub const RESULTS_HEIGHT: i32 = 220;
 
@@ -246,8 +245,7 @@ impl Window {
             self.search_from(page, start.offset(), forward);
             return;
         }
-        let text = page.text();
-        let revision = page.revision();
+        let (snapshot, text) = PageSnapshot::take(&page);
         let found = Match {
             start: start.offset() as usize,
             end: end.offset() as usize,
@@ -256,26 +254,29 @@ impl Window {
         let matcher = Arc::clone(&compiled.matcher);
         let window = self.clone();
         self.spawn(async move {
-            let edit = worker::run(move || matcher.replace_one(&text, &found, &template)).await;
-            if page.revision() != revision || window.tab_page(&page).is_none() {
+            let edit = window
+                .on_snapshot(&snapshot, move || {
+                    matcher.replace_one(&text, &found, &template)
+                })
+                .await;
+            let Ok(edit) = edit else {
                 return;
-            }
+            };
             match edit {
-                Some(Ok(edit)) => {
+                Ok(edit) => {
                     page.clear_current_match();
                     edits::apply_edits(&page.buffer(), std::slice::from_ref(&edit));
                     let after = edit.start + edit.insert.chars().count();
                     let from = if forward { after } else { edit.start };
                     window.search_from(page, from as i32, forward);
                 }
-                Some(Err(SearchError::NotAMatch)) => {
+                Err(SearchError::NotAMatch) => {
                     window.search_from(page, found.start as i32, forward);
                 }
-                Some(Err(error)) => window
+                Err(error) => window
                     .inner
                     .find
                     .set_message(&error.to_string(), Tone::Error),
-                None => {}
             }
         });
     }
@@ -306,38 +307,41 @@ impl Window {
         let started = Instant::now();
         let options = find.options();
         let (range, scope) = Self::command_scope(&page, options);
-        let text = page.text();
+        let (taken, text) = PageSnapshot::take(&page);
         let snapshot = started.elapsed();
-        let revision = page.revision();
         let matcher = Arc::clone(&compiled.matcher);
         find.set_message("Replacing…", Tone::Info);
         find.stats.replace(None);
         let window = self.clone();
         self.spawn(async move {
             let searching = Instant::now();
-            let replaced = worker::run(move || {
-                let cancel = AtomicBool::new(false);
-                let result = matcher.replace_all(&text, &template, Some(range), &cancel);
-                (text, result)
-            })
-            .await;
+            let replaced = window
+                .on_snapshot(&taken, move || {
+                    let cancel = AtomicBool::new(false);
+                    let result = matcher.replace_all(&text, &template, Some(range), &cancel);
+                    (text, result)
+                })
+                .await;
             let search = searching.elapsed();
             let find = &window.inner.find;
-            let Some((text, result)) = replaced else {
-                find.set_message("Replace All failed", Tone::Error);
-                return;
+            let (text, result) = match replaced {
+                Ok(replaced) => replaced,
+                Err(Stale::Panicked) => {
+                    find.set_message("Replace All failed", Tone::Error);
+                    return;
+                }
+                Err(Stale::Closed) => {
+                    find.set_message("The document was closed; nothing was replaced", Tone::Info);
+                    return;
+                }
+                Err(Stale::Edited) => {
+                    find.set_message(
+                        "The document changed while replacing; nothing was replaced",
+                        Tone::Error,
+                    );
+                    return;
+                }
             };
-            if window.tab_page(&page).is_none() {
-                find.set_message("The document was closed; nothing was replaced", Tone::Info);
-                return;
-            }
-            if page.revision() != revision {
-                find.set_message(
-                    "The document changed while replacing; nothing was replaced",
-                    Tone::Error,
-                );
-                return;
-            }
             match result {
                 Ok(result) => {
                     page.clear_current_match();
@@ -410,8 +414,7 @@ impl Window {
         let (mut total, mut documents, mut changed_meanwhile) = (0, 0, 0);
         let mut failed: Vec<String> = Vec::new();
         for page in pages {
-            let text = page.text();
-            let revision = page.revision();
+            let (snapshot, text) = PageSnapshot::take(&page);
             let matcher = Arc::clone(&compiled.matcher);
             let template = template.clone();
             let replaced = worker::run(move || {
@@ -431,12 +434,13 @@ impl Window {
                     continue;
                 }
             };
-            if self.tab_page(&page).is_none() {
-                continue;
-            }
-            if page.revision() != revision {
-                changed_meanwhile += 1;
-                continue;
+            match self.check_snapshot(&snapshot) {
+                Ok(()) => {}
+                Err(Stale::Closed) => continue,
+                Err(_) => {
+                    changed_meanwhile += 1;
+                    continue;
+                }
             }
             if result.count > 0 {
                 page.clear_current_match();
@@ -736,27 +740,21 @@ impl Window {
                 return;
             }
         };
-        self.open_locations(vec![super::Location {
-            path: path.clone(),
+        let opened = self.open_locations(vec![super::Location {
+            path,
             position: Some(LineCol::new(
                 u32::try_from(jump.line).unwrap_or(u32::MAX),
                 Some(jump.column as u32 + 1),
             )),
             create: false,
         }]);
+        let Some(page) = opened.into_iter().next() else {
+            return;
+        };
         let window = self.clone();
         self.spawn(async move {
-            let started = Instant::now();
-            while started.elapsed() < LOAD_WAIT {
-                if let Some(page) = window.page_showing(&path) {
-                    if !page.is_loading() {
-                        window.select_result(&page, &jump);
-                        return;
-                    }
-                } else if started.elapsed() > Duration::from_millis(500) {
-                    return;
-                }
-                glib::timeout_future(Duration::from_millis(20)).await;
+            if page.loaded(JUMP_LOAD_WAIT).await && window.tab_page(&page).is_some() {
+                window.select_result(&page, &jump);
             }
         });
     }

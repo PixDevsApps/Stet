@@ -11,9 +11,9 @@
 use super::Window;
 use super::find::{BarMode, Field, Tone};
 use super::results::{FileNode, FileTarget, SearchNode};
-use crate::editor::{EditorPage, TextOrigin};
-
-use crate::worker;
+use super::snapshot::{PageSnapshot, Stale};
+use crate::editor::{EditorPage, LOAD_WAIT, TextOrigin};
+use crate::runtime::{Ticket, worker};
 use gtk4::glib;
 use gtk4::prelude::*;
 use libadwaita as adw;
@@ -43,14 +43,11 @@ const LINES_PER_DRAIN: usize = 1_000;
 /// The most changed lines a run lists, as Find in Files lists at most this many hits; files
 /// past it are listed with their counts only.
 const LISTED_LINES: usize = DEFAULT_MAX_HITS;
-/// How long an open document's replacement waits for it to load.
-const LOAD_WAIT: Duration = Duration::from_secs(30);
 /// Where an in-place save keeps the previous content (the same folder the editor's saves use).
 const SAVE_BACKUPS_DIR: &str = "save-backups";
 
 /// A Replace in Files run in progress.
 pub struct RifRun {
-    id: u64,
     handle: RifHandle,
     receiver: async_channel::Receiver<RifEvent>,
     search: Rc<SearchNode>,
@@ -261,11 +258,9 @@ impl Window {
         find.set_message("Replacing in files…", Tone::Info);
         self.show_results(false);
         let nav = &self.inner.nav;
-        let id = nav.rif_runs.get() + 1;
-        nav.rif_runs.set(id);
+        let ticket = nav.rif_runs.next();
         nav.rif_stats.replace(None);
         nav.rif.replace(Some(RifRun {
-            id,
             handle,
             receiver,
             search,
@@ -290,17 +285,18 @@ impl Window {
                 self.inner,
                 #[upgrade_or]
                 glib::ControlFlow::Break,
-                move || Window { inner }.drain_replace_in_files(id)
+                move || Window { inner }.drain_replace_in_files(&ticket)
             ),
         );
     }
 
     /// Moves reported files into the panel, starts the next open document, and finishes the
     /// run once the walk, every event and every open document are done.
-    fn drain_replace_in_files(&self, id: u64) -> glib::ControlFlow {
+    /// Only `ticket`'s run, the newest, is in the slot.
+    fn drain_replace_in_files(&self, ticket: &Ticket) -> glib::ControlFlow {
         let nav = &self.inner.nav;
         let mut slot = nav.rif.borrow_mut();
-        let Some(run) = slot.as_mut().filter(|run| run.id == id) else {
+        let Some(run) = slot.as_mut().filter(|_| ticket.is_current()) else {
             return glib::ControlFlow::Break;
         };
         let finished = run.handle.is_finished();
@@ -392,11 +388,12 @@ impl Window {
             let template = run.template.clone();
             let cancel = Arc::clone(&run.cancel);
             let window = self.clone();
+            let ticket = ticket.clone();
             self.spawn(async move {
                 let node = window
                     .replace_in_open_document(path, matcher, template, cancel)
                     .await;
-                window.open_document_done(id, node);
+                window.open_document_done(&ticket, node);
             });
         }
         let done = finished
@@ -412,9 +409,9 @@ impl Window {
         glib::ControlFlow::Break
     }
 
-    fn open_document_done(&self, id: u64, node: Option<(FileNode, Totals)>) {
+    fn open_document_done(&self, ticket: &Ticket, node: Option<(FileNode, Totals)>) {
         let mut slot = self.inner.nav.rif.borrow_mut();
-        let Some(run) = slot.as_mut().filter(|run| run.id == id) else {
+        let Some(run) = slot.as_mut().filter(|_| ticket.is_current()) else {
             return;
         };
         run.open_busy = false;
@@ -429,7 +426,7 @@ impl Window {
         }
         drop(slot);
         // The next open document, or the end of the run, needn't wait for the next drain.
-        self.drain_replace_in_files(id);
+        self.drain_replace_in_files(ticket);
     }
 
     fn update_rif_heading(&self, run: &RifRun, searched: Option<usize>) {
@@ -548,9 +545,8 @@ impl Window {
             home.as_deref(),
         );
         let loaded = self.ensure_loaded(&page).await;
-        let started = Instant::now();
-        while loaded && page.is_loading() && started.elapsed() < LOAD_WAIT {
-            glib::timeout_future(Duration::from_millis(10)).await;
+        if loaded {
+            page.loaded(LOAD_WAIT).await;
         }
         if self.tab_page(&page).is_none() {
             return unchanged(Skip::DocumentClosed);
@@ -578,8 +574,7 @@ impl Window {
             return skipped(Skip::DocumentReadOnly);
         }
         let dirty = Self::has_unsaved_changes(&page);
-        let text = page.text();
-        let revision = page.revision();
+        let (snapshot, text) = PageSnapshot::take(&page);
         let replaced = worker::run(move || {
             let result = matcher.replace_all(&text, &template, None, &cancel);
             (text, result)
@@ -609,11 +604,10 @@ impl Window {
         if result.count == 0 {
             return None;
         }
-        if self.tab_page(&page).is_none() {
-            return unchanged(Skip::DocumentClosed);
-        }
-        if page.revision() != revision {
-            return skipped(Skip::DocumentChanged);
+        match self.check_snapshot(&snapshot) {
+            Ok(()) => {}
+            Err(Stale::Closed) => return unchanged(Skip::DocumentClosed),
+            Err(_) => return skipped(Skip::DocumentChanged),
         }
         let changed = !result.edits.is_empty();
         if changed {

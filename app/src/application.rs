@@ -7,6 +7,7 @@
 use crate::actions;
 use crate::cli;
 use crate::config::{AppConfig, EXIT_AFTER_ENV};
+use crate::runtime::connect_once;
 use crate::theme::Appearance;
 use crate::window::{Location, Shared, Window};
 use gtk4::{gio, glib};
@@ -294,34 +295,23 @@ pub fn log_first_frame(
     started: Instant,
     painted: Rc<Cell<Option<Instant>>>,
 ) {
-    let on_map = Rc::new(RefCell::new(None));
-    let handler = view.connect_map(glib::clone!(
-        #[strong]
-        on_map,
+    connect_once(
+        view,
+        |view, run| view.connect_map(run),
         move |view| {
-            if let Some(handler) = on_map.take() {
-                view.disconnect(handler);
-            }
             let Some(clock) = view.frame_clock() else {
                 tracing::warn!("mapped view has no frame clock; first-frame not measured");
                 return;
             };
-            let on_paint = Rc::new(RefCell::new(None));
-            let painted = painted.clone();
-            let handler = clock.connect_after_paint(glib::clone!(
-                #[strong]
-                on_paint,
-                move |clock| {
-                    if let Some(handler) = on_paint.take() {
-                        clock.disconnect(handler);
-                    }
+            connect_once(
+                &clock,
+                |clock, run| clock.connect_after_paint(run),
+                move |_| {
                     painted.set(Some(Instant::now()));
                     let ms = started.elapsed().as_secs_f64() * 1000.0;
                     tracing::info!("first-frame {ms:.1}");
-                }
-            ));
-            on_paint.replace(Some(handler));
-        }
-    ));
-    on_map.replace(Some(handler));
+                },
+            );
+        },
+    );
 }

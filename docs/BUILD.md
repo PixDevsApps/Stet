@@ -105,7 +105,7 @@ infrastructure/  encoding/ (detect, decode, encode); fs/ (load, safe save, finge
 
 - `stet-domain`: no I/O, no GTK, no threads. Only pure crates (for example `serde`, `thiserror`, `memchr`, `unicode-segmentation`).
 - `stet-infrastructure`: depends on `stet-domain`; std I/O and worker-safe code; no GTK; every test runs headless.
-- `stet` (the app): depends on both; links `gtk4`, `libadwaita` and `sourceview5`. Nothing blocking runs on the GTK thread; workers are plain `std::thread`s and results come back through `async-channel`.
+- `stet` (the app): depends on both; links `gtk4`, `libadwaita` and `sourceview5`. Nothing blocking runs on the GTK thread: jobs run on GLib's thread pool (`runtime::worker::run`, over `gio::spawn_blocking`) and their results come back on the main loop. `app/src/runtime/` also holds the tokens that drop stale results (`Latest`), the debouncer, notifications to wait on instead of polling (`Notify`, `wait_until`, `EditorPage::loaded`) and one-shot signal handlers; `window/snapshot.rs` runs a job on a snapshot of a document's text and checks the result against the page.
 - The M0 spike crate `stet-spikes` was removed on 2026-11-13 ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13)); its code is at the tag `m0-spikes` (see "Spikes (M0)" below).
 - Deliberately **not** used: `syntect`/`two-face` (GtkSourceView highlights), `ropey` ([ADR-003](DECISIONS.md)), `fancy-regex` ([ADR-005](DECISIONS.md)), `notify` (GFileMonitor), `zbus` (GApplication), `ashpd` (portals are the GTK default), `toml_edit` (no Preferences GUI), relm4, tokio. `serde_json`'s `arbitrary_precision` is never enabled: it breaks untagged and flattened types across the whole binary; the JSON tools are token-level.
 

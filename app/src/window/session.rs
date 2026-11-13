@@ -25,8 +25,8 @@ use super::files::Caret;
 use crate::banner::{BannerButton, BannerKind};
 use crate::editor::{DiskState, DocState, EditorPage, LoadStats, ReadOnly, TextOrigin, Unwritable};
 use crate::loader;
+use crate::runtime::{Notify, connect_once, wait_until, worker};
 use crate::session::{FLUSH_TIMEOUT, LOCK_RETRY, unavailable_message};
-use crate::worker;
 use gtk4::{gio, glib};
 use libadwaita::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -72,6 +72,8 @@ pub enum Phase {
 #[derive(Default)]
 pub struct WindowSession {
     phase: Cell<Phase>,
+    /// Wakes whoever waits for the session: the phase changed, or another tab is shown.
+    changed: Notify,
     store: RefCell<Option<Arc<SessionStore>>>,
     /// The session the last commit sent, to skip commits that would change nothing.
     last: RefCell<Option<Session>>,
@@ -87,6 +89,13 @@ pub struct WindowSession {
     restore: Cell<Option<RestoreStats>>,
     /// The old `recent.json`, deleted once a commit holds the list it was migrated from.
     migrated_recent: RefCell<Option<PathBuf>>,
+}
+
+impl WindowSession {
+    fn set_phase(&self, phase: Phase) {
+        self.phase.set(phase);
+        self.changed.notify();
+    }
 }
 
 /// Backup texts by id, for a commit.
@@ -148,7 +157,7 @@ impl Window {
     /// (`--no-session`) the window keeps no session.
     pub fn start_session(&self, enabled: bool) {
         if !enabled {
-            self.inner.session.phase.set(Phase::Off);
+            self.inner.session.set_phase(Phase::Off);
             return;
         }
         let dirs = self.inner.shared.config.dirs.clone();
@@ -172,9 +181,9 @@ impl Window {
                 Some(Err(error)) => {
                     tracing::warn!(%error, "the session is off in this window");
                     window.toast(&unavailable_message(&error));
-                    window.inner.session.phase.set(Phase::Off);
+                    window.inner.session.set_phase(Phase::Off);
                 }
-                None => window.inner.session.phase.set(Phase::Off),
+                None => window.inner.session.set_phase(Phase::Off),
             }
         });
     }
@@ -182,15 +191,22 @@ impl Window {
     /// Resolves once the session is restored or off, and the current tab shows text: it is
     /// loaded or, while it loads in pieces, the first piece is in. Or once `limit` passed.
     pub async fn session_ready(&self, limit: Duration) {
-        while self.inner.session.phase.get() == Phase::Pending {
-            glib::timeout_future(Duration::from_millis(2)).await;
-        }
-        let started = Instant::now();
-        while started.elapsed() < limit
-            && self.current_page().is_some_and(|page| !page.shows_text())
-        {
-            glib::timeout_future(Duration::from_millis(2)).await;
-        }
+        let session = &self.inner.session;
+        wait_until(
+            None,
+            || session.phase.get() != Phase::Pending,
+            || session.changed.notified(),
+        )
+        .await;
+        wait_until(
+            Some(limit),
+            || self.current_page().is_none_or(|page| page.shows_text()),
+            || match self.current_page() {
+                Some(page) => Notify::any(&[&session.changed, page.load_changed()]),
+                None => Notify::any(&[&session.changed]),
+            },
+        )
+        .await;
     }
 
     /// Puts the session back: the window, the histories, the recent files, a stub per tab,
@@ -306,7 +322,7 @@ impl Window {
                 )
             });
         }
-        self.inner.session.phase.set(Phase::On);
+        self.inner.session.set_phase(Phase::On);
         self.start_backups();
         self.update_actions();
     }
@@ -420,6 +436,7 @@ impl Window {
 
     /// A tab is shown: a stub loads its text.
     pub(super) fn session_page_selected(&self, page: &EditorPage) {
+        self.inner.session.changed.notify();
         if Self::is_stub(page) && !page.is_loading() {
             let window = self.clone();
             let page = page.clone();
@@ -430,12 +447,12 @@ impl Window {
     /// Loads `page` if it is a stub and waits until its text is in. False when it closed.
     pub(super) async fn ensure_loaded(&self, page: &EditorPage) -> bool {
         self.session_page_selected(page);
-        while Self::is_stub(page) {
-            if self.tab_page(page).is_none() {
-                return false;
-            }
-            glib::timeout_future(Duration::from_millis(5)).await;
-        }
+        wait_until(
+            None,
+            || !Self::is_stub(page) || self.tab_page(page).is_none(),
+            || page.load_changed().notified(),
+        )
+        .await;
         self.tab_page(page).is_some()
     }
 
@@ -744,20 +761,15 @@ impl Window {
         }
         page.set_top_line(Some(record.first_visible_line));
         // Until the view is shown it has no scroll position of its own to save.
-        let handler = Rc::new(RefCell::new(None));
-        let id = page.view().connect_map(glib::clone!(
-            #[weak]
-            page,
-            #[strong]
-            handler,
-            move |view| {
-                page.set_top_line(None);
-                if let Some(id) = handler.take() {
-                    view.disconnect(id);
-                }
-            }
-        ));
-        handler.replace(Some(id));
+        connect_once(
+            page.view(),
+            |view, run| view.connect_map(run),
+            glib::clone!(
+                #[weak]
+                page,
+                move |_| page.set_top_line(None)
+            ),
+        );
     }
 
     /// The banner for unsaved changes that could not be restored, on every tab of the document.
@@ -1222,9 +1234,12 @@ impl Window {
         if session.quitting.replace(true) {
             return;
         }
-        while session.phase.get() == Phase::Pending {
-            glib::timeout_future(Duration::from_millis(5)).await;
-        }
+        wait_until(
+            None,
+            || session.phase.get() != Phase::Pending,
+            || session.changed.notified(),
+        )
+        .await;
         let backups = self.settings().backups;
         let large: Vec<EditorPage> = self
             .documents()
@@ -1302,7 +1317,7 @@ impl Window {
             return;
         }
         self.commit_session(true);
-        session.phase.set(Phase::Off);
+        session.set_phase(Phase::Off);
         let Some(store) = session.store.take() else {
             return;
         };

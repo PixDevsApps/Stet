@@ -4,6 +4,7 @@
 //! amendment). Triggers are debounced; if no monitor can be created, the owner is polled.
 //! [`FileWatch`] watches an open document's file the same way.
 
+use crate::runtime::Debounce;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
 use std::cell::RefCell;
@@ -25,7 +26,7 @@ pub struct DirWatch {
     on_trigger: Box<dyn Fn()>,
     parent_monitor: RefCell<Option<gio::FileMonitor>>,
     dir_monitor: RefCell<Option<gio::FileMonitor>>,
-    debounce: RefCell<Option<glib::SourceId>>,
+    debounce: Debounce,
     poll: RefCell<Option<glib::SourceId>>,
 }
 
@@ -42,7 +43,7 @@ impl DirWatch {
             on_trigger: Box::new(on_trigger),
             parent_monitor: RefCell::new(None),
             dir_monitor: RefCell::new(None),
-            debounce: RefCell::new(None),
+            debounce: Debounce::default(),
             poll: RefCell::new(None),
         });
         let parent = watch.dir.parent().map(Path::to_path_buf);
@@ -110,17 +111,12 @@ impl DirWatch {
 
     /// Restarts the debounce; the owner's callback runs 150 ms after the last trigger.
     pub fn trigger(self: &Rc<Self>) {
-        if let Some(pending) = self.debounce.take() {
-            pending.remove();
-        }
         let weak = Rc::downgrade(self);
-        let source = glib::timeout_add_local_once(DEBOUNCE, move || {
+        self.debounce.schedule(DEBOUNCE, move || {
             if let Some(watch) = weak.upgrade() {
-                watch.debounce.replace(None);
                 (watch.on_trigger)();
             }
         });
-        self.debounce.replace(Some(source));
     }
 
     fn start_polling(self: &Rc<Self>) {
@@ -148,10 +144,7 @@ impl Drop for DirWatch {
         {
             monitor.cancel();
         }
-        for source in [self.debounce.take(), self.poll.take()]
-            .into_iter()
-            .flatten()
-        {
+        if let Some(source) = self.poll.take() {
             source.remove();
         }
     }
@@ -167,7 +160,7 @@ pub const FILE_DEBOUNCE: Duration = Duration::from_millis(300);
 #[derive(Debug)]
 pub struct FileWatch {
     monitor: gio::FileMonitor,
-    debounce: Rc<RefCell<Option<glib::SourceId>>>,
+    debounce: Rc<Debounce>,
 }
 
 impl FileWatch {
@@ -182,25 +175,14 @@ impl FileWatch {
                 return None;
             }
         };
-        let debounce: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+        let debounce = Rc::new(Debounce::default());
         let on_change = Rc::new(on_change);
         let pending = Rc::downgrade(&debounce);
         monitor.connect_changed(move |_, _, _, _| {
-            let Some(pending) = pending.upgrade() else {
-                return;
-            };
-            if let Some(source) = pending.take() {
-                source.remove();
+            if let Some(pending) = pending.upgrade() {
+                let on_change = on_change.clone();
+                pending.schedule(FILE_DEBOUNCE, move || on_change());
             }
-            let fired = Rc::downgrade(&pending);
-            let on_change = on_change.clone();
-            let source = glib::timeout_add_local_once(FILE_DEBOUNCE, move || {
-                if let Some(fired) = fired.upgrade() {
-                    fired.replace(None);
-                    on_change();
-                }
-            });
-            pending.replace(Some(source));
         });
         Some(Self { monitor, debounce })
     }
@@ -209,9 +191,7 @@ impl FileWatch {
 impl Drop for FileWatch {
     fn drop(&mut self) {
         self.monitor.cancel();
-        if let Some(source) = self.debounce.take() {
-            source.remove();
-        }
+        self.debounce.cancel();
     }
 }
 

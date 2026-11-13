@@ -15,6 +15,7 @@ mod marks;
 mod monitor;
 mod page_search;
 mod preferences;
+mod runtime;
 #[expect(unsafe_code, reason = "GtkSourceView's async search through its C API")]
 mod search;
 #[cfg(feature = "selftest")]
@@ -23,7 +24,6 @@ mod session;
 mod tabstops;
 mod theme;
 mod window;
-mod worker;
 
 use gtk4::glib::ExitCode;
 use std::time::Instant;

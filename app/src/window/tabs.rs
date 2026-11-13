@@ -8,7 +8,7 @@ use super::Window;
 use super::dialogs::SaveChoice;
 use crate::actions;
 use crate::editor::EditorPage;
-use crate::worker;
+use crate::runtime::worker;
 use gtk4 as gtk;
 use gtk4::{gio, glib};
 use libadwaita as adw;

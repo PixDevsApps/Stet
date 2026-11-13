@@ -30,6 +30,7 @@ mod rif;
 mod session;
 mod settings;
 mod smart;
+mod snapshot;
 mod split;
 mod status;
 mod tabs;
@@ -41,8 +42,8 @@ use crate::actions;
 use crate::config::AppConfig;
 use crate::editor::{DocState, EditorPage, ReadOnly, ViewSettings};
 use crate::preferences::Preferences;
+use crate::runtime::{Latest, worker};
 use crate::theme::Appearance;
-use crate::worker;
 use dialogs::SaveChoice;
 use gtk4 as gtk;
 use gtk4::{gdk, gio, glib};
@@ -80,7 +81,6 @@ pub use results::ResultsPanel;
 
 pub use session::Phase as SessionPhase;
 pub use status::StatusBar;
-pub use toolbox::SYNC_BYTES;
 
 /// A file to open, with an optional position.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -310,7 +310,7 @@ pub struct Inner {
     paned: gtk::Paned,
     results_height: Cell<i32>,
     fif: RefCell<Option<fif::FifRun>>,
-    fif_runs: Cell<u64>,
+    fif_runs: Latest,
     fif_stats: RefCell<Option<FifStats>>,
     pub palette: Rc<Palette>,
     pub languages: Rc<LanguagePicker>,
@@ -474,7 +474,7 @@ impl Window {
                 paned,
                 results_height: Cell::new(replace::RESULTS_HEIGHT),
                 fif: RefCell::new(None),
-                fif_runs: Cell::new(0),
+                fif_runs: Latest::default(),
                 fif_stats: RefCell::new(None),
                 palette,
                 languages,
@@ -1038,6 +1038,7 @@ impl Window {
         if self.inner.moving.get() || !closed {
             return;
         }
+        page.load_changed().notify();
         self.on_nav_page_detached(page);
         self.compare_page_closed(page);
         if self.pages().is_empty() {

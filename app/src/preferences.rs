@@ -4,14 +4,14 @@
 //! what is wrong, with the line and column.
 
 use crate::monitor::{DirWatch, TriggerRule};
-use crate::worker;
+use crate::runtime::{Latest, Notify, wait_until, worker};
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::glib::translate::IntoGlib;
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use stet_domain::settings::{CONFIG_FILE, FileError, KEYS_FILE, Keymap, Settings};
 use stet_infrastructure::settings_files::read_optional;
 
@@ -36,7 +36,10 @@ pub struct Preferences {
     texts: RefCell<[Option<String>; 2]>,
     errors: RefCell<[Vec<FileError>; 2]>,
     loaded: Cell<bool>,
-    generation: Cell<u64>,
+    /// Wakes [`Self::ready`]'s waiters once the files were read.
+    first_read: Notify,
+    /// A ticket per reload: the newest wins.
+    reads: Latest,
     listeners: RefCell<Vec<Listener>>,
     watch: RefCell<Option<Rc<DirWatch>>>,
 }
@@ -52,7 +55,8 @@ impl Preferences {
             texts: RefCell::new([None, None]),
             errors: RefCell::new([Vec::new(), Vec::new()]),
             loaded: Cell::new(false),
-            generation: Cell::new(0),
+            first_read: Notify::default(),
+            reads: Latest::default(),
             listeners: RefCell::new(Vec::new()),
             watch: RefCell::new(None),
         });
@@ -100,21 +104,22 @@ impl Preferences {
 
     /// Resolves once the files have been read the first time, or after `timeout`.
     pub async fn ready(&self, timeout: Duration) {
-        let started = Instant::now();
-        while !self.loaded.get() && started.elapsed() < timeout {
-            glib::timeout_future(Duration::from_millis(2)).await;
-        }
+        wait_until(
+            Some(timeout),
+            || self.loaded.get(),
+            || self.first_read.notified(),
+        )
+        .await;
     }
 
     /// Reads both files again; the newest reload wins.
     pub fn reload(self: &Rc<Self>) {
-        let generation = self.generation.get() + 1;
-        self.generation.set(generation);
+        let ticket = self.reads.next();
         let paths = [self.config_file.clone(), self.keys_file.clone()];
         let this = self.clone();
         glib::spawn_future_local(async move {
             let texts = worker::run(move || paths.map(|path| read_optional(&path))).await;
-            if this.generation.get() != generation {
+            if !ticket.is_current() {
                 return;
             }
             if let Some(texts) = texts {
@@ -177,6 +182,7 @@ impl Preferences {
             }
         }
         self.loaded.set(true);
+        self.first_read.notify();
         if update.settings_before.is_some() || update.keymap_changed || !update.problems.is_empty()
         {
             let listeners = self.listeners.borrow().clone();

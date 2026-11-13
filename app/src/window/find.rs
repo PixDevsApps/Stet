@@ -9,9 +9,10 @@
 //! GtkSourceView (ADR-005).
 
 use super::Window;
+use super::snapshot::PageSnapshot;
 use crate::editor::EditorPage;
 use crate::page_search::{Compiled, OwnMatches};
-use crate::worker;
+use crate::runtime::worker;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib, pango};
@@ -1208,8 +1209,7 @@ impl Window {
         if let Some(cancel) = state.own_cancel.take() {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
-        let generation = state.own_generation.get() + 1;
-        state.own_generation.set(generation);
+        let ticket = state.own_searches.next();
         state.own_pending.set(Some((compiled.id, revision)));
         let cancel = Arc::new(AtomicBool::new(false));
         state.own_cancel.replace(Some(Arc::clone(&cancel)));
@@ -1222,7 +1222,7 @@ impl Window {
             let found =
                 worker::run(move || matcher.find_all(&text, None, OWN_MATCH_LIMIT, &cancel)).await;
             let state = page.search();
-            if state.own_generation.get() != generation {
+            if !ticket.is_current() {
                 return;
             }
             state.own_pending.set(None);
@@ -1299,10 +1299,6 @@ impl Window {
         let Some(compiled) = find.compiled().filter(|compiled| compiled.own()) else {
             return;
         };
-        let state = page.search();
-        if let Some(source) = state.own_timeout.take() {
-            source.remove();
-        }
         // A large document's snapshot costs the GTK thread up to about 0.1 s; wait longer.
         let delay = if page.large_file_mode() {
             OWN_REFRESH_DELAY_LARGE
@@ -1311,8 +1307,7 @@ impl Window {
         };
         let window = self.clone();
         let page_ref = page.clone();
-        let source = glib::timeout_add_local_once(delay, move || {
-            page_ref.search().own_timeout.replace(None);
+        page.search().own_refresh.schedule(delay, move || {
             let current = window.inner.find.compiled();
             if current
                 .as_ref()
@@ -1321,7 +1316,6 @@ impl Window {
                 window.refresh_own_matches(&page_ref, &compiled);
             }
         });
-        state.own_timeout.replace(Some(source));
     }
 
     /// The visible tab scrolled: our matcher's highlight follows the visible lines.
@@ -1404,14 +1398,13 @@ impl Window {
         state.apply(Some(&compiled), wrap);
         let window = self.clone();
         if compiled.own() {
-            let text = page.text();
-            let revision = page.revision();
+            let (snapshot, text) = PageSnapshot::take(&page);
             let matcher = Arc::clone(&compiled.matcher);
             self.spawn(async move {
                 let from = from.max(0) as usize;
                 let found =
                     worker::run(move || matcher.find_next(&text, from, !forward, wrap)).await;
-                if page.revision() != revision {
+                if snapshot.edited() {
                     return;
                 }
                 match found {

@@ -4,8 +4,8 @@
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
 use crate::page_search::OWN_MATCH_TAG;
+use crate::runtime::worker;
 use crate::window::Field;
-use crate::worker;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::prelude::*;

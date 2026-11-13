@@ -4,6 +4,7 @@
 //! hidden; the view paints the rectangle itself.
 
 use super::{Motion, a11y, clipboard, edit, keys, paint};
+use crate::runtime::Debounce;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::glib::subclass::Signal;
@@ -67,7 +68,7 @@ mod imp {
         pub busy: Cell<u32>,
         /// A typing burst holds a user action open (ADR-016).
         pub burst: Cell<bool>,
-        pub burst_timer: RefCell<Option<glib::SourceId>>,
+        pub burst_timer: Debounce,
         /// Begin/End Select: the line (a mark, so edits above move it) and the column.
         pub begin: RefCell<Option<(gtk::TextMark, usize)>>,
         /// An Alt+drag is in progress.
@@ -484,25 +485,18 @@ impl StetView {
             self.buffer().begin_user_action();
             keys::set_open_burst(self);
         }
-        if let Some(source) = imp.burst_timer.take() {
-            source.remove();
-        }
         let weak = self.downgrade();
-        let source = glib::timeout_add_local_once(BURST_IDLE, move || {
+        imp.burst_timer.schedule(BURST_IDLE, move || {
             if let Some(view) = weak.upgrade() {
-                view.imp().burst_timer.take();
                 view.close_burst();
             }
         });
-        imp.burst_timer.replace(Some(source));
     }
 
     /// Closes the typing burst, so that it is one undo step and Undo works again.
     pub fn close_burst(&self) {
         let imp = self.imp();
-        if let Some(source) = imp.burst_timer.take() {
-            source.remove();
-        }
+        imp.burst_timer.cancel();
         if imp.burst.replace(false) {
             keys::clear_open_burst(self);
             self.buffer().end_user_action();
