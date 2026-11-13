@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-12 (1.6.0)
+Synced: 2026-11-13 (1.7.0)
 
 This guide describes Stet 1.0: the MVP (M1–M5, 0.3), column mode (M6), bookmarks, Mark, split view and compare (M7), and navigation and Replace in Files (M8). Installing Stet is in [INSTALL.md](INSTALL.md); how it fits into Omarchy is in [INTEGRATIONS.md](INTEGRATIONS.md).
 

@@ -81,6 +81,11 @@
   </screenshots>
 
   <releases>
+    <release version="1.7.0" date="2026-11-13">
+      <description>
+        <p>Restored tabs follow the highlighting limits in config.toml; the command palette and the language and encoding pickers rank like quick open; Open Recent lists files whose names aren't valid UTF-8; a large clean-up of the code.</p>
+      </description>
+    </release>
     <release version="1.6.0" date="2026-11-12">
       <description>
         <p>Stet is also a Flatpak, from its own repository, for Linux systems other than Omarchy and Arch.</p>

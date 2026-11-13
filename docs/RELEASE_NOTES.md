@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-## Unreleased
+## 1.7.0 — 2026-11-13
 
 - **Restored tabs follow your highlighting limits.** A tab restored from its backup when Stet starts now decides syntax highlighting with `highlight_max_bytes` and `highlight_max_lines` from `config.toml`, as an opened file always did; before, it used the built-in limits. The banner that offers Highlight Anyway now names the limits in effect instead of the built-in ones.
 - **The command palette and the pickers find like quick open.** The command palette (F1) and the language and encoding pickers rank what you type with quick open's matcher: word starts and runs of letters first, case ignored. In the pickers, Enter now takes the best match rather than the first visible row (typing `rust` and Enter picks Rust, not reStructuredText).
