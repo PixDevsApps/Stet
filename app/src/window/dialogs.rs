@@ -11,6 +11,7 @@ use std::cell::Cell;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use stet_domain::search::report::plural;
 use stet_domain::text::{LONG_LINE_CHARS, LongestLine};
 use stet_infrastructure::encoding::{Unmappable, status_label};
 
@@ -177,11 +178,11 @@ impl Window {
             Purpose::Save => format!("“{name}” can't be saved as {target}"),
             Purpose::Convert => format!("“{name}” can't be converted to {target}"),
         };
-        let count = if error.count == 1 {
-            "1 character has".to_owned()
-        } else {
-            format!("{} characters have", grouped(error.count))
-        };
+        let count = format!(
+            "{} {}",
+            grouped(error.count),
+            plural(error.count, "character has", "characters have")
+        );
         let body = format!(
             "{count} no {target} equivalent. Go to one to change it, or use UTF-8, which can \
              represent every character."

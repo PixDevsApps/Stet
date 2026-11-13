@@ -214,7 +214,7 @@ pub fn minimal_edit(old: &str, new: &str) -> Option<TextEdit> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use proptest::prelude::*;
 
@@ -311,7 +311,8 @@ mod tests {
         chars.into_iter().collect()
     }
 
-    fn arbitrary_edits(len: usize) -> impl Strategy<Value = Vec<TextEdit>> {
+    /// Sorted, non-overlapping edits of a text of `len` characters.
+    pub(in crate::text) fn arbitrary_edits(len: usize) -> impl Strategy<Value = Vec<TextEdit>> {
         prop::collection::vec((0..=len, 0..=len, "[a-zé日\n]{0,3}"), 0..6).prop_map(|raw| {
             let mut cuts: Vec<(usize, usize, String)> = raw
                 .into_iter()

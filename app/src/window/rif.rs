@@ -19,17 +19,16 @@ use gtk4::prelude::*;
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::collections::VecDeque;
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
-use stet_domain::document::tilde;
+use stet_domain::document::{expand_home, tilde};
 use stet_domain::replace_files::{DocumentOutcome, Skip, file_summary, heading};
 use stet_domain::search::Template;
-use stet_domain::search::report::counted;
+use stet_domain::search::report::{counted, replace_in_files_progress, replace_in_files_status};
 use stet_infrastructure::find_in_files;
 use stet_infrastructure::fs::fingerprint;
 use stet_infrastructure::replace_in_files::{
@@ -135,7 +134,7 @@ impl Window {
         find.remember(Field::Replace, &replacement);
         find.remember(Field::Directory, &folder_text);
         find.remember(Field::Filters, &filters);
-        let folder = super::fif::expand_home(&folder_text);
+        let folder = expand_home(&folder_text, std::env::home_dir().as_deref());
         let window = self.clone();
         self.spawn(async move {
             let is_folder = worker::run({
@@ -375,12 +374,14 @@ impl Window {
         }
         let progress = run.handle.progress();
         if !finished {
-            self.inner.results.status.set_label(&format!(
-                "Replacing in {}… {} searched, {} changed",
-                run.folder,
-                counted(progress.files_searched, "file", "files"),
-                counted(run.totals.files, "file", "files"),
-            ));
+            self.inner
+                .results
+                .status
+                .set_label(&replace_in_files_progress(
+                    &run.folder,
+                    progress.files_searched,
+                    run.totals.files,
+                ));
         }
         if !run.open_busy
             && run.stop_requested.is_none()
@@ -466,25 +467,13 @@ impl Window {
         );
         let results = &self.inner.results;
         results.set_heading(&search, text.clone());
-        let mut status = format!("{text} in {:.2} s", total.as_secs_f64());
-        if summary.cancelled {
-            status.push_str(" — stopped");
-        }
-        if totals.failed > 0 {
-            let _ = write!(
-                status,
-                " — {} failed",
-                counted(totals.failed, "file", "files")
-            );
-        }
-        if unlisted_files > 0 {
-            let _ = write!(
-                status,
-                " — {} listed without their lines",
-                counted(unlisted_files, "file", "files")
-            );
-        }
-        results.status.set_label(&status);
+        results.status.set_label(&replace_in_files_status(
+            &text,
+            total,
+            summary.cancelled,
+            totals.failed,
+            unlisted_files,
+        ));
         results.stop.set_visible(false);
         if let Some(action) = self.action(ActionId::StopFindInFiles) {
             action.set_enabled(self.find_in_files_running());

@@ -12,6 +12,7 @@ use std::cell::{Cell, RefCell};
 use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::rc::Rc;
+use stet_domain::search::report::counted;
 use stet_infrastructure::search::Hit;
 
 /// Searches kept in the panel; older ones are dropped.
@@ -56,14 +57,11 @@ impl FileNode {
     fn row_text(&self) -> String {
         match &self.summary {
             Some(summary) => format!("{} ({summary})", self.label),
-            None => {
-                let count = self.match_count();
-                format!(
-                    "{} ({count} {})",
-                    self.label,
-                    if count == 1 { "hit" } else { "hits" }
-                )
-            }
+            None => format!(
+                "{} ({})",
+                self.label,
+                counted(self.match_count(), "hit", "hits")
+            ),
         }
     }
 

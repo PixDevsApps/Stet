@@ -7,6 +7,7 @@
 use gtk4 as gtk;
 use gtk4::gio;
 use gtk4::prelude::*;
+use stet_domain::search::report::plural;
 
 pub struct StatusBar {
     pub root: gtk::Box,
@@ -134,7 +135,7 @@ impl StatusBar {
         self.length.set_label(&format!(
             "{} {}, {} chars",
             grouped(lines),
-            if lines == 1 { "line" } else { "lines" },
+            plural(lines, "line", "lines"),
             grouped(chars)
         ));
     }
@@ -142,8 +143,7 @@ impl StatusBar {
     /// The word count, when config.toml's `word_count` is on; `None` while it is counted.
     pub fn set_words(&self, words: Option<usize>) {
         self.words.set_label(&match words {
-            Some(1) => "1 word".to_owned(),
-            Some(words) => format!("{} words", grouped(words)),
+            Some(words) => format!("{} {}", grouped(words), plural(words, "word", "words")),
             None => "… words".to_owned(),
         });
     }

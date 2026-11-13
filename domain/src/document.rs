@@ -1,6 +1,6 @@
 //! Document and window naming: untitled numbers, tab titles and the window title.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub const APP_NAME: &str = "Stet";
 
@@ -55,6 +55,15 @@ pub fn tilde(path: &Path, home: Option<&Path>) -> String {
         };
     }
     path.display().to_string()
+}
+
+/// `text` as a path, where `~` and `~/…` name `home`; unchanged without one.
+pub fn expand_home(text: &str, home: Option<&Path>) -> PathBuf {
+    match (text.strip_prefix('~'), home) {
+        (Some(""), Some(home)) => home.to_path_buf(),
+        (Some(rest), Some(home)) if rest.starts_with('/') => home.join(&rest[1..]),
+        _ => PathBuf::from(text),
+    }
 }
 
 /// The command that edits `path` as root with Stet (INTEGRATIONS.md), for the read-only
@@ -127,5 +136,18 @@ mod tests {
         assert_eq!(tilde(Path::new("/etc"), Some(home)), "/etc");
         assert_eq!(tilde(Path::new("/etc"), Some(Path::new("/"))), "/etc");
         assert_eq!(tilde(Path::new("/etc"), None), "/etc");
+    }
+
+    #[test]
+    fn a_tilde_names_home() {
+        let home = Some(Path::new("/home/user"));
+        assert_eq!(expand_home("~", home), Path::new("/home/user"));
+        assert_eq!(expand_home("~/src/x", home), Path::new("/home/user/src/x"));
+        assert_eq!(expand_home("~/", home), Path::new("/home/user/"));
+        assert_eq!(expand_home("~other/src", home), Path::new("~other/src"));
+        assert_eq!(expand_home("/etc/~", home), Path::new("/etc/~"));
+        assert_eq!(expand_home("src", home), Path::new("src"));
+        assert_eq!(expand_home("~/src", None), Path::new("~/src"));
+        assert_eq!(expand_home("~", None), Path::new("~"));
     }
 }

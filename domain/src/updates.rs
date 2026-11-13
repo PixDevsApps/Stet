@@ -3,6 +3,8 @@
 //! a command the user pastes into a terminal, so only `vX.Y.Z` with plain numbers is read, and
 //! the command is built from the numbers, never from the tag's text.
 
+use crate::actions::{Accelerator, ActionId};
+use crate::settings::Keymap;
 use std::fmt;
 
 /// Stet's public repository, whose releases carry the package.
@@ -122,6 +124,83 @@ pub fn update_command(version: Version) -> String {
     )
 }
 
+/// What the dialog says once the check has an answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Answer {
+    pub heading: String,
+    pub body: String,
+    /// The command that installs the newer release.
+    pub command: Option<String>,
+}
+
+/// The dialog's words for the check's `result`, with the Quit key from `keymap`.
+pub fn answer(running: Version, result: Result<Version, UpdateError>, keymap: &Keymap) -> Answer {
+    let latest = match result {
+        Ok(latest) => latest,
+        Err(error) => {
+            return Answer {
+                heading: "Couldn't check for updates".to_owned(),
+                body: failure(error).to_owned(),
+                command: None,
+            };
+        }
+    };
+    match compare(running, latest) {
+        Outcome::Latest => Answer {
+            heading: "You have the latest version".to_owned(),
+            body: format!("Stet {running} is the newest release."),
+            command: None,
+        },
+        Outcome::Ahead(latest) => Answer {
+            heading: "You have the latest version".to_owned(),
+            body: format!("This Stet, {running}, is newer than the latest release, {latest}."),
+            command: None,
+        },
+        Outcome::Newer(latest) => {
+            let quit = match keymap
+                .keys(ActionId::Quit)
+                .first()
+                .and_then(|key| Accelerator::parse(key))
+            {
+                Some(key) => format!("press {} to quit Stet", key.display()),
+                None => "choose File › Quit in Stet's menu".to_owned(),
+            };
+            Answer {
+                heading: format!("Stet {latest} is available"),
+                body: format!(
+                    "You have {running}. To update, copy this command, paste it into a terminal \
+                     and press Enter; it asks for your computer's password. Then {quit} and \
+                     start it again: your tabs and unsaved text come back."
+                ),
+                command: Some(update_command(latest)),
+            }
+        }
+    }
+}
+
+fn failure(error: UpdateError) -> &'static str {
+    match error {
+        UpdateError::Offline => {
+            "GitHub, where Stet's releases are, couldn't be reached. Check your internet \
+             connection and try again."
+        }
+        UpdateError::Timeout => "GitHub didn't answer in time. Try again later.",
+        UpdateError::Certificate => {
+            "The connection to GitHub couldn't be verified, so its answer wasn't used. A network \
+             that intercepts secure connections can cause this."
+        }
+        UpdateError::Busy => {
+            "GitHub is limiting requests from your network right now. Try again in an hour."
+        }
+        UpdateError::NoRelease => "GitHub has no Stet release to compare with.",
+        UpdateError::Unreadable => "GitHub's answer couldn't be read. Try again later.",
+        UpdateError::NoCurl => {
+            "Stet asks GitHub with the curl program, which isn't installed. Install it with \
+             sudo pacman -S curl and try again."
+        }
+    }
+}
+
 /// GitHub's answer for Stet's latest release: drafts and pre-releases are never it.
 pub fn latest_release_url() -> String {
     format!("https://api.github.com/repos/{REPOSITORY}/releases/latest")
@@ -215,6 +294,56 @@ mod tests {
         long.resize(MAX_ANSWER, b'x');
         long.extend_from_slice(br#""}"#);
         assert_eq!(release_version(&long), Err(UpdateError::Unreadable));
+    }
+
+    #[test]
+    fn says_whether_this_is_the_latest() {
+        let keymap = Keymap::default();
+        let same = answer(v(1, 5, 0), Ok(v(1, 5, 0)), &keymap);
+        assert_eq!(same.heading, "You have the latest version");
+        assert_eq!(same.body, "Stet 1.5.0 is the newest release.");
+        assert_eq!(same.command, None);
+        let ahead = answer(v(1, 5, 0), Ok(v(1, 3, 4)), &keymap);
+        assert_eq!(ahead.heading, "You have the latest version");
+        assert!(
+            ahead
+                .body
+                .contains("1.5.0, is newer than the latest release, 1.3.4"),
+            "{}",
+            ahead.body
+        );
+        assert_eq!(ahead.command, None);
+    }
+
+    #[test]
+    fn a_newer_release_comes_with_its_command() {
+        let newer = answer(v(1, 5, 0), Ok(v(1, 6, 0)), &Keymap::default());
+        assert_eq!(newer.heading, "Stet 1.6.0 is available");
+        assert!(newer.body.starts_with("You have 1.5.0."), "{}", newer.body);
+        assert!(
+            newer.body.contains("press Ctrl+Alt+Q to quit Stet"),
+            "{}",
+            newer.body
+        );
+        assert_eq!(newer.command, Some(update_command(v(1, 6, 0))));
+    }
+
+    #[test]
+    fn failures_say_what_to_do() {
+        for error in [
+            UpdateError::Offline,
+            UpdateError::Timeout,
+            UpdateError::Certificate,
+            UpdateError::Busy,
+            UpdateError::NoRelease,
+            UpdateError::Unreadable,
+            UpdateError::NoCurl,
+        ] {
+            let failed = answer(v(1, 5, 0), Err(error), &Keymap::default());
+            assert_eq!(failed.heading, "Couldn't check for updates");
+            assert!(!failed.body.is_empty());
+            assert_eq!(failed.command, None);
+        }
     }
 
     #[test]

@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use stet_domain::marks::Footprint;
 use stet_domain::ops::Change;
 use stet_domain::text::BULK_EDIT_THRESHOLD;
-use stet_domain::text::{Bias, TextEdit, map_offset};
+use stet_domain::text::{Selection, TextEdit};
 use stet_infrastructure::search::ReplaceAll;
 
 /// How an operation reached the buffer.
@@ -25,67 +25,32 @@ pub struct Applied {
     pub footprint: Footprint,
 }
 
-/// The caret and selection as character offsets.
-#[derive(Debug, Clone, Copy)]
-struct Marks {
-    insert: usize,
-    bound: usize,
+/// The buffer's caret and selection.
+fn read_selection(buffer: &sourceview5::Buffer) -> Selection {
+    let offset = |mark: &gtk4::TextMark| buffer.iter_at_mark(mark).offset() as usize;
+    Selection {
+        cursor: offset(&buffer.get_insert()),
+        anchor: offset(&buffer.selection_bound()),
+    }
 }
 
-impl Marks {
-    fn read(buffer: &sourceview5::Buffer) -> Self {
-        let offset = |mark: &gtk4::TextMark| buffer.iter_at_mark(mark).offset() as usize;
-        Self {
-            insert: offset(&buffer.get_insert()),
-            bound: offset(&buffer.selection_bound()),
-        }
-    }
-
-    /// Maps the marks through `edits` (sorted, in the old text's offsets). A selection grows
-    /// over text inserted at its edges, so a replaced selection stays selected; a caret inside
-    /// a replaced match moves to its start.
-    fn map(self, edits: &[TextEdit]) -> Self {
-        if self.insert == self.bound {
-            let caret = map_offset(self.insert, edits, Bias::Before);
-            return Self {
-                insert: caret,
-                bound: caret,
-            };
-        }
-        let (start, end) = (self.insert.min(self.bound), self.insert.max(self.bound));
-        let start = map_offset(start, edits, Bias::Before);
-        let end = map_offset(end, edits, Bias::After);
-        if self.insert <= self.bound {
-            Self {
-                insert: start,
-                bound: end.max(start),
-            }
-        } else {
-            Self {
-                insert: end.max(start),
-                bound: start,
-            }
-        }
-    }
-
-    fn restore(self, buffer: &sourceview5::Buffer) {
-        let insert = buffer.iter_at_offset(self.insert as i32);
-        let bound = buffer.iter_at_offset(self.bound as i32);
-        buffer.select_range(&insert, &bound);
-    }
+fn restore_selection(buffer: &sourceview5::Buffer, selection: Selection) {
+    let cursor = buffer.iter_at_offset(selection.cursor as i32);
+    let anchor = buffer.iter_at_offset(selection.anchor as i32);
+    buffer.select_range(&cursor, &anchor);
 }
 
 /// Applies sorted, non-overlapping `edits` in the buffer's current character offsets, last
 /// first, in one user action.
 pub fn apply_edits(buffer: &sourceview5::Buffer, edits: &[TextEdit]) -> Applied {
     let started = Instant::now();
-    let marks = Marks::read(buffer).map(edits);
+    let selection = read_selection(buffer).map(edits);
     buffer.begin_user_action();
     for edit in edits.iter().rev() {
         replace_range(buffer, edit);
     }
     buffer.end_user_action();
-    marks.restore(buffer);
+    restore_selection(buffer, selection);
     Applied {
         edits: edits.len(),
         bulk: false,
@@ -102,11 +67,11 @@ pub fn apply_coalesced(
     bulk: &TextEdit,
 ) -> Applied {
     let started = Instant::now();
-    let marks = Marks::read(buffer).map(edits);
+    let selection = read_selection(buffer).map(edits);
     buffer.begin_user_action();
     replace_range(buffer, bulk);
     buffer.end_user_action();
-    marks.restore(buffer);
+    restore_selection(buffer, selection);
     Applied {
         edits: edits.len(),
         bulk: true,
@@ -130,11 +95,11 @@ pub fn apply_replace_all(buffer: &sourceview5::Buffer, result: &ReplaceAll, text
         };
     };
     let started = Instant::now();
-    let marks = Marks::read(buffer).map(&result.edits);
+    let selection = read_selection(buffer).map(&result.edits);
     buffer.begin_user_action();
     let deleted = replace_range(buffer, &edit);
     buffer.end_user_action();
-    marks.restore(buffer);
+    restore_selection(buffer, selection);
     debug_assert!(result.edits.len() > BULK_EDIT_THRESHOLD);
     tracing::info!(
         edits = result.edits.len(),
@@ -152,21 +117,13 @@ pub fn apply_replace_all(buffer: &sourceview5::Buffer, result: &ReplaceAll, text
 
 /// The selection in character offsets, ordered, and whether the caret is at its start.
 pub fn selection(buffer: &sourceview5::Buffer) -> (Range<usize>, bool) {
-    let marks = Marks::read(buffer);
-    (
-        marks.insert.min(marks.bound)..marks.insert.max(marks.bound),
-        marks.insert < marks.bound,
-    )
+    let selection = read_selection(buffer);
+    (selection.range(), selection.is_backward())
 }
 
 /// Selects `range` (character offsets), with the caret at its start when `backward`.
 pub fn select(buffer: &sourceview5::Buffer, range: Range<usize>, backward: bool) {
-    let (insert, bound) = if backward {
-        (range.start, range.end)
-    } else {
-        (range.end, range.start)
-    };
-    Marks { insert, bound }.restore(buffer);
+    restore_selection(buffer, Selection::new(range, backward));
 }
 
 /// Applies a text tool's `change`, computed on `text` (still the buffer's text), in one user

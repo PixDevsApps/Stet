@@ -12,13 +12,12 @@ use crate::worker;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
-use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
-use stet_domain::document::tilde;
-use stet_domain::search::report::results_heading;
+use stet_domain::document::{expand_home, tilde};
+use stet_domain::search::report::{find_in_files_progress, find_in_files_status, results_heading};
 use stet_infrastructure::find_in_files::{
     self, FifHandle, FifRequest, FifSummary, FileHits, OpenDocument,
 };
@@ -92,7 +91,10 @@ impl Window {
             .title("Find in Folder")
             .modal(true)
             .build();
-        let current = expand_home(find.directory.text().trim());
+        let current = expand_home(
+            find.directory.text().trim(),
+            std::env::home_dir().as_deref(),
+        );
         if !current.as_os_str().is_empty() {
             dialog.set_initial_folder(Some(&gio::File::for_path(&current)));
         }
@@ -147,7 +149,7 @@ impl Window {
             });
             return;
         }
-        let folder = expand_home(&folder_text);
+        let folder = expand_home(&folder_text, std::env::home_dir().as_deref());
         let filters = find.filters.text().trim().to_owned();
         find.remember(Field::Find, &compiled.query.pattern);
         find.remember(Field::Directory, &folder_text);
@@ -286,11 +288,9 @@ impl Window {
             let heading =
                 results_heading(&run.pattern, run.search.hits(), run.search.files(), None);
             results.set_heading(&run.search, heading);
-            results.status.set_label(&format!(
-                "Searching {}… {} so far",
-                run.folder,
-                hits(run.search.hits())
-            ));
+            results
+                .status
+                .set_label(&find_in_files_progress(&run.folder, run.search.hits()));
             run.slowest_drain = run.slowest_drain.max(started.elapsed());
         }
         if !finished || !run.receiver.is_empty() {
@@ -307,21 +307,16 @@ impl Window {
             Some(summary.files_searched),
         );
         results.set_heading(&run.search, heading.clone());
-        let mut status = format!("{heading} in {:.2} s", total.as_secs_f64());
-        if summary.cancelled {
-            status.push_str(" — stopped");
-        } else if summary.truncated {
-            let _ = write!(status, " — stopped at {} hits", summary.hits);
-        }
+        let status = find_in_files_status(
+            &heading,
+            total,
+            summary.cancelled,
+            summary.truncated.then_some(summary.hits),
+            summary.errors.len(),
+        );
         if summary.errors.is_empty() {
             results.status.set_tooltip_text(None);
         } else {
-            let count = summary.errors.len();
-            let _ = write!(
-                status,
-                " — {count} {} could not be read",
-                if count == 1 { "file" } else { "files" }
-            );
             let details: Vec<String> = summary
                 .errors
                 .iter()
@@ -372,23 +367,6 @@ impl Window {
 
     pub fn find_in_files_stats(&self) -> Option<FifStats> {
         self.inner.fif_stats.borrow().clone()
-    }
-}
-
-fn hits(count: usize) -> String {
-    if count == 1 {
-        "1 hit".to_owned()
-    } else {
-        format!("{count} hits")
-    }
-}
-
-/// `~` and `~/…` name the home folder.
-pub fn expand_home(text: &str) -> PathBuf {
-    match (text.strip_prefix('~'), std::env::home_dir()) {
-        (Some(""), Some(home)) => home,
-        (Some(rest), Some(home)) if rest.starts_with('/') => home.join(&rest[1..]),
-        _ => PathBuf::from(text),
     }
 }
 

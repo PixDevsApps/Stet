@@ -10,9 +10,7 @@ use gtk4::prelude::*;
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::cell::{Cell, RefCell};
-use stet_domain::actions::{Accelerator, ActionId};
-use stet_domain::settings::Keymap;
-use stet_domain::updates::{self, Outcome, UpdateError, Version};
+use stet_domain::updates::{self, UpdateError, Version};
 
 pub const CHECKING: &str = "Checking for updates…";
 /// The button that copies the command.
@@ -30,82 +28,6 @@ pub struct UpdateState {
 /// The running Stet's version.
 pub fn running() -> Version {
     Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or_default()
-}
-
-/// What the dialog says once the check has an answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Answer {
-    pub heading: String,
-    pub body: String,
-    /// The command that installs the newer release.
-    pub command: Option<String>,
-}
-
-pub fn answer(running: Version, result: Result<Version, UpdateError>, keymap: &Keymap) -> Answer {
-    let latest = match result {
-        Ok(latest) => latest,
-        Err(error) => {
-            return Answer {
-                heading: "Couldn't check for updates".to_owned(),
-                body: failure(error).to_owned(),
-                command: None,
-            };
-        }
-    };
-    match updates::compare(running, latest) {
-        Outcome::Latest => Answer {
-            heading: "You have the latest version".to_owned(),
-            body: format!("Stet {running} is the newest release."),
-            command: None,
-        },
-        Outcome::Ahead(latest) => Answer {
-            heading: "You have the latest version".to_owned(),
-            body: format!("This Stet, {running}, is newer than the latest release, {latest}."),
-            command: None,
-        },
-        Outcome::Newer(latest) => {
-            let quit = match keymap
-                .keys(ActionId::Quit)
-                .first()
-                .and_then(|key| Accelerator::parse(key))
-            {
-                Some(key) => format!("press {} to quit Stet", key.display()),
-                None => "choose File › Quit in Stet's menu".to_owned(),
-            };
-            Answer {
-                heading: format!("Stet {latest} is available"),
-                body: format!(
-                    "You have {running}. To update, copy this command, paste it into a terminal \
-                     and press Enter; it asks for your computer's password. Then {quit} and \
-                     start it again: your tabs and unsaved text come back."
-                ),
-                command: Some(updates::update_command(latest)),
-            }
-        }
-    }
-}
-
-fn failure(error: UpdateError) -> &'static str {
-    match error {
-        UpdateError::Offline => {
-            "GitHub, where Stet's releases are, couldn't be reached. Check your internet \
-             connection and try again."
-        }
-        UpdateError::Timeout => "GitHub didn't answer in time. Try again later.",
-        UpdateError::Certificate => {
-            "The connection to GitHub couldn't be verified, so its answer wasn't used. A network \
-             that intercepts secure connections can cause this."
-        }
-        UpdateError::Busy => {
-            "GitHub is limiting requests from your network right now. Try again in an hour."
-        }
-        UpdateError::NoRelease => "GitHub has no Stet release to compare with.",
-        UpdateError::Unreadable => "GitHub's answer couldn't be read. Try again later.",
-        UpdateError::NoCurl => {
-            "Stet asks GitHub with the curl program, which isn't installed. Install it with \
-             sudo pacman -S curl and try again."
-        }
-    }
 }
 
 impl Window {
@@ -156,7 +78,7 @@ impl Window {
             if window.inner.dialog.borrow().as_ref() != Some(&dialog) {
                 return;
             }
-            let answer = answer(running(), result, &keymap);
+            let answer = updates::answer(running(), result, &keymap);
             dialog.set_heading(Some(&answer.heading));
             dialog.set_body(&answer.body);
             dialog.set_response_label("close", "Close");
@@ -214,60 +136,6 @@ fn command_box(command: &str) -> (gtk::Box, gtk::Button) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn v(text: &str) -> Version {
-        Version::parse(text).unwrap()
-    }
-
-    #[test]
-    fn says_whether_this_is_the_latest() {
-        let keymap = Keymap::default();
-        let same = answer(v("1.5.0"), Ok(v("1.5.0")), &keymap);
-        assert_eq!(same.heading, "You have the latest version");
-        assert_eq!(same.body, "Stet 1.5.0 is the newest release.");
-        assert_eq!(same.command, None);
-        let ahead = answer(v("1.5.0"), Ok(v("1.3.4")), &keymap);
-        assert_eq!(ahead.heading, "You have the latest version");
-        assert!(
-            ahead
-                .body
-                .contains("1.5.0, is newer than the latest release, 1.3.4"),
-            "{}",
-            ahead.body
-        );
-        assert_eq!(ahead.command, None);
-    }
-
-    #[test]
-    fn a_newer_release_comes_with_its_command() {
-        let newer = answer(v("1.5.0"), Ok(v("1.6.0")), &Keymap::default());
-        assert_eq!(newer.heading, "Stet 1.6.0 is available");
-        assert!(newer.body.starts_with("You have 1.5.0."), "{}", newer.body);
-        assert!(
-            newer.body.contains("press Ctrl+Alt+Q to quit Stet"),
-            "{}",
-            newer.body
-        );
-        assert_eq!(newer.command, Some(updates::update_command(v("1.6.0"))));
-    }
-
-    #[test]
-    fn failures_say_what_to_do() {
-        for error in [
-            UpdateError::Offline,
-            UpdateError::Timeout,
-            UpdateError::Certificate,
-            UpdateError::Busy,
-            UpdateError::NoRelease,
-            UpdateError::Unreadable,
-            UpdateError::NoCurl,
-        ] {
-            let failed = answer(v("1.5.0"), Err(error), &Keymap::default());
-            assert_eq!(failed.heading, "Couldn't check for updates");
-            assert!(!failed.body.is_empty());
-            assert_eq!(failed.command, None);
-        }
-    }
 
     #[test]
     fn the_running_version_reads() {

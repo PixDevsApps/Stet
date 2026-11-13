@@ -15,15 +15,11 @@ use std::time::Duration;
 use stet_domain::actions::{ActionId, KeyScope, Menu};
 use stet_domain::settings::keymap::default_keys_file;
 use stet_domain::settings::{Keymap, Settings, default_config_file};
+use stet_domain::text::count_words;
 use stet_infrastructure::settings_files::create_if_missing;
 
 /// How long the text must rest before its words are counted again.
 const WORD_COUNT_DELAY: Duration = Duration::from_millis(250);
-
-/// Words: runs of characters between white space.
-fn count_words(text: &str) -> usize {
-    text.split_whitespace().count()
-}
 
 impl Window {
     /// The settings in use.

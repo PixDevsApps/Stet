@@ -27,6 +27,7 @@ use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
 use stet_domain::marks::{self, Bookmarks, LineEdit, MarkStyle, bookmark_lines_of};
 use stet_domain::ops::Change;
+use stet_domain::search::report::counted;
 use stet_domain::search::{Query, SearchMode, SearchOptions};
 use stet_domain::text::{BULK_EDIT_THRESHOLD, is_word_char};
 use stet_domain::text::{LineIndex, TextEdit};
@@ -545,11 +546,10 @@ impl Window {
             })
             .collect();
         page.view().clipboard().set_text(&copied.join("\n"));
-        self.toast(&if ranges.len() == 1 {
-            "Copied 1 marked text".to_owned()
-        } else {
-            format!("Copied {} marked texts", ranges.len())
-        });
+        self.toast(&format!(
+            "Copied {}",
+            counted(ranges.len(), "marked text", "marked texts")
+        ));
     }
 
     // ----- style tokens ------------------------------------------------------------------
@@ -744,9 +744,8 @@ fn coalesce(edits: &[TextEdit], text: &str) -> Option<TextEdit> {
 }
 
 fn lines_message(verb: &str, count: usize) -> String {
-    if count == 1 {
-        format!("{verb} 1 bookmarked line")
-    } else {
-        format!("{verb} {count} bookmarked lines")
-    }
+    format!(
+        "{verb} {}",
+        counted(count, "bookmarked line", "bookmarked lines")
+    )
 }

@@ -25,7 +25,7 @@ use stet_domain::actions::ActionId;
 use stet_domain::document::tilde;
 use stet_domain::location::LineCol;
 use stet_domain::search::report::{
-    count_message, replace_in_documents_message, replace_message, results_heading,
+    count_message, counted, replace_in_documents_message, replace_message, results_heading,
 };
 use stet_domain::search::{ScopeKind, SearchOptions};
 use stet_infrastructure::find_in_files::DEFAULT_MAX_HITS;
@@ -464,11 +464,10 @@ impl Window {
     }
 
     async fn ask_replace_in_documents(&self, pattern: &str, documents: usize) -> bool {
-        let heading = if documents == 1 {
-            "Replace in 1 open document?".to_owned()
-        } else {
-            format!("Replace in {documents} open documents?")
-        };
+        let heading = format!(
+            "Replace in {}?",
+            counted(documents, "open document", "open documents")
+        );
         let body = format!(
             "Every match of “{pattern}” is replaced. Each document can be undone on its own."
         );

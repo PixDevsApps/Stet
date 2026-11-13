@@ -1,6 +1,7 @@
 //! The words the find bar and the results panel use to report a search.
 
 use std::fmt::Write as _;
+use std::time::Duration;
 
 use super::{SearchOptions, TemplateWarning};
 
@@ -37,9 +38,14 @@ impl SearchOptions {
     }
 }
 
+/// `one` for a count of 1, `many` for any other.
+pub fn plural<'a>(count: usize, one: &'a str, many: &'a str) -> &'a str {
+    if count == 1 { one } else { many }
+}
+
 /// `1 match`, `3 matches`.
 pub fn counted(count: usize, one: &str, many: &str) -> String {
-    format!("{count} {}", if count == 1 { one } else { many })
+    format!("{count} {}", plural(count, one, many))
 }
 
 /// The find bar's report after Count.
@@ -115,6 +121,75 @@ pub fn results_heading(
     heading
 }
 
+/// Find in Files' status line while it runs: `Searching ~/src… 3 hits so far`.
+pub fn find_in_files_progress(folder: &str, hits: usize) -> String {
+    format!(
+        "Searching {folder}… {} so far",
+        counted(hits, "hit", "hits")
+    )
+}
+
+/// Find in Files' status line once it ends: its `heading`, how long it `took`, whether the user
+/// stopped it or it stopped at the hit limit (`truncated_at`), and how many files could not be
+/// read.
+pub fn find_in_files_status(
+    heading: &str,
+    took: Duration,
+    stopped: bool,
+    truncated_at: Option<usize>,
+    unreadable: usize,
+) -> String {
+    let mut status = format!("{heading} in {:.2} s", took.as_secs_f64());
+    if stopped {
+        status.push_str(" — stopped");
+    } else if let Some(hits) = truncated_at {
+        let _ = write!(status, " — stopped at {hits} hits");
+    }
+    if unreadable > 0 {
+        let _ = write!(
+            status,
+            " — {} could not be read",
+            counted(unreadable, "file", "files")
+        );
+    }
+    status
+}
+
+/// Replace in Files' status line while it runs.
+pub fn replace_in_files_progress(folder: &str, searched: usize, changed: usize) -> String {
+    format!(
+        "Replacing in {folder}… {} searched, {} changed",
+        counted(searched, "file", "files"),
+        counted(changed, "file", "files"),
+    )
+}
+
+/// Replace in Files' status line once it ends: its `heading`, how long it `took`, whether the
+/// user stopped it, the files it failed to write and the files listed without their lines.
+pub fn replace_in_files_status(
+    heading: &str,
+    took: Duration,
+    stopped: bool,
+    failed: usize,
+    unlisted: usize,
+) -> String {
+    let mut status = format!("{heading} in {:.2} s", took.as_secs_f64());
+    if stopped {
+        status.push_str(" — stopped");
+    }
+    if failed > 0 {
+        let _ = write!(status, " — {} failed", counted(failed, "file", "files"));
+    }
+    if unlisted > 0 {
+        let _ = write!(
+            status,
+            " — {} listed without their lines",
+            counted(unlisted, "file", "files")
+        );
+    }
+    status
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::SearchMode;
@@ -174,6 +249,65 @@ mod tests {
         assert_eq!(
             results_heading("x", 1, 1, None),
             "Search “x” (1 hit in 1 file)"
+        );
+    }
+
+    #[test]
+    fn plurals() {
+        assert_eq!(plural(1, "line", "lines"), "line");
+        assert_eq!(plural(0, "line", "lines"), "lines");
+        assert_eq!(plural(2, "line", "lines"), "lines");
+        assert_eq!(counted(1, "hit", "hits"), "1 hit");
+        assert_eq!(counted(0, "hit", "hits"), "0 hits");
+    }
+
+    #[test]
+    fn find_in_files_status_lines() {
+        assert_eq!(
+            find_in_files_progress("~/src", 1),
+            "Searching ~/src… 1 hit so far"
+        );
+        assert_eq!(
+            find_in_files_progress("/tmp", 12),
+            "Searching /tmp… 12 hits so far"
+        );
+        let heading = "Search “x” (3 hits in 2 files of 10 searched)";
+        let took = Duration::from_millis(1234);
+        assert_eq!(
+            find_in_files_status(heading, took, false, None, 0),
+            format!("{heading} in 1.23 s")
+        );
+        assert_eq!(
+            find_in_files_status(heading, took, true, Some(50), 1),
+            format!("{heading} in 1.23 s — stopped — 1 file could not be read")
+        );
+        assert_eq!(
+            find_in_files_status(heading, took, false, Some(50), 2),
+            format!("{heading} in 1.23 s — stopped at 50 hits — 2 files could not be read")
+        );
+    }
+
+    #[test]
+    fn replace_in_files_status_lines() {
+        assert_eq!(
+            replace_in_files_progress("~/src", 1, 0),
+            "Replacing in ~/src… 1 file searched, 0 files changed"
+        );
+        let heading = "Replace “a” with “b” (2 replacements in 1 file of 4 searched)";
+        let took = Duration::from_millis(50);
+        assert_eq!(
+            replace_in_files_status(heading, took, false, 0, 0),
+            format!("{heading} in 0.05 s")
+        );
+        assert_eq!(
+            replace_in_files_status(heading, took, true, 1, 3),
+            format!(
+                "{heading} in 0.05 s — stopped — 1 file failed — 3 files listed without their lines"
+            )
+        );
+        assert_eq!(
+            replace_in_files_status(heading, took, false, 2, 1),
+            format!("{heading} in 0.05 s — 2 files failed — 1 file listed without their lines")
         );
     }
 
