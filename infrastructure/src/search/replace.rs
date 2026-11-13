@@ -6,7 +6,7 @@ use stet_domain::search::Template;
 use stet_domain::text::{BULK_EDIT_THRESHOLD, TextEdit};
 
 use super::matcher::{Match, MatchCaptures, Matcher, Matches, Scope, SearchError};
-use stet_domain::text::{ByteCursor, CharCursor};
+use stet_domain::text::{ByteCursor, ByteOffset, CharCursor, CharOffset, OffsetRange};
 
 /// The result of a Replace All: edits in character offsets of the searched text, in order,
 /// never overlapping. Apply them in one user action.
@@ -15,7 +15,8 @@ pub struct ReplaceAll {
     pub edits: Vec<TextEdit>,
     /// Matches replaced. A replacement equal to the matched text counts but makes no edit.
     pub count: usize,
-    spans: Vec<Range<usize>>,
+    /// The edits' byte ranges in the searched text, recorded while matching.
+    spans: Vec<Range<ByteOffset>>,
     text_len: usize,
 }
 
@@ -36,7 +37,7 @@ impl ReplaceAll {
             String::with_capacity(spans[spans.len() - 1].end - spans[0].start + changed);
         let mut copied = spans[0].start;
         for (edit, span) in self.edits.iter().zip(spans.iter()) {
-            insert.push_str(&text[copied..span.start]);
+            insert.push_str(&text[(copied..span.start).get()]);
             insert.push_str(&edit.insert);
             copied = span.end;
         }
@@ -49,7 +50,7 @@ impl ReplaceAll {
             return text.to_owned();
         };
         let spans = self.byte_spans(text);
-        let (start, end) = (spans[0].start, spans[spans.len() - 1].end);
+        let (start, end) = (spans[0].start.get(), spans[spans.len() - 1].end.get());
         let mut out = String::with_capacity(text.len() - (end - start) + edit.insert.len());
         out.push_str(&text[..start]);
         out.push_str(&edit.insert);
@@ -59,13 +60,13 @@ impl ReplaceAll {
 
     /// The edits' byte ranges in `text`, the text they were made for (Replace in Files maps
     /// them to the file's own text).
-    pub fn byte_ranges(&self, text: &str) -> Vec<Range<usize>> {
+    pub fn byte_ranges(&self, text: &str) -> Vec<Range<ByteOffset>> {
         self.byte_spans(text).into_owned()
     }
 
     /// The edits' byte ranges in `text`: recorded while matching, or recomputed if the edits
     /// were changed or `text` is another text.
-    fn byte_spans(&self, text: &str) -> Cow<'_, [Range<usize>]> {
+    fn byte_spans(&self, text: &str) -> Cow<'_, [Range<ByteOffset>]> {
         if self.spans.len() == self.edits.len() && self.text_len == text.len() {
             return Cow::Borrowed(&self.spans);
         }
@@ -73,14 +74,17 @@ impl ReplaceAll {
         Cow::Owned(
             self.edits
                 .iter()
-                .map(|edit| cursor.byte_at(edit.start)..cursor.byte_at(edit.end))
+                .map(|edit| {
+                    cursor.byte_at(CharOffset::new(edit.start))
+                        ..cursor.byte_at(CharOffset::new(edit.end))
+                })
                 .collect(),
         )
     }
 }
 
 impl Matcher {
-    /// Replaces every match inside `range` (characters; the whole text when `None`) with
+    /// Replaces every match inside `range` (the whole text when `None`) with
     /// `template`, on a snapshot. `$`` and `$'` see the text since the previous match and up
     /// to the end of the range. All matches are found in the original text, like a global
     /// substitution, so lookbehind never sees an earlier replacement.
@@ -88,21 +92,21 @@ impl Matcher {
         &self,
         text: &str,
         template: &Template,
-        range: Option<Range<usize>>,
+        range: Option<Range<CharOffset>>,
         cancel: &AtomicBool,
     ) -> Result<ReplaceAll, SearchError> {
         let scope = Scope::resolve(text, range)?;
-        let subject = &text[..scope.end];
+        let subject = &text[..scope.bytes.end.get()];
         let literal = template.as_literal();
-        let mut matches = Matches::new(self, subject.as_bytes(), scope.start);
+        let mut matches = Matches::new(self, subject.as_bytes(), scope.bytes.start.get());
         let mut locations = self.locations();
         let names = self.capture_names();
-        let mut chars = CharCursor::at(text, scope.start, scope.start_char);
+        let mut chars = CharCursor::at(text, scope.start());
         let mut result = ReplaceAll {
             text_len: text.len(),
             ..ReplaceAll::default()
         };
-        let mut previous_end = scope.start;
+        let mut previous_end = scope.bytes.start.get();
         loop {
             let found = match literal {
                 Some(_) => matches.next()?,
@@ -127,12 +131,13 @@ impl Matcher {
             if insert.as_ref() == &subject[start..end] {
                 continue;
             }
+            let span = ByteOffset::new(start)..ByteOffset::new(end);
             result.edits.push(TextEdit {
-                start: chars.char_at(start),
-                end: chars.char_at(end),
+                start: chars.char_at(span.start).get(),
+                end: chars.char_at(span.end).get(),
                 insert: insert.into_owned(),
             });
-            result.spans.push(start..end);
+            result.spans.push(span);
         }
         Ok(result)
     }
@@ -145,13 +150,14 @@ impl Matcher {
         found: &Match,
         template: &Template,
     ) -> Result<TextEdit, SearchError> {
-        let scope = Scope::resolve(text, Some(found.start..found.end))?;
-        let wanted = Some((scope.start, scope.end));
+        let scope = Scope::resolve(text, Some(found.range()))?;
+        let bytes = scope.bytes.get();
+        let wanted = Some((bytes.start, bytes.end));
         let subject = text.as_bytes();
         let mut locations = self.locations();
-        let mut hit = self.captures(&mut locations, subject, scope.start, false)?;
-        if hit != wanted && scope.end > scope.start {
-            hit = self.captures(&mut locations, subject, scope.start, true)?;
+        let mut hit = self.captures(&mut locations, subject, bytes.start, false)?;
+        if hit != wanted && bytes.end > bytes.start {
+            hit = self.captures(&mut locations, subject, bytes.start, true)?;
         }
         if hit != wanted {
             return Err(SearchError::NotAMatch);
@@ -163,9 +169,9 @@ impl Matcher {
                 locations: &locations,
                 names: self.capture_names(),
                 prefix: "",
-                suffix: &text[scope.end..],
+                suffix: &text[bytes.end..],
             }),
         };
-        Ok(TextEdit::new(found.start..found.end, insert))
+        Ok(TextEdit::new(found.start.get()..found.end.get(), insert))
     }
 }

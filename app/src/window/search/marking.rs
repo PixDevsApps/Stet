@@ -30,8 +30,8 @@ use stet_domain::actions::ActionId;
 use stet_domain::marks::{self, Bookmarks, LineEdit, MarkStyle, bookmark_lines_of};
 use stet_domain::ops::Change;
 use stet_domain::search::{Query, SearchMode, SearchOptions};
-use stet_domain::text::counted;
 use stet_domain::text::{BULK_EDIT_THRESHOLD, is_word_char};
+use stet_domain::text::{CharOffset, OffsetRange, counted};
 use stet_domain::text::{LineIndex, Selection, TextEdit};
 use stet_infrastructure::search::{Matcher, SearchError};
 
@@ -417,7 +417,10 @@ impl Window {
         let started = Instant::now();
         let (snapshot, text) = PageSnapshot::take(page);
         let bookmark = request.bookmark;
-        let range = request.range.clone();
+        let range = request
+            .range
+            .clone()
+            .map(|range| CharOffset::new(range.start)..CharOffset::new(range.end));
         let search = move |text: &str| {
             let cancel = AtomicBool::new(false);
             matcher
@@ -426,7 +429,7 @@ impl Window {
                     let ranges: Vec<Range<usize>> = found
                         .matches
                         .iter()
-                        .map(|found| found.start..found.end)
+                        .map(|found| found.range().get())
                         .collect();
                     let lines = if bookmark {
                         bookmark_lines_of(&ranges, &LineIndex::new(text))

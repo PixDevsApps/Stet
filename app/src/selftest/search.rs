@@ -911,7 +911,13 @@ impl Harness {
             let ours: Vec<(usize, usize)> = match Matcher::new(&query) {
                 Ok(matcher) => matcher
                     .find_all(row.input, None, usize::MAX, &AtomicBool::new(false))
-                    .map(|found| found.matches.iter().map(|m| (m.start, m.end)).collect())
+                    .map(|found| {
+                        found
+                            .matches
+                            .iter()
+                            .map(|m| (m.start.get(), m.end.get()))
+                            .collect()
+                    })
                     .unwrap_or_default(),
                 Err(error) => {
                     failures.push(format!("{}: our matcher rejected it: {error}", row.name));

@@ -2,6 +2,7 @@
 //! without conversion (ADR-003).
 
 use super::offset::ByteCursor;
+use super::units::{ByteOffset, CharOffset};
 use std::fmt;
 use std::ops::Range;
 
@@ -114,14 +115,14 @@ pub fn apply(text: &str, edits: Vec<TextEdit>) -> Result<String, EditError> {
     let edits = normalize(edits, text.chars().count())?;
     let mut out = String::with_capacity(text.len());
     let mut cursor = ByteCursor::new(text);
-    let mut copied = 0;
+    let mut copied = ByteOffset::ZERO;
     for edit in &edits {
-        let start = cursor.byte_at(edit.start);
-        out.push_str(&text[copied..start]);
+        let start = cursor.byte_at(CharOffset::new(edit.start));
+        out.push_str(&text[copied.get()..start.get()]);
         out.push_str(&edit.insert);
-        copied = cursor.byte_at(edit.end);
+        copied = cursor.byte_at(CharOffset::new(edit.end));
     }
-    out.push_str(&text[copied..]);
+    out.push_str(&text[copied.get()..]);
     Ok(out)
 }
 

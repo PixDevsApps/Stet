@@ -3,6 +3,9 @@
 
 use std::ops::Range;
 
+use super::offset::{CharCursor, char_to_byte};
+use super::units::{Anchor, ByteOffset, CharOffset};
+
 /// A zero-based line and a column counted in characters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Position {
@@ -86,19 +89,25 @@ impl LineIndex {
         start..end
     }
 
-    pub fn byte_to_char(&self, text: &str, offset: usize) -> usize {
-        let line = self.line_of_byte(offset);
-        self.char_starts[line] + text[self.byte_starts[line]..offset].chars().count()
+    /// The point where `line` starts, in both units.
+    fn line_start(&self, line: usize) -> Anchor {
+        Anchor::new(
+            ByteOffset::new(self.byte_starts[line]),
+            CharOffset::new(self.char_starts[line]),
+        )
     }
 
-    pub fn char_to_byte(&self, text: &str, offset: usize) -> usize {
-        let line = self.line_of_char(offset);
-        let start = self.byte_starts[line];
-        let column = offset - self.char_starts[line];
-        text[start..]
-            .char_indices()
-            .nth(column)
-            .map_or(text.len(), |(byte, _)| start + byte)
+    /// The character offset of byte `offset` of `text`, the text this index was made for.
+    pub fn byte_to_char(&self, text: &str, offset: ByteOffset) -> CharOffset {
+        let start = self.line_start(self.line_of_byte(offset.get()));
+        CharCursor::at(text, start).char_at(offset)
+    }
+
+    /// The byte offset of character `offset` of `text`, the text this index was made for, or
+    /// the end of the text beyond it.
+    pub fn char_to_byte(&self, text: &str, offset: CharOffset) -> ByteOffset {
+        let start = self.line_start(self.line_of_char(offset.get()));
+        char_to_byte(text, start, offset).unwrap_or_else(|| ByteOffset::new(text.len()))
     }
 
     pub fn position(&self, offset: usize) -> Position {
@@ -148,8 +157,8 @@ mod tests {
             prop_assert_eq!(index.len_chars(), chars.len());
             let offset = pick % (chars.len() + 1);
             let byte = chars.get(offset).map_or(text.len(), |(b, _)| *b);
-            prop_assert_eq!(index.char_to_byte(&text, offset), byte);
-            prop_assert_eq!(index.byte_to_char(&text, byte), offset);
+            prop_assert_eq!(index.char_to_byte(&text, CharOffset::new(offset)), ByteOffset::new(byte));
+            prop_assert_eq!(index.byte_to_char(&text, ByteOffset::new(byte)), CharOffset::new(offset));
             let before = &chars[..offset];
             let line = before.iter().filter(|(_, c)| *c == '\n').count();
             let column = before.iter().rev().take_while(|(_, c)| *c != '\n').count();

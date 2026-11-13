@@ -8,7 +8,9 @@ use stet_domain::search::{
     Captures, Direction, Query, TranslateError, Translated, Wrap, translate,
 };
 
-use stet_domain::text::{CharCursor, LineCursor, char_to_byte, next_boundary};
+use stet_domain::text::{
+    Anchor, ByteOffset, CharCursor, CharOffset, LineCursor, char_to_byte, next_boundary,
+};
 
 /// GtkSourceView compiles with newline convention ANY and Unicode `\R` (`implregex.c`); the
 /// `pcre2` crate has no option for either, so they lead the pattern.
@@ -74,8 +76,15 @@ pub enum SearchError {
     #[error("search cancelled")]
     Cancelled,
     /// A character range outside the text of `len` characters.
-    #[error("range {range:?} is outside the text of {len} characters")]
-    Range { range: Range<usize>, len: usize },
+    #[error(
+        "range {}..{} is outside the text of {len} characters",
+        .range.start.get(),
+        .range.end.get()
+    )]
+    Range {
+        range: Range<CharOffset>,
+        len: usize,
+    },
     /// The text at the given match no longer matches.
     #[error("the text there no longer matches")]
     NotAMatch,
@@ -90,10 +99,17 @@ fn match_error(error: pcre2::Error) -> SearchError {
 /// A match in character offsets, the unit of `GtkTextIter` and [`stet_domain::text::TextEdit`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Match {
-    pub start: usize,
-    pub end: usize,
+    pub start: CharOffset,
+    pub end: CharOffset,
     /// Zero-based line of `start`.
     pub line: usize,
+}
+
+impl Match {
+    /// The matched characters.
+    pub fn range(&self) -> Range<CharOffset> {
+        self.start..self.end
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -173,21 +189,21 @@ impl Matcher {
         self.translated.needs_own_matcher
     }
 
-    /// Every match inside `range` (characters; the whole text when `None`), at most `limit`
+    /// Every match inside `range` (the whole text when `None`), at most `limit`
     /// of them. Lookbehind, `\b` and `^` see the text before the range; the range's end acts
     /// as the end of the text.
     pub fn find_all(
         &self,
         text: &str,
-        range: Option<Range<usize>>,
+        range: Option<Range<CharOffset>>,
         limit: usize,
         cancel: &AtomicBool,
     ) -> Result<FindAll, SearchError> {
         let scope = Scope::resolve(text, range)?;
-        let subject = &text.as_bytes()[..scope.end];
-        let mut matches = Matches::new(self, subject, scope.start);
-        let mut chars = CharCursor::at(text, scope.start, scope.start_char);
-        let mut lines = LineCursor::at(text, scope.start);
+        let subject = &text.as_bytes()[..scope.bytes.end.get()];
+        let mut matches = Matches::new(self, subject, scope.bytes.start.get());
+        let mut chars = CharCursor::at(text, scope.start());
+        let mut lines = LineCursor::at(text, scope.bytes.start);
         let mut found = Vec::new();
         while let Some((start, end)) = matches.next()? {
             if cancel.load(Ordering::Relaxed) {
@@ -199,6 +215,7 @@ impl Matcher {
                     truncated: true,
                 });
             }
+            let (start, end) = (ByteOffset::new(start), ByteOffset::new(end));
             found.push(Match {
                 line: lines.line_at(start),
                 start: chars.char_at(start),
@@ -221,14 +238,16 @@ impl Matcher {
     pub fn find_next(
         &self,
         text: &str,
-        from: usize,
+        from: CharOffset,
         direction: Direction,
         wrap: Wrap,
     ) -> Result<Option<NextMatch>, SearchError> {
-        let from_byte = char_to_byte(text, 0, 0, from).ok_or_else(|| SearchError::Range {
-            range: from..from,
-            len: text.chars().count(),
-        })?;
+        let from_byte = char_to_byte(text, Anchor::START, from)
+            .ok_or_else(|| SearchError::Range {
+                range: from..from,
+                len: text.chars().count(),
+            })?
+            .get();
         let found = match direction {
             Direction::Backward => self.last_before(text, from_byte)?,
             Direction::Forward => self.find_after_empty(text.as_bytes(), from_byte)?,
@@ -453,20 +472,22 @@ impl<'m, 's> Matches<'m, 's> {
     }
 }
 
-/// A searched range in bytes.
+/// A searched range: its bytes, and the character its start is.
 pub(crate) struct Scope {
-    pub(crate) start: usize,
-    pub(crate) end: usize,
-    pub(crate) start_char: usize,
+    pub(crate) bytes: Range<ByteOffset>,
+    pub(crate) start_char: CharOffset,
 }
 
 impl Scope {
-    pub(crate) fn resolve(text: &str, range: Option<Range<usize>>) -> Result<Self, SearchError> {
+    /// The bytes of the characters `range` of `text`; the whole text when `None`.
+    pub(crate) fn resolve(
+        text: &str,
+        range: Option<Range<CharOffset>>,
+    ) -> Result<Self, SearchError> {
         let Some(range) = range else {
             return Ok(Self {
-                start: 0,
-                end: text.len(),
-                start_char: 0,
+                bytes: ByteOffset::ZERO..ByteOffset::new(text.len()),
+                start_char: CharOffset::ZERO,
             });
         };
         let out_of_range = || SearchError::Range {
@@ -476,20 +497,26 @@ impl Scope {
         if range.start > range.end {
             return Err(out_of_range());
         }
-        let start = char_to_byte(text, 0, 0, range.start).ok_or_else(out_of_range)?;
-        let end = char_to_byte(text, start, range.start, range.end).ok_or_else(out_of_range)?;
+        let start = char_to_byte(text, Anchor::START, range.start).ok_or_else(out_of_range)?;
+        let end = char_to_byte(text, Anchor::new(start, range.start), range.end)
+            .ok_or_else(out_of_range)?;
         Ok(Self {
-            start,
-            end,
+            bytes: start..end,
             start_char: range.start,
         })
+    }
+
+    /// Where the scope starts, in both units.
+    pub(crate) fn start(&self) -> Anchor {
+        Anchor::new(self.bytes.start, self.start_char)
     }
 }
 
 fn to_match(text: &str, (start, end): (usize, usize)) -> Match {
-    let mut chars = CharCursor::at(text, 0, 0);
+    let (start, end) = (ByteOffset::new(start), ByteOffset::new(end));
+    let mut chars = CharCursor::new(text);
     Match {
-        line: LineCursor::at(text, 0).line_at(start),
+        line: LineCursor::at(text, ByteOffset::ZERO).line_at(start),
         start: chars.char_at(start),
         end: chars.char_at(end),
     }

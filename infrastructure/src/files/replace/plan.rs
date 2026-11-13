@@ -7,7 +7,7 @@ use std::path::Path;
 use encoding_rs::Encoding;
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{LfText, RawEdit, Skip, apply_raw, raw_edits};
-use stet_domain::text::Eol;
+use stet_domain::text::{ByteOffset, CharOffset, Eol, OffsetRange};
 
 use crate::encoding::{DocumentFormat, bom_bytes, decode, detect, encode};
 use crate::files::{CancelToken, FileError};
@@ -90,7 +90,7 @@ pub(super) fn plan(
         &lf,
         ranges
             .iter()
-            .cloned()
+            .map(OffsetRange::get)
             .zip(result.edits.iter().map(|edit| edit.insert.as_str())),
     );
     let new_raw =
@@ -199,7 +199,7 @@ fn splice(
 /// ([`crate::search::ReplaceAll::byte_ranges`]).
 pub fn replaced_hits(
     new_text: &str,
-    ranges: &[std::ops::Range<usize>],
+    ranges: &[std::ops::Range<ByteOffset>],
     edits: &[stet_domain::text::TextEdit],
     limit: usize,
 ) -> Vec<Hit> {
@@ -209,15 +209,15 @@ pub fn replaced_hits(
     let (mut line, mut line_from) = (0, 0);
     let (mut chars, mut chars_from) = (0, 0);
     for (range, edit) in ranges.iter().zip(edits).take(limit) {
-        let start = range.start.saturating_add_signed(shift);
+        let start = range.start.get().saturating_add_signed(shift);
         let end = start + edit.insert.len();
         shift += edit.insert.len().cast_signed() - (range.end - range.start).cast_signed();
         line += memchr::memchr_iter(b'\n', &bytes[line_from..start]).count();
         chars += new_text[chars_from..start].chars().count();
         let length = edit.insert.chars().count();
         matches.push(Match {
-            start: chars,
-            end: chars + length,
+            start: CharOffset::new(chars),
+            end: CharOffset::new(chars + length),
             line,
         });
         // The next search for line breaks starts after this replacement.

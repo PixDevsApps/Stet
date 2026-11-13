@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use super::matcher::Match;
-use stet_domain::text::{ByteCursor, count_chars};
+use stet_domain::text::{ByteCursor, CharOffset, count_chars};
 
 /// The longest line text a [`Hit`] carries.
 pub(super) const MAX_LINE_CHARS: usize = 500;
@@ -18,17 +18,19 @@ pub struct Hit {
     /// longer than `MAX_LINE_CHARS` is cut to a window that starts a little before its first
     /// match.
     pub line_text: String,
-    /// Characters of the line before `line_text`: 0 unless the line was cut.
-    pub line_offset: usize,
-    /// The matches on the line, as byte ranges in `line_text`. A match that goes on past the
-    /// line ends at the end of `line_text`.
+    /// The column, in characters of the whole line, where `line_text` starts: 0 unless the
+    /// line was cut.
+    pub line_offset: CharOffset,
+    /// The matches on the line, as byte indices into `line_text` (not into the document), the
+    /// unit Pango's attributes and `str` slicing take. A match that goes on past the line ends
+    /// at the end of `line_text`.
     pub match_ranges: Vec<Range<usize>>,
 }
 
 impl Hit {
     /// The character column (in the whole line) where the first match starts.
     #[cfg(test)]
-    pub fn column(&self) -> usize {
+    pub fn column(&self) -> CharOffset {
         let start = self.match_ranges.first().map_or(0, |range| range.start);
         self.line_offset + count_chars(&self.line_text.as_bytes()[..start])
     }
@@ -42,13 +44,13 @@ pub fn document_hits(text: &str, matches: &[Match]) -> Vec<Hit> {
     let mut i = 0;
     while i < matches.len() {
         let line = matches[i].line;
-        let first = cursor.byte_at(matches[i].start);
+        let first = cursor.byte_at(matches[i].start).get();
         let line_start = memchr::memrchr(b'\n', &bytes[..first]).map_or(0, |at| at + 1);
         let line_end = memchr::memchr(b'\n', &bytes[first..]).map_or(bytes.len(), |at| first + at);
         let mut ranges = Vec::new();
         while let Some(found) = matches.get(i).filter(|found| found.line == line) {
-            let start = cursor.byte_at(found.start);
-            let end = cursor.byte_at(found.end);
+            let start = cursor.byte_at(found.start).get();
+            let end = cursor.byte_at(found.end).get();
             ranges.push(start - line_start..end.max(start) - line_start);
             i += 1;
         }
@@ -116,7 +118,7 @@ fn window(line_number: u64, text: String, ranges: Vec<Range<usize>>) -> Hit {
         return Hit {
             line_number,
             line_text: text,
-            line_offset: 0,
+            line_offset: CharOffset::ZERO,
             match_ranges: ranges,
         };
     }
@@ -134,7 +136,7 @@ fn window(line_number: u64, text: String, ranges: Vec<Range<usize>>) -> Hit {
     Hit {
         line_number,
         line_text: text[start..end].to_owned(),
-        line_offset: start_char,
+        line_offset: CharOffset::new(start_char),
         match_ranges,
     }
 }
@@ -148,18 +150,18 @@ mod tests {
         let text = "one two\nthree two two\n";
         let matches = [
             Match {
-                start: 4,
-                end: 7,
+                start: CharOffset::new(4),
+                end: CharOffset::new(7),
                 line: 0,
             },
             Match {
-                start: 14,
-                end: 17,
+                start: CharOffset::new(14),
+                end: CharOffset::new(17),
                 line: 1,
             },
             Match {
-                start: 18,
-                end: 21,
+                start: CharOffset::new(18),
+                end: CharOffset::new(21),
                 line: 1,
             },
         ];
@@ -173,7 +175,7 @@ mod tests {
         );
         assert_eq!(hits[1].line_text, "three two two");
         assert_eq!(hits[1].match_ranges, [6..9, 10..13]);
-        assert_eq!(hits[1].column(), 6);
+        assert_eq!(hits[1].column(), CharOffset::new(6));
     }
 
     #[test]
@@ -188,8 +190,8 @@ mod tests {
         let line = format!("{}needle{}", "x".repeat(1000), "y".repeat(1000));
         let hit = make_hit(1, line.as_bytes(), std::slice::from_ref(&(1000..1006)));
         assert_eq!(hit.line_text.chars().count(), MAX_LINE_CHARS);
-        assert_eq!(hit.line_offset, 960);
+        assert_eq!(hit.line_offset, CharOffset::new(960));
         assert_eq!(&hit.line_text[hit.match_ranges[0].clone()], "needle");
-        assert_eq!(hit.column(), 1000);
+        assert_eq!(hit.column(), CharOffset::new(1000));
     }
 }

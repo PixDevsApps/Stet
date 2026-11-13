@@ -422,7 +422,8 @@ mod tests {
             .find_all(row.input, None, usize::MAX, &cancel)
             .map_err(|error| error.to_string())?
             .matches;
-        let spans: Vec<(usize, usize)> = found.iter().map(|m| (m.start, m.end)).collect();
+        let spans: Vec<(usize, usize)> =
+            found.iter().map(|m| (m.start.get(), m.end.get())).collect();
         let texts: Vec<String> = spans
             .iter()
             .map(|&(start, end)| chars(row.input, start, end))

@@ -27,7 +27,7 @@ use stet_domain::ops::lines::{
 use stet_domain::ops::numbers::NumberSequence;
 use stet_domain::ops::{Change, Indent, SyntaxError, Target, json, xml};
 use stet_domain::search::SearchMode;
-use stet_domain::text::{LineIndex, Selection, TextEdit};
+use stet_domain::text::{CharOffset, LineIndex, OffsetRange, Selection, TextEdit};
 
 /// A result larger than this is inserted in pieces of about this size, 16 ms apart, inside
 /// the one user action, so a 20 MB JSON file formats without blocking the window.
@@ -567,8 +567,8 @@ impl Window {
                 Target::Selection(range) if !range.is_empty() => range,
                 _ => 0..index.len_chars(),
             };
-            let slice =
-                &text[index.char_to_byte(text, range.start)..index.char_to_byte(text, range.end)];
+            let byte = |offset: usize| index.char_to_byte(text, CharOffset::new(offset));
+            let slice = &text[(byte(range.start)..byte(range.end)).get()];
             let checked = if is_json {
                 json::validate(slice)
             } else {

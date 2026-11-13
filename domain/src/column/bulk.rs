@@ -1,7 +1,7 @@
 //! Large column edits as one replacement of their line range (ADR-003 amendment).
 
 use super::editing::ColumnEdit;
-use crate::text::ByteCursor;
+use crate::text::{ByteCursor, ByteOffset, CharOffset};
 use crate::text::{LineIndex, TextEdit};
 use std::ops::Range;
 
@@ -54,16 +54,16 @@ impl ColumnEdit {
         let old = &text[bytes];
         let mut new = String::with_capacity(old.len() + self.edits.len());
         let mut cursor = ByteCursor::new(old);
-        let mut copied = 0;
+        let mut copied = ByteOffset::ZERO;
         let mut appended_lines = 0;
         for edit in &self.edits {
-            let start = cursor.byte_at(edit.start - chars.start);
-            new.push_str(&old[copied..start]);
+            let start = cursor.byte_at(CharOffset::new(edit.start - chars.start));
+            new.push_str(&old[copied.get()..start.get()]);
             new.push_str(&edit.insert);
-            copied = cursor.byte_at(edit.end - chars.start);
+            copied = cursor.byte_at(CharOffset::new(edit.end - chars.start));
             appended_lines += memchr::memchr_iter(b'\n', edit.insert.as_bytes()).count();
         }
-        new.push_str(&old[copied..]);
+        new.push_str(&old[copied.get()..]);
         Some(BulkEdit {
             edit: TextEdit::new(chars, new),
             lines,

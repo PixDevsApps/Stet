@@ -14,8 +14,8 @@ pub mod xml;
 use std::fmt;
 use std::ops::Range;
 
-use crate::text::ByteCursor;
 use crate::text::{BULK_EDIT_THRESHOLD, Bias, LineIndex, Position, TextEdit, map_offset};
+use crate::text::{ByteCursor, CharOffset, OffsetRange};
 
 /// The part of the text an operation works on.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,13 +92,13 @@ impl Change {
     pub fn coalesce(&self, text: &str) -> Option<TextEdit> {
         let (first, last) = (self.edits.first()?, self.edits.last()?);
         let mut cursor = ByteCursor::new(text);
-        let mut copied = cursor.byte_at(first.start);
+        let mut copied = cursor.byte_at(CharOffset::new(first.start));
         let mut insert = String::new();
         for edit in &self.edits {
-            let start = cursor.byte_at(edit.start);
-            insert.push_str(&text[copied..start]);
+            let start = cursor.byte_at(CharOffset::new(edit.start));
+            insert.push_str(&text[copied.get()..start.get()]);
             insert.push_str(&edit.insert);
-            copied = cursor.byte_at(edit.end);
+            copied = cursor.byte_at(CharOffset::new(edit.end));
         }
         Some(TextEdit::new(first.start..last.end, insert))
     }
@@ -248,9 +248,8 @@ impl<'a> Doc<'a> {
     }
 
     fn slice(&self, chars: Range<usize>) -> &'a str {
-        let start = self.index.char_to_byte(self.text, chars.start);
-        let end = self.index.char_to_byte(self.text, chars.end);
-        &self.text[start..end]
+        let byte = |offset| self.index.char_to_byte(self.text, CharOffset::new(offset));
+        &self.text[(byte(chars.start)..byte(chars.end)).get()]
     }
 
     /// `range` ordered and clamped to the text.

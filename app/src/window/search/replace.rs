@@ -28,7 +28,7 @@ use stet_domain::search::report::ScopeKind;
 use stet_domain::search::report::{
     count_message, replace_in_documents_message, replace_message, results_heading,
 };
-use stet_domain::text::counted;
+use stet_domain::text::{CharOffset, counted};
 use stet_infrastructure::files::find::DEFAULT_MAX_HITS;
 use stet_infrastructure::search::{Match, SearchError, document_hits};
 
@@ -163,7 +163,12 @@ impl Window {
             let cancel = AtomicBool::new(false);
             let counted = worker::run(move || {
                 matcher
-                    .find_all(&text, Some(range), usize::MAX, &cancel)
+                    .find_all(
+                        &text,
+                        Some(CharOffset::new(range.start)..CharOffset::new(range.end)),
+                        usize::MAX,
+                        &cancel,
+                    )
                     .map(|found| found.matches.len())
             })
             .await;
@@ -209,8 +214,8 @@ impl Window {
         }
         let (snapshot, text) = PageSnapshot::take(&page);
         let found = Match {
-            start: start.char_offset(),
-            end: end.char_offset(),
+            start: CharOffset::new(start.char_offset()),
+            end: CharOffset::new(end.char_offset()),
             line: start.line_number(),
         };
         let matcher = Arc::clone(&compiled.matcher);
@@ -233,7 +238,7 @@ impl Window {
                     window.search_from(page, from, forward);
                 }
                 Err(SearchError::NotAMatch) => {
-                    window.search_from(page, found.start, forward);
+                    window.search_from(page, found.start.get(), forward);
                 }
                 Err(error) => window
                     .inner
@@ -269,6 +274,7 @@ impl Window {
         let started = Instant::now();
         let options = find.options();
         let (range, scope) = Self::command_scope(&page, options);
+        let range = CharOffset::new(range.start)..CharOffset::new(range.end);
         let (taken, text) = PageSnapshot::take(&page);
         let snapshot = started.elapsed();
         let matcher = Arc::clone(&compiled.matcher);

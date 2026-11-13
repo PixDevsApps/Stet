@@ -3,7 +3,7 @@
 use super::editing::{ColumnEdit, edit_lines, push_spaces, splice};
 use super::rect::{Rect, clamp_lines};
 use super::visual::{locate, text_width};
-use crate::text::{LineIndex, TextEdit};
+use crate::text::{CharOffset, LineIndex, TextEdit};
 
 /// The clipboard MIME type of a copied block (ADR-016); `text/plain` carries the same text.
 pub const MIME_TYPE: &str = "application/x-stet-column-block";
@@ -134,8 +134,8 @@ pub fn paste(
         let text_end = index.len_chars();
         match edits.last_mut() {
             Some(last) if index.line_of_char(last.start) + 1 == lines => {
-                let rest = index.char_to_byte(text, last.end);
-                last.insert.push_str(&text[rest..]);
+                let rest = index.char_to_byte(text, CharOffset::new(last.end));
+                last.insert.push_str(&text[rest.get()..]);
                 last.insert.push_str(&appended);
                 last.end = text_end;
             }

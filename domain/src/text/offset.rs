@@ -1,5 +1,7 @@
 //! Offset conversions over UTF-8 text in one forward pass: characters, bytes and lines.
 
+use super::units::{Anchor, ByteOffset, CharOffset};
+
 /// Characters in `bytes`: the bytes that do not continue a UTF-8 sequence.
 pub fn count_chars(bytes: &[u8]) -> usize {
     bytes
@@ -17,16 +19,16 @@ pub fn next_boundary(bytes: &[u8], at: usize) -> usize {
     next
 }
 
-/// The byte offset of character `target`, walking from byte `byte`, which is character
-/// `chars`. `None` beyond the end of `text`.
-pub fn char_to_byte(text: &str, byte: usize, chars: usize, target: usize) -> Option<usize> {
+/// The byte offset of character `target`, counting from `from` (or from the start of the
+/// text when `target` lies before it). `None` beyond the end of `text`.
+pub fn char_to_byte(text: &str, from: Anchor, target: CharOffset) -> Option<ByteOffset> {
     const BLOCK: usize = 64;
-    if target < chars {
-        return char_to_byte(text, 0, 0, target);
+    if target < from.char {
+        return char_to_byte(text, Anchor::START, target);
     }
-    let mut remaining = target - chars;
+    let mut remaining = target - from.char;
     let bytes = text.as_bytes();
-    let mut at = byte;
+    let mut at = from.byte.get();
     while remaining >= BLOCK && at + BLOCK <= bytes.len() {
         remaining -= count_chars(&bytes[at..at + BLOCK]);
         at += BLOCK;
@@ -41,35 +43,39 @@ pub fn char_to_byte(text: &str, byte: usize, chars: usize, target: usize) -> Opt
         at = next_boundary(bytes, at);
         remaining -= 1;
     }
-    Some(at)
+    Some(ByteOffset::new(at))
 }
 
 /// Converts non-decreasing byte offsets to character offsets.
 #[derive(Debug, Clone)]
 pub struct CharCursor<'a> {
     bytes: &'a [u8],
-    byte: usize,
-    chars: usize,
+    at: Anchor,
 }
 
 impl<'a> CharCursor<'a> {
-    /// A cursor at byte `byte`, which is character `chars`.
-    pub fn at(text: &'a str, byte: usize, chars: usize) -> Self {
+    /// A cursor at the start of `text`.
+    pub fn new(text: &'a str) -> Self {
+        Self::at(text, Anchor::START)
+    }
+
+    /// A cursor at `at`, a point of `text` known in both units.
+    pub fn at(text: &'a str, at: Anchor) -> Self {
         Self {
             bytes: text.as_bytes(),
-            byte,
-            chars,
+            at,
         }
     }
 
-    pub fn char_at(&mut self, byte: usize) -> usize {
-        if byte < self.byte {
-            self.byte = 0;
-            self.chars = 0;
+    /// The character offset of byte `byte`, which must be on a character boundary. Fastest
+    /// when calls don't go backwards; a byte before the last one counts again from the start.
+    pub fn char_at(&mut self, byte: ByteOffset) -> CharOffset {
+        if byte < self.at.byte {
+            self.at = Anchor::START;
         }
-        self.chars += count_chars(&self.bytes[self.byte..byte]);
-        self.byte = byte;
-        self.chars
+        self.at.char += count_chars(&self.bytes[self.at.byte.get()..byte.get()]);
+        self.at.byte = byte;
+        self.at.char
     }
 }
 
@@ -77,28 +83,27 @@ impl<'a> CharCursor<'a> {
 #[derive(Debug, Clone)]
 pub struct ByteCursor<'a> {
     text: &'a str,
-    byte: usize,
-    chars: usize,
+    at: Anchor,
 }
 
 impl<'a> ByteCursor<'a> {
+    /// A cursor at the start of `text`.
     pub fn new(text: &'a str) -> Self {
         Self {
             text,
-            byte: 0,
-            chars: 0,
+            at: Anchor::START,
         }
     }
 
-    /// The byte offset of character `chars`, or the end of the text beyond it.
-    pub fn byte_at(&mut self, chars: usize) -> usize {
-        match char_to_byte(self.text, self.byte, self.chars, chars) {
+    /// The byte offset of character `char`, or the end of the text beyond it. Fastest when
+    /// calls don't go backwards.
+    pub fn byte_at(&mut self, char: CharOffset) -> ByteOffset {
+        match char_to_byte(self.text, self.at, char) {
             Some(byte) => {
-                self.byte = byte;
-                self.chars = chars;
+                self.at = Anchor::new(byte, char);
                 byte
             }
-            None => self.text.len(),
+            None => ByteOffset::new(self.text.len()),
         }
     }
 }
@@ -107,28 +112,28 @@ impl<'a> ByteCursor<'a> {
 #[derive(Debug, Clone)]
 pub struct LineCursor<'a> {
     bytes: &'a [u8],
-    byte: usize,
+    byte: ByteOffset,
     line: usize,
 }
 
 impl<'a> LineCursor<'a> {
     /// A cursor at byte `byte` of `text`.
-    pub fn at(text: &'a str, byte: usize) -> Self {
+    pub fn at(text: &'a str, byte: ByteOffset) -> Self {
         let bytes = text.as_bytes();
         Self {
             bytes,
             byte,
-            line: memchr::memchr_iter(b'\n', &bytes[..byte]).count(),
+            line: memchr::memchr_iter(b'\n', &bytes[..byte.get()]).count(),
         }
     }
 
     /// The zero-based line of byte `byte`.
-    pub fn line_at(&mut self, byte: usize) -> usize {
+    pub fn line_at(&mut self, byte: ByteOffset) -> usize {
         if byte < self.byte {
-            self.byte = 0;
+            self.byte = ByteOffset::ZERO;
             self.line = 0;
         }
-        self.line += memchr::memchr_iter(b'\n', &self.bytes[self.byte..byte]).count();
+        self.line += memchr::memchr_iter(b'\n', &self.bytes[self.byte.get()..byte.get()]).count();
         self.byte = byte;
         self.line
     }
@@ -139,31 +144,44 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    fn chars(offset: usize) -> CharOffset {
+        CharOffset::new(offset)
+    }
+
+    fn bytes(offset: usize) -> ByteOffset {
+        ByteOffset::new(offset)
+    }
+
+    fn from(byte: usize, char: usize) -> Anchor {
+        Anchor::new(bytes(byte), chars(char))
+    }
+
     #[test]
     fn converts_offsets() {
         let text = "aé\n日x";
+        let start = Anchor::START;
         assert_eq!(count_chars(text.as_bytes()), 5);
-        assert_eq!(char_to_byte(text, 0, 0, 2), Some(3));
-        assert_eq!(char_to_byte(text, 3, 2, 4), Some(7));
-        assert_eq!(char_to_byte(text, 0, 0, 5), Some(8));
-        assert_eq!(char_to_byte(text, 0, 0, 6), None);
-        assert_eq!(char_to_byte(text, 7, 4, 1), Some(1));
-        let mut chars = CharCursor::at(text, 0, 0);
-        assert_eq!(chars.char_at(3), 2);
-        assert_eq!(chars.char_at(7), 4);
-        assert_eq!(chars.char_at(1), 1);
-        let mut bytes = ByteCursor::new(text);
-        assert_eq!(bytes.byte_at(4), 7);
-        assert_eq!(bytes.byte_at(2), 3);
-        assert_eq!(bytes.byte_at(9), 8);
+        assert_eq!(char_to_byte(text, start, chars(2)), Some(bytes(3)));
+        assert_eq!(char_to_byte(text, from(3, 2), chars(4)), Some(bytes(7)));
+        assert_eq!(char_to_byte(text, start, chars(5)), Some(bytes(8)));
+        assert_eq!(char_to_byte(text, start, chars(6)), None);
+        assert_eq!(char_to_byte(text, from(7, 4), chars(1)), Some(bytes(1)));
+        let mut char_cursor = CharCursor::new(text);
+        assert_eq!(char_cursor.char_at(bytes(3)), chars(2));
+        assert_eq!(char_cursor.char_at(bytes(7)), chars(4));
+        assert_eq!(char_cursor.char_at(bytes(1)), chars(1));
+        let mut byte_cursor = ByteCursor::new(text);
+        assert_eq!(byte_cursor.byte_at(chars(4)), bytes(7));
+        assert_eq!(byte_cursor.byte_at(chars(2)), bytes(3));
+        assert_eq!(byte_cursor.byte_at(chars(9)), bytes(8));
         let long = "é".repeat(100) + "x" + &"a".repeat(100);
-        assert_eq!(char_to_byte(&long, 0, 0, 100), Some(200));
-        assert_eq!(char_to_byte(&long, 0, 0, 170), Some(270));
-        assert_eq!(char_to_byte(&long, 0, 0, 201), Some(301));
-        assert_eq!(char_to_byte(&long, 0, 0, 202), None);
-        let mut lines = LineCursor::at(text, 4);
-        assert_eq!(lines.line_at(7), 1);
-        assert_eq!(lines.line_at(0), 0);
+        assert_eq!(char_to_byte(&long, start, chars(100)), Some(bytes(200)));
+        assert_eq!(char_to_byte(&long, start, chars(170)), Some(bytes(270)));
+        assert_eq!(char_to_byte(&long, start, chars(201)), Some(bytes(301)));
+        assert_eq!(char_to_byte(&long, start, chars(202)), None);
+        let mut lines = LineCursor::at(text, bytes(4));
+        assert_eq!(lines.line_at(bytes(7)), 1);
+        assert_eq!(lines.line_at(bytes(0)), 0);
         assert_eq!(next_boundary(text.as_bytes(), 1), 3);
     }
 
@@ -173,16 +191,31 @@ mod tests {
             let starts: Vec<usize> = text.char_indices().map(|(byte, _)| byte).chain([text.len()]).collect();
             let mut picks = picks;
             picks.sort_unstable();
-            let mut bytes = ByteCursor::new(&text);
-            let mut chars = CharCursor::at(&text, 0, 0);
+            let mut byte_cursor = ByteCursor::new(&text);
+            let mut char_cursor = CharCursor::new(&text);
             for pick in picks {
                 let expected = starts.get(pick).copied().unwrap_or(text.len());
-                prop_assert_eq!(bytes.byte_at(pick), expected);
+                prop_assert_eq!(byte_cursor.byte_at(chars(pick)), bytes(expected));
                 if let Some(&byte) = starts.get(pick) {
-                    prop_assert_eq!(chars.char_at(byte), pick);
-                    prop_assert_eq!(char_to_byte(&text, 0, 0, pick), Some(byte));
+                    prop_assert_eq!(char_cursor.char_at(bytes(byte)), chars(pick));
+                    prop_assert_eq!(char_to_byte(&text, Anchor::START, chars(pick)), Some(bytes(byte)));
                 }
             }
+        }
+
+        #[test]
+        fn any_anchor_gives_the_same_byte(text in "[a\\né日]{0,200}", anchor in 0usize..210, target in 0usize..210) {
+            let starts: Vec<usize> = text.char_indices().map(|(byte, _)| byte).chain([text.len()]).collect();
+            let anchor = anchor.min(starts.len() - 1);
+            let from = Anchor::new(bytes(starts[anchor]), chars(anchor));
+            prop_assert_eq!(
+                char_to_byte(&text, from, chars(target)),
+                char_to_byte(&text, Anchor::START, chars(target))
+            );
+            prop_assert_eq!(
+                char_to_byte(&text, from, chars(target)),
+                starts.get(target).map(|&byte| bytes(byte))
+            );
         }
     }
 }

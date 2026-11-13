@@ -16,6 +16,7 @@ use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use stet_domain::search::{Query, Translated};
+use stet_domain::text::CharOffset;
 use stet_infrastructure::search::{Match, Matcher};
 
 /// The tag that shows our own matcher's matches, styled like GtkSourceView's `search-match`.
@@ -263,7 +264,7 @@ impl PageSearch {
             .iter_at_line_number(last_line)
             .map_or_else(|| buffer.total_chars(), |iter| iter.char_offset());
         let matches = &own.matches;
-        let (first, last) = (start, end);
+        let (first, last) = (CharOffset::new(start), CharOffset::new(end));
         let from = matches.partition_point(|found| found.end < first);
         let Some(tag) = buffer.tag_table().lookup(OWN_MATCH_TAG) else {
             return;
@@ -275,8 +276,8 @@ impl PageSearch {
             if found.end > found.start {
                 buffer.apply_tag(
                     &tag,
-                    &buffer.iter_at_char_offset(found.start),
-                    &buffer.iter_at_char_offset(found.end),
+                    &buffer.iter_at_char_offset(found.start.get()),
+                    &buffer.iter_at_char_offset(found.end.get()),
                 );
             }
         }
@@ -287,6 +288,7 @@ impl PageSearch {
     pub fn own_position(&self, start: usize, end: usize) -> Option<usize> {
         let own = self.own.borrow();
         let matches = &own.as_ref()?.matches;
+        let (start, end) = (CharOffset::new(start), CharOffset::new(end));
         let index = matches.partition_point(|found| found.start < start);
         matches
             .get(index)

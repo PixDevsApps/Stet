@@ -130,7 +130,7 @@ fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = usize>) -> Ve
 mod tests {
     use super::*;
     use crate::marks::bookmark_lines_of;
-    use crate::text::apply;
+    use crate::text::{ByteOffset, apply};
     use proptest::prelude::*;
 
     fn bookmarks(lines: &[usize]) -> Bookmarks {
@@ -195,7 +195,7 @@ mod tests {
         let matches: Vec<Range<usize>> = log
             .match_indices("ERROR")
             .map(|(byte, found)| {
-                let start = index.byte_to_char(log, byte);
+                let start = index.byte_to_char(log, ByteOffset::new(byte)).get();
                 start..start + found.chars().count()
             })
             .collect();

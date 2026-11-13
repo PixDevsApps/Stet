@@ -90,7 +90,7 @@ impl FileNode {
         Some(Jump {
             target: self.target.clone(),
             line: hit.line_number,
-            column,
+            column: column.get(),
             length,
         })
     }

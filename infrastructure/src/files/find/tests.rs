@@ -322,7 +322,7 @@ fn open_documents_are_searched_from_memory() {
     let lines: Vec<(u64, &str, usize)> = files[0]
         .1
         .iter()
-        .map(|hit| (hit.line_number, hit.line_text.as_str(), hit.column()))
+        .map(|hit| (hit.line_number, hit.line_text.as_str(), hit.column().get()))
         .collect();
     assert_eq!(lines, [(2, "needle in memory", 0), (3, "needle again", 0)]);
     assert_eq!(summary.hits, 3);

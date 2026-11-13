@@ -29,7 +29,7 @@ The domain keeps formats that are its models' own contracts: `session.json` *is*
 
 | Context | Module | Holds |
 | --- | --- | --- |
-| Text | `text` | Character, byte and line offsets (`offset`), `TextEdit` and offset mapping, line endings, `Selection`, character rules (the NUL placeholder, word characters), count wording. |
+| Text | `text` | Character and byte offsets as types of their own (`CharOffset`, `ByteOffset`, `units`) and conversions between characters, bytes and lines (`offset`), `TextEdit` and offset mapping, line endings, `Selection`, character rules (the NUL placeholder, word characters), count wording. |
 | Document | `document` | Names and titles, untitled tabs, indentation, language hints, `file:line:col`, the document's read-only and loss state, and **which banners a tab shows** (`banners_for`). |
 | Search | `search` | The query, the regex dialect translated to PCRE2, replacement templates, history, smart highlighting, report sentences, Replace in Files' rules. |
 | Editing operations | `ops`, `column` | The text tools (case, lines, comments, numbers, JSON, XML) as pure functions returning edits; column mode's rectangles and edits (ADR-016). |

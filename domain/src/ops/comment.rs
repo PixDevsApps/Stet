@@ -15,7 +15,7 @@ use std::ops::Range;
 use super::{
     Change, Doc, Target, char_len, is_blank, is_blank_char, leading_blanks, trailing_blanks,
 };
-use crate::text::TextEdit;
+use crate::text::{ByteOffset, CharOffset, TextEdit};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CommentTokens {
@@ -94,11 +94,11 @@ pub fn toggle_block(text: &str, target: &Target, tokens: &CommentTokens) -> Chan
             if lead >= content {
                 return Change::default();
             }
-            let start = doc.index.byte_to_char(text, lead);
-            (start..doc.index.byte_to_char(text, content), None)
+            let char_at = |byte: usize| doc.index.byte_to_char(text, ByteOffset::new(byte)).get();
+            (char_at(lead)..char_at(content), None)
         }
     };
-    let byte = |offset: usize| doc.index.char_to_byte(text, offset);
+    let byte = |offset: usize| doc.index.char_to_byte(text, CharOffset::new(offset)).get();
     let bytes = byte(range.start)..byte(range.end);
     let is_space = |c: char| matches!(c, ' ' | '\t' | '\n');
     let slice = &text[bytes.clone()];
@@ -296,7 +296,11 @@ fn unwrap(doc: &Doc<'_>, comment: Range<usize>, open: &str, close: &str) -> Chan
     let (open_space, close_space) = inner_spaces(inner);
     let open_end = comment.start + open.len() + open_space;
     let close_start = (comment.end - close.len() - close_space).max(open_end);
-    let char_at = |byte: usize| doc.index.byte_to_char(doc.text, byte);
+    let char_at = |byte: usize| {
+        doc.index
+            .byte_to_char(doc.text, ByteOffset::new(byte))
+            .get()
+    };
     Change::new(
         vec![
             TextEdit::delete(char_at(comment.start)..char_at(open_end)),
