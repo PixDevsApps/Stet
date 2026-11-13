@@ -22,7 +22,7 @@ mod tests;
 
 pub use hits::{Hit, document_hits};
 pub use matcher::{Match, Matcher, PatternError, SearchError};
-pub use replace::{BULK_EDIT_THRESHOLD, ReplaceAll};
+pub use replace::ReplaceAll;
 
 pub(crate) use hits::make_hit;
 pub(crate) use matcher::{JIT_STACK, pcre2_message};

@@ -3,14 +3,10 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use stet_domain::search::Template;
-use stet_domain::text::TextEdit;
+use stet_domain::text::{BULK_EDIT_THRESHOLD, TextEdit};
 
 use super::matcher::{Match, MatchCaptures, Matcher, Matches, Scope, SearchError};
 use super::text::{ByteCursor, CharCursor};
-
-/// Above this many edits, apply a Replace All as one bulk edit ([`ReplaceAll::as_single_edit`];
-/// ADR-003 amendment).
-pub const BULK_EDIT_THRESHOLD: usize = 2_000;
 
 /// The result of a Replace All: edits in character offsets of the searched text, in order,
 /// never overlapping. Apply them in one user action.

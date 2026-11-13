@@ -18,8 +18,7 @@ pub use table::{
 
 use encoding_rs::{UTF_8, UTF_16BE, UTF_16LE};
 
-/// Stands in for U+0000 in the buffer, because GtkTextBuffer rejects text containing NUL.
-pub const PLACEHOLDER: char = '\u{2400}';
+pub use stet_domain::text::NUL_PLACEHOLDER as PLACEHOLDER;
 
 const PLACEHOLDER_UTF8: &[u8] = "\u{2400}".as_bytes();
 

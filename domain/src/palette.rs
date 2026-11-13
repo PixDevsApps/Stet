@@ -2,6 +2,7 @@
 //! order, ignoring case; whole-substring matches, word starts and runs of consecutive
 //! characters score higher. Deliberately small: quick open (M8) brings a real fuzzy matcher.
 
+use crate::text::fold_char as fold;
 /// How well `query` matches `text`; `None` when it does not. An empty query matches
 /// everything with score 0. Higher is better.
 pub fn score(query: &str, text: &str) -> Option<u32> {
@@ -44,11 +45,6 @@ pub fn score(query: &str, text: &str) -> Option<u32> {
         next = found + 1;
     }
     Some(total)
-}
-
-/// One lowercase character per character, so query and text stay aligned.
-fn fold(c: char) -> char {
-    c.to_lowercase().next().unwrap_or(c)
 }
 
 fn find_run(haystack: &[char], needle: &[char]) -> Option<usize> {

@@ -4,6 +4,10 @@
 use std::fmt;
 use std::ops::Range;
 
+/// Above this many edits a change is applied as one replacement of the range it spans
+/// (ADR-003 amendment).
+pub const BULK_EDIT_THRESHOLD: usize = 2_000;
+
 /// Replaces the characters `start..end` with `insert`. Offsets count Unicode scalar values,
 /// not bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]

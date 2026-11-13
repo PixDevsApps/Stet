@@ -5,6 +5,7 @@
 //! selection that spans lines never qualifies.
 
 use super::{Query, SearchMode, SearchOptions};
+use crate::text::is_word_char;
 
 /// How smart highlighting matches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,11 +21,6 @@ impl Default for SmartHighlight {
             whole_word: true,
         }
     }
-}
-
-/// A word character for smart highlighting and whole-word matching: a letter, digit or `_`.
-pub fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
 }
 
 impl SmartHighlight {

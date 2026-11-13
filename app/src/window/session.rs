@@ -37,6 +37,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use stet_domain::document::next_untitled_number;
+use stet_domain::language::HEAD_BYTES;
 use stet_domain::recent::RecentFiles;
 use stet_domain::search::{History, SearchHistory, history::HISTORY_LIMIT};
 use stet_domain::session::{
@@ -52,9 +53,6 @@ use stet_infrastructure::recent as recent_store;
 use stet_infrastructure::session_store::{
     Orphan, Restored, SessionStore, Snapshot, StoreError, StoreStatus,
 };
-
-/// How much of a restored text language detection looks at.
-const HEAD_BYTES: usize = 4096;
 
 /// A mark at the first visible line of a restored tab, scrolled to once the view is laid out.
 const TOP_MARK: &str = "stet-restore-top";

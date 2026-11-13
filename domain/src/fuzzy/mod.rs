@@ -13,6 +13,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::text::fold_char;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::mem;
@@ -125,7 +126,7 @@ impl Matcher {
         let query: Vec<char> = query
             .chars()
             .filter(|c| !c.is_whitespace())
-            .map(|c| if case_sensitive { c } else { fold(c) })
+            .map(|c| if case_sensitive { c } else { fold_char(c) })
             .collect();
         let path_query = query.contains(&'/');
         Self {
@@ -172,7 +173,7 @@ impl Matcher {
             chars
         } else {
             folded.clear();
-            folded.extend(chars.iter().map(|&c| fold(c)));
+            folded.extend(chars.iter().map(|&c| fold_char(c)));
             folded
         };
         let mut tables = Tables {
@@ -362,14 +363,6 @@ fn greedy_positions(query: &[char], text: &[char], start: usize) -> Vec<usize> {
         from += found + 1;
     }
     positions
-}
-
-fn fold(c: char) -> char {
-    if c.is_ascii() {
-        c.to_ascii_lowercase()
-    } else {
-        c.to_lowercase().next().unwrap_or(c)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

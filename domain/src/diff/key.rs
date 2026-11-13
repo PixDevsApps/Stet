@@ -61,15 +61,6 @@ pub(super) fn fold_case(text: Cow<'_, str>) -> Cow<'_, str> {
     }
 }
 
-/// Folds one character for a case-insensitive comparison that keeps character counts.
-pub(super) fn fold_char(c: char) -> char {
-    if c.is_ascii() {
-        c.to_ascii_lowercase()
-    } else {
-        c.to_lowercase().next().unwrap_or(c)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

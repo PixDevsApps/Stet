@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use stet_domain::indent;
 use stet_domain::language as hints;
+use stet_domain::language::HEAD_BYTES;
 use stet_domain::text::{LONG_LINE_CHARS, LongestLine, Position, line_count, longest_line};
 use stet_infrastructure::encoding::status_label;
 use stet_infrastructure::fs::{
@@ -26,9 +27,6 @@ use stet_infrastructure::fs::{
 /// Temporary files that interrupted saves left next to a file are removed after it is saved
 /// again, once they are this old.
 const STALE_TEMP_AGE: Duration = Duration::from_secs(60);
-
-/// How much of the text language detection looks at.
-const HEAD_BYTES: usize = 4096;
 
 /// Where an in-place save keeps the previous content until the new content is on disk.
 const SAVE_BACKUPS_DIR: &str = "save-backups";

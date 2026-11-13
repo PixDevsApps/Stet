@@ -8,8 +8,9 @@ use std::ops::Range;
 use std::time::{Duration, Instant};
 use stet_domain::marks::Footprint;
 use stet_domain::ops::Change;
+use stet_domain::text::BULK_EDIT_THRESHOLD;
 use stet_domain::text::{Bias, TextEdit, map_offset};
-use stet_infrastructure::search::{BULK_EDIT_THRESHOLD, ReplaceAll};
+use stet_infrastructure::search::ReplaceAll;
 
 /// How an operation reached the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

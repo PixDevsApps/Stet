@@ -28,8 +28,9 @@ use stet_domain::actions::ActionId;
 use stet_domain::marks::{self, Bookmarks, LineEdit, MarkStyle, bookmark_lines_of};
 use stet_domain::ops::Change;
 use stet_domain::search::{Query, SearchMode, SearchOptions};
+use stet_domain::text::{BULK_EDIT_THRESHOLD, is_word_char};
 use stet_domain::text::{LineIndex, TextEdit};
-use stet_infrastructure::search::{BULK_EDIT_THRESHOLD, Matcher, SearchError};
+use stet_infrastructure::search::{Matcher, SearchError};
 
 /// Mark and the style tokens stop after this many matches in a document.
 pub const MARK_LIMIT: usize = 1_000_000;
@@ -715,19 +716,18 @@ fn token_at_caret(page: &EditorPage) -> Option<(String, bool)> {
     }
     // A token is a run of letters, digits and underscores (Scintilla's word characters):
     // `alpha.beta` is two.
-    let is_token = |c: char| c.is_alphanumeric() || c == '_';
     let caret = buffer.iter_at_mark(&buffer.get_insert());
     let mut start = caret;
     while !start.starts_line() {
         let mut before = start;
         before.backward_char();
-        if !is_token(before.char()) {
+        if !is_word_char(before.char()) {
             break;
         }
         start = before;
     }
     let mut end = caret;
-    while !end.ends_line() && is_token(end.char()) {
+    while !end.ends_line() && is_word_char(end.char()) {
         end.forward_char();
     }
     let token = buffer.text(&start, &end, false).to_string();

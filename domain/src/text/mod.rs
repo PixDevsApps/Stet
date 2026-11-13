@@ -1,9 +1,13 @@
+pub mod chars;
 pub mod edit;
 pub mod eol;
 pub mod index;
 pub mod lines;
 
-pub use edit::{Bias, EditError, TextEdit, apply, map_offset, minimal_edit, normalize};
+pub use chars::{NUL_PLACEHOLDER, fold_char, is_word_char};
+pub use edit::{
+    BULK_EDIT_THRESHOLD, Bias, EditError, TextEdit, apply, map_offset, minimal_edit, normalize,
+};
 pub use eol::{Eol, EolStats, normalize_to_lf};
 pub use index::{LineIndex, Position};
 pub use lines::{

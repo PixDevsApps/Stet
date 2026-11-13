@@ -37,6 +37,7 @@
 
 use super::extended::{EscapeError, unescape};
 use super::{SearchMode, to_buffer_text};
+use crate::text::is_word_char;
 
 /// The groups of one match, as a template sees them.
 pub trait Captures {
@@ -583,8 +584,7 @@ fn push_text(nodes: &mut Vec<Node>, c: char) {
 
 fn is_group_name(name: &str) -> bool {
     let mut chars = name.chars();
-    chars.next().is_some_and(|c| c.is_alphabetic() || c == '_')
-        && chars.all(|c| c.is_alphanumeric() || c == '_')
+    chars.next().is_some_and(|c| c.is_alphabetic() || c == '_') && chars.all(is_word_char)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

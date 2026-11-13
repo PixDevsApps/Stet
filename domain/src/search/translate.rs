@@ -19,7 +19,8 @@ use std::fmt;
 
 use super::extended::{EscapeError, unescape};
 use super::pattern::{self, SourceMap};
-use super::{NUL_PLACEHOLDER, Query, SearchMode};
+use super::{Query, SearchMode};
+use crate::text::{NUL_PLACEHOLDER, is_word_char};
 
 /// Where the pattern runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -297,7 +298,7 @@ enum CharClass {
 
 impl CharClass {
     fn of(c: char) -> Self {
-        if c.is_alphanumeric() || c == '_' {
+        if is_word_char(c) {
             Self::Word
         } else if c.is_whitespace() {
             Self::Space

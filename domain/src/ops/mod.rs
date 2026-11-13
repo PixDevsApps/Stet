@@ -13,11 +13,7 @@ use std::fmt;
 use std::ops::Range;
 
 use crate::text::edit::ByteCursor;
-use crate::text::{Bias, LineIndex, Position, TextEdit, map_offset};
-
-/// Above this many edits a change is applied as one replacement of the range it spans
-/// (ADR-003 amendment).
-pub const BULK_EDIT_THRESHOLD: usize = 2_000;
+use crate::text::{BULK_EDIT_THRESHOLD, Bias, LineIndex, Position, TextEdit, map_offset};
 
 /// The part of the text an operation works on.
 #[derive(Debug, Clone, PartialEq, Eq)]

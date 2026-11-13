@@ -3,6 +3,9 @@
 //! declaration or an editor modeline). Results are GtkSourceView language ids; the caller
 //! checks that the id is installed.
 
+/// How much of a text, from its start, language detection looks at.
+pub const HEAD_BYTES: usize = 4096;
+
 const FILE_NAMES: &[(&str, &str)] = &[
     ("PKGBUILD", "sh"),
     (".SRCINFO", "ini"),

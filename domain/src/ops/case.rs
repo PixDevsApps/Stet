@@ -7,7 +7,9 @@ use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::{BULK_EDIT_THRESHOLD, Change, Doc, Target, char_len};
+use crate::text::BULK_EDIT_THRESHOLD;
+
+use super::{Change, Doc, Target, char_len};
 use crate::text::TextEdit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

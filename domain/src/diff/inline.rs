@@ -12,8 +12,9 @@ use std::ops::Range;
 
 use imara_diff::{Algorithm, Diff, Interner, NoSliderHeuristic, Token};
 
-use super::key::{fold_case, fold_char};
+use super::key::fold_case;
 use super::{CompareOptions, IgnoreWhitespace};
+use crate::text::{fold_char, is_word_char};
 
 const MAX_WORD_DIFF_BYTES: usize = 16 * 1024;
 
@@ -139,7 +140,7 @@ fn split_pieces<'a>(line: &'a str, by_char: bool, pieces: &mut Vec<Piece<'a>>) {
     for (column, (byte, c)) in line.char_indices().enumerate() {
         let kind = if c.is_whitespace() {
             Kind::Space
-        } else if c.is_alphanumeric() || c == '_' {
+        } else if is_word_char(c) {
             Kind::Word
         } else {
             Kind::Other

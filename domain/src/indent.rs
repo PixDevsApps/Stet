@@ -15,7 +15,7 @@ pub struct Indentation {
 impl Indentation {
     /// The default: tabs, four columns wide.
     pub const DEFAULT: Self = Self {
-        tab_width: 4,
+        tab_width: crate::view::DEFAULT_TAB_WIDTH,
         insert_spaces: false,
     };
 

@@ -24,9 +24,6 @@ pub use smart::SmartHighlight;
 pub use template::{Captures, Template, TemplateWarning};
 pub use translate::{Target, TranslateError, Translated, translate, translate_for};
 
-/// What the buffer holds instead of U+0000 (ADR-007).
-pub const NUL_PLACEHOLDER: char = '\u{2400}';
-
 /// How the text in the find and replace fields is read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SearchMode {
@@ -146,7 +143,7 @@ impl Query {
 }
 
 /// Normalizes text the way the loader normalizes a document: CRLF and CR become LF
-/// (ADR-008) and NUL becomes [`NUL_PLACEHOLDER`] (ADR-007).
+/// (ADR-008) and NUL becomes [`NUL_PLACEHOLDER`](crate::text::NUL_PLACEHOLDER) (ADR-007).
 pub fn to_buffer_text(text: &str) -> Cow<'_, str> {
     if memchr::memchr2(b'\r', 0, text.as_bytes()).is_none() {
         return Cow::Borrowed(text);
@@ -159,7 +156,7 @@ pub fn to_buffer_text(text: &str) -> Cow<'_, str> {
                 chars.next_if_eq(&'\n');
                 out.push('\n');
             }
-            '\0' => out.push(NUL_PLACEHOLDER),
+            '\0' => out.push(crate::text::NUL_PLACEHOLDER),
             c => out.push(c),
         }
     }
