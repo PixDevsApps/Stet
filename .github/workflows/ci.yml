@@ -14,26 +14,24 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # The toolchain the checks are held to, the development machine's; a newer Rust's new
+  # warnings show in the `latest` job instead of failing the build.
+  RUST_TOOLCHAIN: "1.98.1"
 
 jobs:
   checks:
     name: Format, lints, tests, docs and build
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     # Arch Linux has the GTK 4, libadwaita and GtkSourceView 5 versions Stet builds against.
     container: archlinux:base-devel
     steps:
       - name: System packages
-        run: pacman -Syu --noconfirm --needed rust gtk4 libadwaita gtksourceview5 pcre2 pkgconf python git
-      - uses: actions/checkout@v5
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: checks-${{ hashFiles('Cargo.lock') }}
-          restore-keys: checks-
+        run: pacman -Syu --noconfirm --needed rustup gtk4 libadwaita gtksourceview5 pcre2 pkgconf python git
+      - name: Toolchain
+        run: rustup default "$RUST_TOOLCHAIN" && rustup component add rustfmt clippy
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # The UI self-tests (tools/ci.sh --ui) need a patched gtk4-broadwayd on GTK 4.24
       # (docs/upstream/gtk-broadway-shared-render-node.md); they run on the maintainer's machine.
       - name: tools/ci.sh
@@ -42,18 +40,48 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           bash tools/ci.sh
 
+  dependencies:
+    name: Dependency policy (cargo deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+
   msrv:
     name: Minimum Rust version
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container: archlinux:base-devel
     steps:
       - name: System packages
         run: pacman -Syu --noconfirm --needed rustup gtk4 libadwaita gtksourceview5 pcre2 pkgconf git
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Toolchain from rust-version
         run: |
           version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
           rustup toolchain install "$version" --profile minimal
           echo "MSRV=$version" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - name: cargo check
         run: cargo +"$MSRV" check --workspace --all-targets --locked
+
+  latest:
+    name: Latest stable Rust (early warning)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    continue-on-error: true
+    container: archlinux:base-devel
+    steps:
+      - name: System packages
+        run: pacman -Syu --noconfirm --needed rustup gtk4 libadwaita gtksourceview5 pcre2 pkgconf git
+      - name: Toolchain
+        run: rustup default stable && rustup component add clippy
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - name: Clippy and tests
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked

@@ -22,12 +22,18 @@ cargo fmt --all --check
 python3 -I tools/flatpak-cargo-sources.py --check
 # Every relative link in the Markdown files resolves.
 python3 -I tools/check-links.py
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
 # Without the self-test harness (ADR-020), as the packages build it: nothing else may need it.
-cargo clippy -p stet --no-default-features --all-targets -- -D warnings
-cargo test --workspace
-RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --quiet
-cargo build --workspace
+cargo clippy -p stet --no-default-features --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo test -p stet --no-default-features --locked
+RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked --quiet
+# The dependency policy in deny.toml (licenses, RustSec advisories, sources), when cargo-deny is
+# installed; the CI workflow always runs it.
+if command -v cargo-deny >/dev/null; then
+    cargo deny --locked check
+fi
+cargo build --workspace --locked
 
 if $ui; then
     mkdir -p .local

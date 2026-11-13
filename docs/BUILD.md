@@ -179,7 +179,7 @@ Environment variables:
 bash tools/ci.sh
 ```
 
-The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, the same Clippy run for the app without its self-test harness (`cargo clippy -p stet --no-default-features --all-targets -- -D warnings`, which fails if anything outside the harness needs it), `cargo test --workspace`, `cargo doc --workspace --no-deps` with warnings as errors, and `cargo build --workspace` (plus the checks that the Flatpak's crate list matches `Cargo.lock` and that every relative link in the Markdown files resolves, `tools/check-links.py`). Run it before every change is proposed.
+The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, the same Clippy run for the app without its self-test harness (`cargo clippy -p stet --no-default-features --all-targets -- -D warnings`, which fails if anything outside the harness needs it), `cargo test --workspace` and the app's tests without the harness, `cargo doc --workspace --no-deps` with warnings as errors, `cargo deny check` against `deny.toml` when cargo-deny is installed, and `cargo build --workspace`, every cargo step with `--locked` (plus the checks that the Flatpak's crate list matches `Cargo.lock` and that every relative link in the Markdown files resolves, `tools/check-links.py`). Run it before every change is proposed.
 
 ```sh
 bash tools/ci.sh --ui

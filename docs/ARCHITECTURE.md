@@ -19,7 +19,7 @@ stet-domain  ←  stet-infrastructure  ←  stet (the app)
 | --- | --- | --- | --- |
 | `stet-domain` | `domain/` | Model the editor and decide: text, search, sessions, settings, menus, banners. Parse and write data formats as pure functions over text or bytes. | Open a file, a socket or a process; start a thread; name GTK. |
 | `stet-infrastructure` | `infrastructure/` | Read and write files, walk folders, run PCRE2 and ripgrep's searcher, detect and convert encodings, talk to Omarchy's files and the desktop. Every test runs without a display. | Link GTK. |
-| `stet` | `app/` | Everything on screen, and the main loop. The only crate with `unsafe`, kept in `app/src/sys/`. | Do blocking work on the GTK thread. |
+| `stet` | `app/` | Everything on screen, and the main loop. The only crate with `unsafe`: safe wrappers in `app/src/sys/`, plus a test of GTK's accelerator parser and the self-test harness setting its environment before any thread starts. | Do blocking work on the GTK thread. |
 
 The domain keeps formats that are its models' own contracts: `session.json` *is* the session record with its forgiving decoding (ADR-006), and `config.toml`/`keys.toml` errors are reported by line and column (ADR-017). See the [ADR-020 amendment](DECISIONS.md#adr-020-amendment--formats-stay-with-their-models-2026-11-13).
 
@@ -90,7 +90,7 @@ Nothing blocks the GTK thread (ADR-003). The pattern:
 3. Back on the GTK thread, drop the result if the page was closed or edited meanwhile, or if a newer request superseded it (`runtime::Latest`; `runtime::SharedLatest` when the ticket must travel to a thread of its own, as quick open's ranking and walk do).
 4. Apply edits to the buffer in one user action; more than 2,000 edits become one bulk edit (`text::BULK_EDIT_THRESHOLD`).
 
-Waiting is event-driven: `EditorPage::loaded()`, `runtime::Notify`, signals. Polling loops and hand-made generation counters are not used.
+Waiting is event-driven: `EditorPage::loaded()`, `runtime::Notify`, signals; stale results are dropped with `runtime::Latest` (`SharedLatest` across threads). The one poll left is D-Bus activation's bounded wait for the service, which runs before GTK starts.
 
 ## Opening and saving a file
 
@@ -109,9 +109,10 @@ The self-test harness reaches the window only through `window/probe.rs`. Its com
 
 ## Rules the tools enforce
 
-- `[workspace.lints]` in `Cargo.toml`: `unsafe_code` denied (allowed on `mod sys;` only), the lossy-cast lints, `too_many_lines`, `unwrap_used` (outside tests), `undocumented_unsafe_blocks`, and a chosen part of Clippy's pedantic group. `#[expect(…, reason = "…")]` marks the few exceptions; `allow_attributes` and `allow_attributes_without_reason` keep it that way. The two libraries also warn on `unreachable_pub`.
+- `[workspace.lints]` in `Cargo.toml`: `unsafe_code` denied (expected, with a reason, on `mod sys;` and the two places above), the lossy-cast lints, `too_many_lines`, `unwrap_used` (outside tests), `undocumented_unsafe_blocks`, and a chosen part of Clippy's pedantic group. `#[expect(…, reason = "…")]` marks the few exceptions; `allow_attributes` and `allow_attributes_without_reason` keep it that way. The two libraries also warn on `unreachable_pub`, `missing_docs` and `clippy::must_use_candidate`.
 - `clippy.toml` disallows GTK's raw text positions (`TextBufferExt::iter_at_offset`, `iter_at_line`, `iter_at_line_offset`, and `TextIter::offset`, `line`, `line_offset` and their setters): offsets, lines and columns cross from GTK's integers only in `app/src/convert.rs`, character offsets as `CharOffset` (`iter_at_char`, `char_offset`) and lines as `Line` (`iter_at_line_start`, `buffer_line`, `display_line` as a `LineNumber`).
-- `tools/ci.sh`: rustfmt, Clippy with `-D warnings` (with and without `selftest`), the tests, rustdoc with `-D warnings`, the build, and the check that the Flatpak's crate list matches `Cargo.lock`.
+- `tools/ci.sh`: rustfmt, Clippy with `-D warnings` (with and without `selftest`), the tests (also without `selftest`), rustdoc with `-D warnings`, `cargo deny` against `deny.toml` (licenses, RustSec advisories, sources), the build, the check that the Flatpak's crate list matches `Cargo.lock`, and `tools/check-links.py`; every cargo step `--locked`.
+- `.github/workflows/ci.yml` runs `tools/ci.sh` on a pinned toolchain in Arch Linux, `cargo deny`, the minimum Rust version, and an early-warning job on the latest stable Rust that may fail; its actions are pinned to commits and Dependabot updates them.
 
 ## Where new code goes
 

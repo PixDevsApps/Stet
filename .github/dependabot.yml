@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # The actions CI uses, pinned to commits; Cargo dependencies are updated by hand, since a
+  # change also regenerates the Flatpak's crate list and the license records.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

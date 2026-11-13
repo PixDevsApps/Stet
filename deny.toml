@@ -1,0 +1,32 @@
+# cargo-deny: the dependency policy, checked by CI (cargo deny check).
+
+[graph]
+all-features = true
+
+[advisories]
+# Every RustSec advisory that affects a locked crate fails the check, as does a yanked crate.
+yanked = "deny"
+
+[licenses]
+# The licenses packaging/dependency-licenses.json records today (THIRD_PARTY.md), all
+# compatible with Stet's MIT license.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+# The workspace's own crates depend on each other by path; none is published.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
