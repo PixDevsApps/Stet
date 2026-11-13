@@ -1,9 +1,11 @@
 //! Reading `config.toml` and `keys.toml`, and creating them with commented defaults when the
 //! palette opens one that does not exist yet (ADR-017).
 
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::Path;
+
+use crate::fs::durable::{self, FileMode, WriteOptions};
 
 /// Settings files larger than this are refused rather than read.
 pub const MAX_BYTES: u64 = 1024 * 1024;
@@ -31,19 +33,18 @@ pub fn read_optional(path: &Path) -> io::Result<Option<String>> {
 }
 
 /// Writes `text` to `path` unless the file exists, creating its directory. Returns whether it
-/// wrote the file; an existing file is never touched.
+/// wrote the file; an existing file is never touched. The file appears complete or not at all
+/// ([`durable::write_atomic`]), with the umask's default mode, like a file the user creates.
 pub fn create_if_missing(path: &Path, text: &str) -> io::Result<bool> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
-    let mut file = match OpenOptions::new().write(true).create_new(true).open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(false),
-        Err(error) => return Err(error),
-    };
-    file.write_all(text.as_bytes())?;
-    file.sync_all()?;
-    Ok(true)
+    let options = WriteOptions::create_new(FileMode::Umask);
+    match durable::write_atomic(path, text.as_bytes(), options) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 #[cfg(test)]
@@ -75,5 +76,18 @@ mod tests {
         fs::write(&path, "quit = []\n").unwrap();
         assert!(!create_if_missing(&path, "# defaults\n").unwrap());
         assert_eq!(fs::read_to_string(&path).unwrap(), "quit = []\n");
+        assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn created_files_get_the_umask_default_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let reference = dir.path().join("reference");
+        fs::write(&reference, "").unwrap();
+        let path = dir.path().join("config.toml");
+        assert!(create_if_missing(&path, "# defaults\n").unwrap());
+        let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&path), mode(&reference));
     }
 }

@@ -2,6 +2,7 @@
 //! saving, and the open and save pipeline over the encoding module.
 
 mod document;
+pub(crate) mod durable;
 mod load;
 mod meta;
 mod read;

@@ -1,10 +1,8 @@
 //! Stet's own XDG directories (ADR-010): `$XDG_STATE_HOME/stet`, `$XDG_CACHE_HOME/stet` and
-//! `$XDG_CONFIG_HOME/stet`. Directories Stet creates for private data are mode 0700.
+//! `$XDG_CONFIG_HOME/stet`. Directories Stet creates for private data are mode 0700
+//! ([`crate::fs::durable::ensure_private_dir`]).
 
 use std::ffi::OsStr;
-use std::fs::{self, DirBuilder, Permissions};
-use std::io;
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 pub const APP_DIR: &str = "stet";
@@ -72,17 +70,6 @@ impl StetDirs {
     }
 }
 
-/// Creates `dir` (and missing parents) and makes `dir` itself mode 0700, also when it existed
-/// with wider permissions.
-pub fn ensure_private_dir(dir: &Path) -> io::Result<()> {
-    DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
-    let mode = fs::metadata(dir)?.permissions().mode() & 0o777;
-    if mode != 0o700 {
-        fs::set_permissions(dir, Permissions::from_mode(0o700))?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,23 +98,5 @@ mod tests {
         );
         assert_eq!(dirs.styles_dir(), Path::new("/tmp/x/cache/stet/styles"));
         assert!(StetDirs::from_env().state.ends_with("stet"));
-    }
-
-    #[test]
-    fn private_dirs_are_0700() {
-        let root = tempfile::tempdir().unwrap();
-        let dir = root.path().join("a/b");
-        ensure_private_dir(&dir).unwrap();
-        assert_eq!(
-            fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
-            0o700
-        );
-
-        fs::set_permissions(&dir, Permissions::from_mode(0o755)).unwrap();
-        ensure_private_dir(&dir).unwrap();
-        assert_eq!(
-            fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
-            0o700
-        );
     }
 }

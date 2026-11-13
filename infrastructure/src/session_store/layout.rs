@@ -1,12 +1,11 @@
 use super::StoreError;
-use super::fsutil::FILE_MODE;
-use std::fs::{self, DirBuilder, File, OpenOptions, Permissions};
-use std::io::{self, Read};
-use std::os::unix::fs::{DirBuilderExt, FileExt as _, OpenOptionsExt, PermissionsExt};
+use crate::fs::durable::{PRIVATE_FILE_MODE, ensure_private_dir};
+use std::fs::{File, OpenOptions, Permissions};
+use std::io::Read;
+use std::os::unix::fs::{FileExt as _, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use stet_domain::session::is_valid_id;
 
-const DIR_MODE: u32 = 0o700;
 const BACKUP_EXTENSION: &str = ".txt";
 const TEMP_SUFFIX: &str = ".tmp";
 
@@ -89,7 +88,7 @@ impl Layout {
     /// Creates the directories, private to the user; tightens them if they already exist.
     pub(super) fn create(&self) -> Result<(), StoreError> {
         for dir in [&self.root, &self.backups, &self.orphans] {
-            private_dir(dir).map_err(|error| StoreError::io("create", dir, error))?;
+            ensure_private_dir(dir).map_err(|error| StoreError::io("create", dir, error))?;
         }
         Ok(())
     }
@@ -103,7 +102,7 @@ impl Layout {
             .write(true)
             .create(true)
             .truncate(false)
-            .mode(FILE_MODE)
+            .mode(PRIVATE_FILE_MODE)
             .open(&path)
             .map_err(|error| StoreError::io("open", &path, error))?;
         match fs4::FileExt::try_lock(&file) {
@@ -119,23 +118,12 @@ impl Layout {
             }
         }
         let pid = format!("{}\n", std::process::id());
-        file.set_permissions(Permissions::from_mode(FILE_MODE))
+        file.set_permissions(Permissions::from_mode(PRIVATE_FILE_MODE))
             .and_then(|()| file.set_len(0))
             .and_then(|()| file.write_all_at(pid.as_bytes(), 0))
             .map_err(|error| StoreError::io("write", &path, error))?;
         Ok(file)
     }
-}
-
-fn private_dir(dir: &Path) -> io::Result<()> {
-    DirBuilder::new()
-        .recursive(true)
-        .mode(DIR_MODE)
-        .create(dir)?;
-    if fs::metadata(dir)?.permissions().mode() & 0o777 != DIR_MODE {
-        fs::set_permissions(dir, Permissions::from_mode(DIR_MODE))?;
-    }
-    Ok(())
 }
 
 fn read_pid(mut file: &File) -> Option<u32> {

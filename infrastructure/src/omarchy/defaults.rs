@@ -3,8 +3,10 @@
 //! the editors it knows, so "Set as Default Editor" writes it directly (INTEGRATIONS.md).
 
 use std::fs;
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
+
+use crate::fs::durable::{self, FileMode, WriteOptions};
 
 /// The file in Omarchy's state directory (the parent of `current/`).
 pub fn editor_file(omarchy_dir: &Path) -> PathBuf {
@@ -22,15 +24,16 @@ pub fn read_default_editor(omarchy_dir: &Path) -> io::Result<Option<String>> {
 }
 
 /// Writes `command` as the default editor, as `omarchy-default-editor` does (`printf '%s\n'`),
-/// through a temporary file renamed into place.
+/// atomically and durably ([`durable::write_atomic`]), private to the user (mode 0600).
 pub fn write_default_editor(omarchy_dir: &Path, command: &str) -> io::Result<PathBuf> {
     let path = editor_file(omarchy_dir);
     let dir = path.parent().expect("the editor file has a directory");
     fs::create_dir_all(dir)?;
-    let mut temp = tempfile::NamedTempFile::new_in(dir)?;
-    writeln!(temp, "{command}")?;
-    temp.as_file().sync_all()?;
-    temp.persist(&path).map_err(|error| error.error)?;
+    durable::write_atomic(
+        &path,
+        format!("{command}\n").as_bytes(),
+        WriteOptions::replace(FileMode::PRIVATE),
+    )?;
     Ok(path)
 }
 
@@ -57,5 +60,16 @@ mod tests {
         write_default_editor(dir.path(), "stet").unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), "stet\n");
         assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn the_file_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_default_editor(dir.path(), "stet").unwrap();
+        assert_eq!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
     }
 }

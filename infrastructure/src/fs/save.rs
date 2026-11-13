@@ -1,8 +1,8 @@
 use std::ffi::OsStr;
-use std::fs::{self, DirBuilder, File, Metadata, OpenOptions, Permissions};
+use std::fs::{self, File, Metadata, OpenOptions, Permissions};
 use std::io::{self, ErrorKind, Write};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{DirBuilderExt, FileExt, MetadataExt, PermissionsExt};
+use std::os::unix::fs::{FileExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -12,16 +12,12 @@ use tempfile::Builder;
 
 use stet_domain::session::Fingerprint;
 
+use super::durable::{self, FileMode};
 use super::meta::fingerprint_of;
 use crate::encoding::Unmappable;
 
 /// How many symbolic links [`safe_save`] follows by hand to a file that doesn't exist yet.
 const MAX_LINKS: usize = 40;
-
-/// The temporary file of an atomic save is `.<name>.<RANDOM>.stet-tmp` next to the target.
-const TEMP_SUFFIX: &str = ".stet-tmp";
-/// The length of the random part, which tempfile makes of ASCII letters and digits.
-const TEMP_RANDOM_LEN: usize = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveOptions {
@@ -235,15 +231,12 @@ fn atomic(
     hook: &mut dyn FnMut(Stage),
 ) -> Result<SaveOutcome, Atomic> {
     let failed = |error: io::Error| Atomic::Failed(SaveError::io(target, error));
-    let name = target.file_name().unwrap_or_default().to_string_lossy();
-    let mode = if original.is_some() { 0o600 } else { 0o666 };
-    let mut temp = Builder::new()
-        .prefix(&format!(".{name}."))
-        .rand_bytes(TEMP_RANDOM_LEN)
-        .suffix(TEMP_SUFFIX)
-        .permissions(Permissions::from_mode(mode))
-        .tempfile_in(dir)
-        .map_err(failed)?;
+    let mode = if original.is_some() {
+        FileMode::PRIVATE
+    } else {
+        FileMode::Umask
+    };
+    let mut temp = durable::temp_beside(target, mode).map_err(failed)?;
     temp.write_all(bytes).map_err(failed)?;
     if let Some(original) = original {
         keep_owner(temp.as_file(), original).map_err(|error| match error.kind() {
@@ -265,7 +258,7 @@ fn atomic(
             }
             _ => failed(error.error),
         })?;
-    sync_dir(dir);
+    durable::sync_dir_or_warn(dir);
     let metadata = file.metadata().map_err(failed)?;
     Ok(SaveOutcome {
         fingerprint: fingerprint_of(&metadata),
@@ -369,10 +362,7 @@ fn in_place(
 
 /// Copies the target into `backup_dir` as a private file and syncs it.
 fn backup_copy(target: &Path, backup_dir: &Path) -> io::Result<PathBuf> {
-    DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(backup_dir)?;
+    durable::ensure_private_dir(backup_dir)?;
     let name = target.file_name().unwrap_or_default().to_string_lossy();
     let mut backup = Builder::new()
         .prefix(&format!("{name}."))
@@ -380,7 +370,7 @@ fn backup_copy(target: &Path, backup_dir: &Path) -> io::Result<PathBuf> {
         .tempfile_in(backup_dir)?;
     io::copy(&mut File::open(target)?, backup.as_file_mut())?;
     backup.as_file().sync_all()?;
-    sync_dir(backup_dir);
+    durable::sync_dir_or_warn(backup_dir);
     let (_, path) = backup.keep().map_err(|error| error.error)?;
     Ok(path)
 }
@@ -397,19 +387,10 @@ pub fn remove_stale_temps(target: &Path, min_age: Duration) -> usize {
     let Ok(entries) = fs::read_dir(dir) else {
         return 0;
     };
-    let prefix = [b".", name.as_bytes(), b"."].concat();
     let now = SystemTime::now();
     let mut removed = 0;
     for entry in entries.flatten() {
-        let file_name = entry.file_name();
-        let Some(random) = file_name
-            .as_bytes()
-            .strip_prefix(prefix.as_slice())
-            .and_then(|rest| rest.strip_suffix(TEMP_SUFFIX.as_bytes()))
-        else {
-            continue;
-        };
-        if random.len() != TEMP_RANDOM_LEN || !random.iter().all(u8::is_ascii_alphanumeric) {
+        if !durable::is_temp_of(&entry.file_name(), name) {
             continue;
         }
         let Ok(metadata) = entry.metadata() else {
@@ -425,14 +406,6 @@ pub fn remove_stale_temps(target: &Path, min_age: Duration) -> usize {
         }
     }
     removed
-}
-
-/// Makes a rename or a new directory entry durable. A failure is logged, not returned: the
-/// content itself is already synced.
-fn sync_dir(dir: &Path) {
-    if let Err(error) = File::open(dir).and_then(|dir| dir.sync_all()) {
-        tracing::warn!(%error, "could not sync the directory");
-    }
 }
 
 #[cfg(test)]

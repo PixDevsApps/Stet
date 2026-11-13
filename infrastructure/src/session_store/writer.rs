@@ -1,7 +1,8 @@
-use super::fsutil::{remove_file, remove_files_in, sync_dir, write_synced};
+use super::fsutil::{remove_file, remove_files_in, sync_dir};
 use super::layout::Layout;
 use super::restore;
 use super::{CommitStats, Restored, Snapshot, StoreError, StoreStatus};
+use crate::fs::durable::{FileMode, write_synced};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io;
@@ -263,7 +264,7 @@ impl BackupWriter {
     fn write_backup(&self, id: &str, text: &str) -> Result<(), StoreError> {
         let temp = self.layout.backup_temp(id);
         let target = self.layout.backup(id);
-        let replaced = write_synced(&temp, text.as_bytes())
+        let replaced = write_synced(&temp, text.as_bytes(), FileMode::PRIVATE)
             .map_err(|error| StoreError::io("write", &temp, error))
             .and_then(|()| self.checkpoint(Phase::BackupTempWritten))
             .and_then(|()| {
@@ -283,7 +284,8 @@ impl BackupWriter {
         let bytes = serde_json::to_vec_pretty(session)
             .map_err(|error| StoreError::io("encode", &manifest, error.into()))?;
         let temp = self.layout.manifest_temp();
-        write_synced(&temp, &bytes).map_err(|error| StoreError::io("write", &temp, error))?;
+        write_synced(&temp, &bytes, FileMode::PRIVATE)
+            .map_err(|error| StoreError::io("write", &temp, error))?;
         self.checkpoint(Phase::ManifestTempWritten)?;
         if keep_previous {
             match fs::rename(&manifest, self.layout.previous()) {

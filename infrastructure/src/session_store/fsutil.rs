@@ -1,29 +1,13 @@
 use super::StoreError;
-use std::fs::{self, File, OpenOptions, Permissions};
-use std::io::{self, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use crate::fs::durable;
+use std::fs;
+use std::io;
 use std::path::Path;
 
-pub(super) const FILE_MODE: u32 = 0o600;
-
-/// Creates or truncates `path` with mode 0600, writes `bytes` and syncs the file.
-pub(super) fn write_synced(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(FILE_MODE)
-        .open(path)?;
-    file.set_permissions(Permissions::from_mode(FILE_MODE))?;
-    file.write_all(bytes)?;
-    file.sync_all()
-}
-
-/// Syncs a directory, so renames and new entries in it survive a power loss.
+/// Syncs a directory, so renames and new entries in it survive a power loss. The writer
+/// returns the error: its next step (a manifest referencing new backups) depends on it.
 pub(super) fn sync_dir(dir: &Path) -> Result<(), StoreError> {
-    File::open(dir)
-        .and_then(|dir| dir.sync_all())
-        .map_err(|error| StoreError::io("sync", dir, error))
+    durable::sync_dir(dir).map_err(|error| StoreError::io("sync", dir, error))
 }
 
 /// Removes a file; one that is already gone counts as removed.

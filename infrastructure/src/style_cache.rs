@@ -2,22 +2,30 @@
 //! ADR-004): exactly one `stet-omarchy-<fingerprint>.xml` is kept there.
 
 use std::fs;
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::xdg;
+use crate::fs::durable::{self, FileMode, WriteOptions};
 
 /// The start of every generated scheme id, and so of every file name this module manages.
 pub const SCHEME_PREFIX: &str = "stet-omarchy-";
 
-/// Writes `<id>.xml` through a temporary file renamed into place, and removes the other
-/// generated schemes, so exactly one is in the search path.
+/// Writes `<id>.xml` atomically and durably ([`durable::write_atomic`]) in the private
+/// directory `dir`, private to the user (mode 0600), and removes the other generated
+/// schemes, so exactly one is in the search path.
 pub fn write_scheme(dir: &Path, id: &str, xml: &str) -> io::Result<PathBuf> {
-    xdg::ensure_private_dir(dir)?;
+    durable::ensure_private_dir(dir).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!("could not create {}: {error}", dir.display()),
+        )
+    })?;
     let path = dir.join(format!("{id}.xml"));
-    let mut temp = tempfile::NamedTempFile::new_in(dir)?;
-    temp.write_all(xml.as_bytes())?;
-    temp.persist(&path).map_err(|error| error.error)?;
+    durable::write_atomic(
+        &path,
+        xml.as_bytes(),
+        WriteOptions::replace(FileMode::PRIVATE),
+    )?;
     for entry in fs::read_dir(dir)?.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
@@ -52,6 +60,10 @@ mod tests {
         assert_eq!(
             fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
             0o700
+        );
+        assert_eq!(
+            fs::metadata(&first).unwrap().permissions().mode() & 0o777,
+            0o600
         );
         fs::write(dir.join("other.xml"), "").unwrap();
         fs::write(dir.join("stet-omarchy-notes.txt"), "").unwrap();
