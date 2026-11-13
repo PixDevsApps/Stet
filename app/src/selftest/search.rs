@@ -902,7 +902,7 @@ impl Harness {
             let mut widget = Vec::new();
             let mut iter = buffer.start_iter();
             while let Some((start, end, wrapped)) = context.forward(&iter) {
-                if wrapped || widget.len() > 10_000 || end.offset() <= iter.offset() {
+                if wrapped || widget.len() > 10_000 || end.char_offset() <= iter.char_offset() {
                     break;
                 }
                 widget.push((start.char_offset(), end.char_offset()));

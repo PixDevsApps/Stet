@@ -1,7 +1,7 @@
 //! In-window dialogs, only where a decision is needed (DESIGN.md), plus the file choosers.
 
 use super::Window;
-use crate::convert::BufferPositions;
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::EditorPage;
 use crate::runtime::connect_once;
 use gtk4 as gtk;
@@ -222,8 +222,8 @@ impl Window {
             let iter = buffer.iter_at_char_offset(offset);
             let text = format!(
                 "Line {}, column {}: {character} (U+{:04X})",
-                iter.line() + 1,
-                iter.line_offset() + 1,
+                iter.display_line(),
+                iter.display_column(),
                 u32::from(character)
             );
             let label = gtk::Label::builder()

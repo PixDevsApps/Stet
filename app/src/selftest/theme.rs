@@ -108,10 +108,6 @@ echo "$name" > theme.name
     }
 
     /// `assert-dark true|false`: whether libadwaita is dark.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn assert_dark(&self, args: &[String]) -> StepResult {
         equal(
             "dark",

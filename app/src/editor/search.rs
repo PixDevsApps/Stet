@@ -6,7 +6,7 @@
 
 use super::document::CURRENT_MATCH_TAG;
 use super::page::EditorPage;
-use crate::convert::{BufferPositions, to_usize};
+use crate::convert::{BufferPositions, IterPosition};
 use crate::runtime::{Debounce, Latest};
 use crate::theme::scheme::SMART_HIGHLIGHT_STYLE;
 use gtk4 as gtk;
@@ -22,7 +22,7 @@ use stet_infrastructure::search::{Match, Matcher};
 pub const OWN_MATCH_TAG: &str = "stet-search-match";
 
 /// How many lines above and below the visible ones get our own matches' highlight.
-const TAG_MARGIN_LINES: i32 = 100;
+const TAG_MARGIN_LINES: usize = 100;
 
 const MATCH_START_MARK: &str = "stet-match-start";
 const MATCH_END_MARK: &str = "stet-match-end";
@@ -72,7 +72,7 @@ pub struct PageSearch {
     pub own_pending: Cell<Option<(u64, u64)>>,
     pub own_cancel: RefCell<Option<Arc<AtomicBool>>>,
     /// The character range our match tag currently covers.
-    tagged: Cell<Option<(i32, i32)>>,
+    tagged: Cell<Option<(usize, usize)>>,
     /// The pending search after an edit.
     pub own_refresh: Debounce,
     /// Smart highlighting's pending update.
@@ -226,11 +226,11 @@ impl PageSearch {
 
     fn untag(&self, buffer: &sourceview5::Buffer) {
         if let Some((start, end)) = self.tagged.take() {
-            let end = end.min(buffer.char_count());
+            let end = end.min(buffer.total_chars());
             buffer.remove_tag_by_name(
                 OWN_MATCH_TAG,
-                &buffer.iter_at_offset(start.min(end)),
-                &buffer.iter_at_offset(end),
+                &buffer.iter_at_char_offset(start.min(end)),
+                &buffer.iter_at_char_offset(end),
             );
         }
     }
@@ -250,20 +250,20 @@ impl PageSearch {
         let rect = view.visible_rect();
         let top = view
             .iter_at_location(rect.x(), rect.y())
-            .map_or(0, |iter| iter.line());
+            .map_or(0, |iter| iter.line_number());
         let bottom = view
             .iter_at_location(rect.x(), rect.y() + rect.height())
-            .map_or_else(|| buffer.line_count(), |iter| iter.line());
-        let first_line = (top - TAG_MARGIN_LINES).max(0);
+            .map_or_else(|| buffer.total_lines(), |iter| iter.line_number());
+        let first_line = top.saturating_sub(TAG_MARGIN_LINES);
         let last_line = bottom.saturating_add(TAG_MARGIN_LINES);
         let start = buffer
-            .iter_at_line(first_line)
-            .map_or(0, |iter| iter.offset());
+            .iter_at_line_number(first_line)
+            .map_or(0, |iter| iter.char_offset());
         let end = buffer
-            .iter_at_line(last_line)
-            .map_or_else(|| buffer.char_count(), |iter| iter.offset());
+            .iter_at_line_number(last_line)
+            .map_or_else(|| buffer.total_chars(), |iter| iter.char_offset());
         let matches = &own.matches;
-        let (first, last) = (to_usize(start), to_usize(end));
+        let (first, last) = (start, end);
         let from = matches.partition_point(|found| found.end < first);
         let Some(tag) = buffer.tag_table().lookup(OWN_MATCH_TAG) else {
             return;

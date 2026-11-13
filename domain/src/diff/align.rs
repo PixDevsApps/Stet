@@ -7,7 +7,7 @@ use super::Side;
 /// A run of rows: left and right lines share rows in order, and the shorter side is padded
 /// after its lines.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AlignedChunk {
+pub(super) struct AlignedChunk {
     pub left: Range<usize>,
     pub right: Range<usize>,
     /// The chunk's first row.
@@ -15,11 +15,11 @@ pub struct AlignedChunk {
 }
 
 impl AlignedChunk {
-    pub fn rows(&self) -> usize {
+    pub(super) fn rows(&self) -> usize {
         self.left.len().max(self.right.len())
     }
 
-    pub fn lines(&self, side: Side) -> &Range<usize> {
+    pub(super) fn lines(&self, side: Side) -> &Range<usize> {
         match side {
             Side::Left => &self.left,
             Side::Right => &self.right,
@@ -73,7 +73,7 @@ impl Alignment {
     }
 
     #[cfg(test)]
-    pub fn chunks(&self) -> &[AlignedChunk] {
+    pub(super) fn chunks(&self) -> &[AlignedChunk] {
         &self.chunks
     }
 

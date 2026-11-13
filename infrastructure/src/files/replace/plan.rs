@@ -21,7 +21,7 @@ const LISTED_UNMAPPABLE: usize = 5;
 
 /// The new content of a file, worked out but not written.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Plan {
+pub(super) struct Plan {
     /// The bytes to write; empty when nothing changes.
     pub bytes: Vec<u8>,
     /// Matches replaced, those whose replacement equals the match included.
@@ -35,7 +35,7 @@ pub struct Plan {
 
 /// Why a plan could not be made.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PlanError {
+pub(super) enum PlanError {
     /// The file matched this many times, but is left alone for the reason given.
     Skip(Skip, usize),
     Search(SearchError),
@@ -51,7 +51,7 @@ pub enum PlanError {
 /// malformed bytes, replacements the encoding cannot represent, a replacement that would join
 /// a lone CR and a lone LF into one line break, and any case where the untouched text would
 /// not come back as the same bytes (a stateful encoding).
-pub fn plan(
+pub(super) fn plan(
     bytes: &[u8],
     matcher: &Matcher,
     template: &Template,
@@ -232,7 +232,7 @@ pub fn replaced_hits(
 
 /// How one file of a run went.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FileOutcome {
+pub(crate) enum FileOutcome {
     /// Nothing matched.
     NoMatch,
     /// The replacements were made; `written` is false when every one equalled its match.
@@ -262,7 +262,7 @@ pub(crate) enum Stage {
 
 /// What every file of a run shares.
 #[derive(Debug, Clone)]
-pub struct FileOptions {
+pub(crate) struct FileOptions {
     /// Files from this size are skipped.
     pub max_bytes: u64,
     /// Where an in-place save keeps the previous content while it writes ([`safe_save`]).
@@ -273,7 +273,7 @@ pub struct FileOptions {
 
 /// Replaces in the file `path` and writes it with [`safe_save`], keeping its symbolic link,
 /// mode and owner; a file that changed since it was read is left alone.
-pub fn replace_file(
+pub(crate) fn replace_file(
     path: &Path,
     matcher: &Matcher,
     template: &Template,

@@ -1,0 +1,14 @@
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+disallowed-methods = [
+    { path = "gtk4::prelude::TextBufferExt::iter_at_offset", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::prelude::TextBufferExt::iter_at_line", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::prelude::TextBufferExt::iter_at_line_offset", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::TextIter::offset", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::TextIter::line", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::TextIter::line_offset", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::TextIter::set_offset", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::TextIter::set_line", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+    { path = "gtk4::TextIter::set_line_offset", reason = "GTK positions are converted in app/src/convert.rs: use BufferPositions or IterPosition" },
+]

@@ -17,6 +17,8 @@
 //! - [`theme`]: colours, the Omarchy palette and the editor's colour roles.
 //! - [`updates`]: checking for a newer release.
 
+#![warn(unreachable_pub)]
+
 pub mod actions;
 pub mod column;
 pub mod diff;

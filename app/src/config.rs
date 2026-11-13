@@ -3,7 +3,8 @@
 
 use std::path::PathBuf;
 use std::time::Duration;
-use stet_infrastructure::omarchy::{fontconfig_dir, omarchy_dir};
+use stet_infrastructure::omarchy::font::fontconfig_dir;
+use stet_infrastructure::omarchy::paths::omarchy_dir;
 use stet_infrastructure::xdg::StetDirs;
 
 pub const APP_ID: &str = if cfg!(debug_assertions) {

@@ -19,6 +19,7 @@
 //!   caret and scroll position. The divider's position, the other view's tab and the bookmarks
 //!   come back too. Texts a comparison opened stay out.
 
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::BannerButton;
 use crate::editor::load;
 use crate::editor::load::LoadStats;
@@ -741,23 +742,18 @@ impl Window {
     /// The caret, the selection with its direction, and the first visible line.
     fn restore_position(page: &EditorPage, record: &TabRecord) {
         let buffer = page.buffer();
-        let len = usize::try_from(buffer.char_count()).unwrap_or(0);
-        let (anchor, caret) = record.anchor_and_caret(len);
+        let (anchor, caret) = record.anchor_and_caret(buffer.total_chars());
         page.place_selection(anchor, caret);
-        let line = i32::try_from(record.first_visible_line)
-            .unwrap_or(i32::MAX)
-            .min(buffer.line_count() - 1);
-        if let Some(top) = buffer.iter_at_line(line) {
-            let name = format!("{TOP_MARK}-{}", page.clone_id());
-            let mark = match buffer.mark(&name) {
-                Some(mark) => {
-                    buffer.move_mark(&mark, &top);
-                    mark
-                }
-                None => buffer.create_mark(Some(&name), &top, true),
-            };
-            page.view().scroll_to_mark(&mark, 0.0, true, 0.0, 0.0);
-        }
+        let top = buffer.iter_at_line_or_last(record.first_visible_line);
+        let name = format!("{TOP_MARK}-{}", page.clone_id());
+        let mark = match buffer.mark(&name) {
+            Some(mark) => {
+                buffer.move_mark(&mark, &top);
+                mark
+            }
+            None => buffer.create_mark(Some(&name), &top, true),
+        };
+        page.view().scroll_to_mark(&mark, 0.0, true, 0.0, 0.0);
         page.set_top_line(Some(record.first_visible_line));
         // Until the view is shown it has no scroll position of its own to save.
         connect_once(
@@ -1000,7 +996,7 @@ impl Window {
         let state = page.state();
         let session = page.session().clone();
         let buffer = page.buffer();
-        let chars = usize::try_from(buffer.char_count()).unwrap_or(0);
+        let chars = buffer.total_chars();
         let needs_backup = self.settings().backups
             && !session.discarded
             && (page.is_dirty() || (state.path.is_none() && chars > 0));
@@ -1479,7 +1475,7 @@ fn first_visible_line(page: &EditorPage) -> usize {
     let view = page.view();
     let rect = view.visible_rect();
     let (iter, _) = view.line_at_y(rect.y());
-    usize::try_from(iter.line()).unwrap_or(0)
+    iter.line_number()
 }
 
 /// Why the session is off in this window, for a toast.

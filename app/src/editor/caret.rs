@@ -3,7 +3,7 @@
 
 use super::column::StetView;
 use super::page::EditorPage;
-use crate::convert::IterPosition;
+use crate::convert::{BufferPositions, IterPosition};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
@@ -78,7 +78,7 @@ impl EditorPage {
     /// in the buffer when it has this view's caret, else in the marks this view keeps.
     pub fn place_selection(&self, anchor: usize, caret: usize) {
         let buffer = self.buffer();
-        let at = |chars: usize| buffer.iter_at_offset(i32::try_from(chars).unwrap_or(i32::MAX));
+        let at = |chars: usize| buffer.iter_at_char_offset(chars);
         let document = self.document();
         if document.caret_owner.upgrade().is_none() {
             document.caret_owner.set(Some(self));
@@ -121,40 +121,30 @@ impl EditorPage {
     /// Moves the cursor to `position`, clamped to the text, and scrolls it into view.
     pub fn go_to(&self, position: Position) {
         let buffer = self.buffer();
-        let Some(iter) = self.iter_at(position) else {
-            return;
-        };
-        buffer.place_cursor(&iter);
+        buffer.place_cursor(&self.iter_at(position));
         self.view()
             .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);
     }
 
     /// Moves the cursor to `position`, clamped to the text, without scrolling.
     pub fn place_cursor(&self, position: Position) {
-        if let Some(iter) = self.iter_at(position) {
-            self.buffer().place_cursor(&iter);
-        }
+        self.buffer().place_cursor(&self.iter_at(position));
     }
 
-    fn iter_at(&self, position: Position) -> Option<gtk::TextIter> {
-        let buffer = self.buffer();
-        let last_line = (buffer.line_count() - 1).max(0);
-        let line = i32::try_from(position.line)
-            .unwrap_or(i32::MAX)
-            .min(last_line);
-        let mut iter = buffer.iter_at_line(line)?;
+    fn iter_at(&self, position: Position) -> gtk::TextIter {
+        let mut iter = self.buffer().iter_at_line_or_last(position.line);
         let mut column = position.column;
         while column > 0 && !iter.ends_line() {
             iter.forward_char();
             column -= 1;
         }
-        Some(iter)
+        iter
     }
 
     /// Selects the character at `offset` and shows it (the unmappable dialog's Go To).
     pub fn select_char(&self, offset: usize) {
         let buffer = self.buffer();
-        let start = buffer.iter_at_offset(i32::try_from(offset).unwrap_or(i32::MAX));
+        let start = buffer.iter_at_char_offset(offset);
         let mut end = start;
         end.forward_char();
         buffer.select_range(&start, &end);

@@ -47,10 +47,6 @@ pub(super) const COMMANDS: &[Command] = commands![
 impl Harness {
     /// `sandbox-home`: only as the first step; `run` points `HOME` and the XDG directories at
     /// `$TMP/home` before GTK starts, so the step itself does nothing.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn sandbox_home(&self, _: &[String]) {}
 
     /// `set-text <text>`: replaces the current tab's text without an undo step, the caret at

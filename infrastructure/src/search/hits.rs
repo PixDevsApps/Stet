@@ -4,7 +4,7 @@ use super::matcher::Match;
 use stet_domain::text::{ByteCursor, count_chars};
 
 /// The longest line text a [`Hit`] carries.
-pub const MAX_LINE_CHARS: usize = 500;
+pub(super) const MAX_LINE_CHARS: usize = 500;
 /// How much of a long line is kept before its first match.
 const CONTEXT_CHARS: usize = 40;
 

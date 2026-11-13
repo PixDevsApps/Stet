@@ -250,7 +250,7 @@ fn display(key: &str) -> String {
 }
 
 /// Whether `keys.toml` can change the keys of `id`.
-pub fn is_rebindable(id: ActionId) -> bool {
+fn is_rebindable(id: ActionId) -> bool {
     !id.kind().takes_parameter() && !id.has_widget_keys()
 }
 

@@ -197,10 +197,6 @@ impl Harness {
     }
 
     /// `write-column-lines <path> <count>`: writes that many lines of spike S5's shapes.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn write_column_lines(&self, args: &[String]) -> StepResult {
         let count = number(&args[1])?;
         super::write_file(std::path::Path::new(&args[0]), s5_lines(count).as_bytes())

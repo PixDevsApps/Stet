@@ -6,7 +6,7 @@ use crate::text::{LineIndex, TextEdit};
 use std::ops::Range;
 
 /// Above this many edits, a column edit goes to the buffer as one [`BulkEdit`].
-pub const BULK_THRESHOLD: usize = 2_000;
+pub(super) const BULK_THRESHOLD: usize = 2_000;
 
 /// A column edit as a single replacement of whole lines.
 ///

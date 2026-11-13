@@ -12,8 +12,7 @@ use gtk4::glib;
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use stet_domain::actions::{ActionId, KeyScope, Menu};
-use stet_domain::settings::keymap::default_keys_file;
-use stet_domain::settings::{Keymap, Settings, default_config_file};
+use stet_domain::settings::{Keymap, Settings, default_config_file, default_keys_file};
 use stet_infrastructure::settings_files::create_if_missing;
 
 /// Applies what is loaded now, then every later change.

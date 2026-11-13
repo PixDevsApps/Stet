@@ -401,7 +401,7 @@ pub(crate) mod testing {
     use proptest::prelude::*;
 
     /// Lines from a small alphabet that exercises blanks, case, digits, signs and non-ASCII.
-    pub fn text() -> impl Strategy<Value = String> {
+    pub(crate) fn text() -> impl Strategy<Value = String> {
         let line = prop::collection::vec(
             prop_oneof![
                 4 => "[a-cA-C]",
@@ -424,7 +424,7 @@ pub(crate) mod testing {
     }
 
     /// A text with a target: lines, a selection (often from and to line starts) or the document.
-    pub fn text_and_target() -> impl Strategy<Value = (String, Target)> {
+    pub(crate) fn text_and_target() -> impl Strategy<Value = (String, Target)> {
         text().prop_flat_map(|text| {
             let len = char_len(&text);
             let lines = text.split('\n').count();
@@ -447,7 +447,7 @@ pub(crate) mod testing {
     }
 
     /// The lines a target covers, computed on a plain vector of lines.
-    pub fn naive_lines(text: &str, target: &Target) -> Range<usize> {
+    pub(crate) fn naive_lines(text: &str, target: &Target) -> Range<usize> {
         let lines: Vec<&str> = text.split('\n').collect();
         let line_of = |offset: usize| text.chars().take(offset).filter(|&c| c == '\n').count();
         match target {
@@ -474,7 +474,7 @@ pub(crate) mod testing {
     }
 
     /// Applies `change` to `text`, checking that its edits are already normalized.
-    pub fn applied(text: &str, change: &Change) -> String {
+    pub(crate) fn applied(text: &str, change: &Change) -> String {
         let len = char_len(text);
         assert_eq!(
             normalize(change.edits.clone(), len).as_ref(),
@@ -496,7 +496,7 @@ pub(crate) mod testing {
     }
 
     /// Replaces the lines `range` of `text` with `new`.
-    pub fn splice_lines(text: &str, range: Range<usize>, new: Vec<String>) -> String {
+    pub(crate) fn splice_lines(text: &str, range: Range<usize>, new: Vec<String>) -> String {
         let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
         lines.splice(range, new);
         lines.join("\n")

@@ -32,10 +32,6 @@ pub(super) const COMMANDS: &[Command] = commands![
     "assert-files-like" (3, 3) => assert_files_like,
 ];
 
-#[expect(
-    clippy::unused_self,
-    reason = "the registry calls every handler as a method; these need only the file system"
-)]
 impl Harness {
     /// `launch-file <path> <text>`: only before every other step; the file is written and put
     /// on the app's first command line before the app starts (see `run`), so the step itself

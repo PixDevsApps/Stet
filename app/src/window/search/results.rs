@@ -5,7 +5,7 @@
 //! `GtkListView` over a `GtkTreeListModel` keeps large result sets cheap.
 
 use super::SearchCommand;
-use crate::convert::{to_u32, unit_to_u16};
+use crate::convert::{BufferPositions, to_u32, unit_to_u16};
 use crate::editor::EditorPage;
 use crate::editor::load::JUMP_LOAD_WAIT;
 use crate::window::{Location, Window};
@@ -456,10 +456,6 @@ impl ResultsPanel {
     /// Adds files after the others in `search`, in one change of the list. (Inserting Find in
     /// Files' files one by one to keep them sorted blocked the main loop for 0.43 s per drain
     /// with 13,000 files.)
-    #[expect(
-        clippy::unused_self,
-        reason = "one of the panel's methods for filling a search, called on the panel like `begin`"
-    )]
     pub fn add_files(&self, search: &Rc<SearchNode>, files: Vec<FileNode>) {
         if files.is_empty() {
             return;
@@ -903,11 +899,9 @@ impl Window {
     fn select_result(&self, page: &EditorPage, jump: &Jump) {
         self.select(page);
         let buffer = page.buffer();
-        let line = i32::try_from(jump.line.saturating_sub(1)).unwrap_or(i32::MAX);
-        let line = line.min((buffer.line_count() - 1).max(0));
-        let Some(mut start) = buffer.iter_at_line(line) else {
-            return;
-        };
+        let mut start = buffer.iter_at_line_or_last(
+            usize::try_from(jump.line.saturating_sub(1)).unwrap_or(usize::MAX),
+        );
         for _ in 0..jump.column {
             if start.ends_line() {
                 break;

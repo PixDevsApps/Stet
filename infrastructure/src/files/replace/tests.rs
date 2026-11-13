@@ -1,7 +1,7 @@
 use super::plan::{Plan, PlanError, Stage, plan, replace_file_with_hook};
 use super::*;
 use crate::encoding::fixtures::{fixtures, legacy, utf16};
-use crate::encoding::{PLACEHOLDER, bom_bytes, decode, detect};
+use crate::encoding::{bom_bytes, decode, detect};
 use crate::files::CancelToken;
 use crate::fs::open_document;
 use encoding_rs::{ISO_2022_JP, SHIFT_JIS, UTF_8, UTF_16BE, UTF_16LE, WINDOWS_1252};
@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use stet_domain::search::{SearchMode, SearchOptions};
+use stet_domain::text::NUL_PLACEHOLDER;
 use stet_domain::text::{Eol, normalize_to_lf};
 
 fn query(mode: SearchMode, pattern: &str) -> Query {
@@ -53,7 +54,7 @@ fn oracle_bytes(
     map_placeholder: bool,
 ) -> Vec<u8> {
     let text = if map_placeholder {
-        text.replace(PLACEHOLDER, "\0")
+        text.replace(NUL_PLACEHOLDER, "\0")
     } else {
         text.to_owned()
     };

@@ -237,10 +237,6 @@ impl Harness {
     }
 
     /// `assert-language-hints`: every language id the registry hints at is installed.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn assert_language_hints(&self, _: &[String]) -> StepResult {
         let manager = sourceview5::LanguageManager::default();
         let missing: Vec<&str> = hint_ids()

@@ -3,7 +3,7 @@
 //! Both are TOML and are read with positions, so every mistake is reported with its line and
 //! column; a file with mistakes is not applied at all. Missing keys keep their defaults.
 
-pub mod keymap;
+mod keymap;
 
 use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
@@ -16,7 +16,7 @@ use toml::de::{DeTable, DeValue};
 use crate::document::indent::Indentation;
 use crate::view::{DEFAULT_FONT_SIZE_PT, HIGHLIGHT_MAX_BYTES, HIGHLIGHT_MAX_LINES};
 
-pub use keymap::Keymap;
+pub use keymap::{Canonical, Keymap, default_keys_file};
 
 pub const CONFIG_FILE: &str = "config.toml";
 pub const KEYS_FILE: &str = "keys.toml";

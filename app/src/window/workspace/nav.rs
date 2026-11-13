@@ -18,7 +18,7 @@
 //! its places (`stet_domain::nav::History`). Alt+Left and Alt+Right are application
 //! accelerators as well, which takes them from GtkSourceView's `move-words`.
 
-use crate::convert::to_i32;
+use crate::convert::{BufferPositions, IterPosition, to_i32};
 use crate::editor::EditorPage;
 use crate::editor::load::JUMP_LOAD_WAIT;
 use crate::runtime::{Debounce, Flag};
@@ -180,12 +180,11 @@ impl Nav {
 
 fn caret(page: &EditorPage) -> usize {
     let buffer = page.buffer();
-    usize::try_from(buffer.iter_at_mark(&buffer.get_insert()).offset()).unwrap_or(0)
+    buffer.iter_at_mark(&buffer.get_insert()).char_offset()
 }
 
 fn line_of(page: &EditorPage, offset: usize) -> usize {
-    let offset = i32::try_from(offset).unwrap_or(i32::MAX);
-    usize::try_from(page.buffer().iter_at_offset(offset).line()).unwrap_or(0)
+    page.buffer().iter_at_char_offset(offset).line_number()
 }
 
 /// The navigation commands: the Ctrl+Tab switcher's steps, and back and forward.
@@ -264,7 +263,7 @@ impl Window {
             #[weak]
             page,
             move |_, iter, text| {
-                let at = usize::try_from(iter.offset()).unwrap_or(0);
+                let at = iter.char_offset();
                 window.remap_history(&page, at, || TextEdit::insert(at, text));
             }
         ));
@@ -274,10 +273,7 @@ impl Window {
             #[weak]
             page,
             move |_, start, end| {
-                let (start, end) = (
-                    usize::try_from(start.offset()).unwrap_or(0),
-                    usize::try_from(end.offset()).unwrap_or(0),
-                );
+                let (start, end) = (start.char_offset(), end.char_offset());
                 window.remap_history(&page, start, || TextEdit::delete(start..end));
             }
         ));
@@ -404,12 +400,9 @@ impl Window {
                 return;
             }
             let buffer = page.buffer();
-            let offset = i32::try_from(place.offset)
-                .unwrap_or(i32::MAX)
-                .min(buffer.char_count());
             {
                 let _navigating = window.inner.nav.navigating.raise();
-                buffer.place_cursor(&buffer.iter_at_offset(offset));
+                buffer.place_cursor(&buffer.iter_at_char_offset(place.offset));
                 page.view()
                     .scroll_to_mark(&buffer.get_insert(), 0.1, false, 0.0, 0.0);
             }

@@ -2,7 +2,7 @@
 //! the Column Editor. Compact alert dialogs: Tab moves between the fields, Enter applies,
 //! Escape cancels, and the fields remember their last values.
 
-use crate::convert::{BufferPositions, to_u32, to_usize};
+use crate::convert::{BufferPositions, IterPosition, to_u32};
 use crate::editor::EditorPage;
 use crate::editor::column::dialog::NUMBERS_OVERFLOW;
 use crate::editor::edits;
@@ -94,16 +94,16 @@ where
 fn numbered_lines(buffer: &sourceview5::Buffer, selected: &Range<usize>) -> usize {
     let first = buffer.iter_at_char_offset(selected.start);
     let last = if selected.is_empty() {
-        buffer.line_count() - 1
+        buffer.total_lines() - 1
     } else {
         let end = buffer.iter_at_char_offset(selected.end);
-        if end.line() > first.line() && end.starts_line() {
-            end.line() - 1
+        if end.line_number() > first.line_number() && end.starts_line() {
+            end.line_number() - 1
         } else {
-            end.line()
+            end.line_number()
         }
     };
-    to_usize(last - first.line() + 1)
+    last - first.line_number() + 1
 }
 
 fn combo_row(title: &str, choices: &[&str], selected: usize) -> adw::ComboRow {

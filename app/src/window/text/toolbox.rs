@@ -551,8 +551,8 @@ impl Window {
         self.toast(&format!(
             "{what}: {} at line {}, column {}",
             error.message,
-            iter.line() + 1,
-            iter.line_offset() + 1
+            iter.display_line(),
+            iter.display_column()
         ));
         page.view().grab_focus();
     }
@@ -647,10 +647,12 @@ impl Window {
         let selected = edits::selection(&buffer).range();
         let first = buffer.iter_at_char_offset(selected.start);
         let mut last = buffer.iter_at_char_offset(selected.end);
-        if last.line() > first.line() && last.starts_line() {
+        if last.line_number() > first.line_number() && last.starts_line() {
             last.backward_line();
         }
-        let start = buffer.iter_at_line(first.line()).unwrap_or(first);
+        let start = buffer
+            .iter_at_line_number(first.line_number())
+            .unwrap_or(first);
         let mut end = last;
         if !end.ends_line() {
             end.forward_to_line_end();
@@ -669,7 +671,9 @@ impl Window {
         let start = buffer.iter_at_char_offset(selected.start);
         let end = buffer.iter_at_char_offset(selected.end);
         let query = if selected.is_empty() {
-            let line_start = buffer.iter_at_line(start.line()).unwrap_or(start);
+            let line_start = buffer
+                .iter_at_line_number(start.line_number())
+                .unwrap_or(start);
             let mut line_end = line_start;
             if !line_end.ends_line() {
                 line_end.forward_to_line_end();

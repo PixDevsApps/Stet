@@ -15,7 +15,7 @@ mod key;
 mod moves;
 mod pair;
 #[cfg(test)]
-#[allow(
+#[expect(
     clippy::single_range_in_vec_init,
     reason = "expected columns are one-element lists of ranges"
 )]

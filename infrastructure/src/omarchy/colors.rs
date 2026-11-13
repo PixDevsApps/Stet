@@ -49,7 +49,7 @@ pub fn parse_resolved(output: &str) -> BTreeMap<String, String> {
 /// The fully resolved palette for a `colors.toml`, with every fallback applied.
 /// Uses Omarchy's `omarchy-theme-color` when installed, else the built-in resolver.
 pub fn resolve_palette(file: &Path) -> io::Result<BTreeMap<String, String>> {
-    resolve_palette_with(file, super::theme_color_script().as_deref())
+    resolve_palette_with(file, super::paths::theme_color_script().as_deref())
 }
 
 /// [`resolve_palette`] with an explicit resolver script; `None` forces the built-in resolver.
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn builtin_resolver_matches_omarchy_theme_color() {
         let _spawning = spawn_lock();
-        let Some(omarchy) = super::super::theme_color_script() else {
+        let Some(omarchy) = super::super::paths::theme_color_script() else {
             return;
         };
         let cases = [

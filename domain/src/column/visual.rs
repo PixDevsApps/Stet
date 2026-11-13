@@ -2,7 +2,7 @@
 
 /// The visual column after `ch` when it starts at `column`: a tab advances to the next multiple
 /// of `tab_width` (0 counts as 1), and every other character takes one cell.
-pub fn next_column(column: usize, ch: char, tab_width: usize) -> usize {
+pub(super) fn next_column(column: usize, ch: char, tab_width: usize) -> usize {
     if ch == '\t' {
         let tab_width = tab_width.max(1);
         column + tab_width - column % tab_width

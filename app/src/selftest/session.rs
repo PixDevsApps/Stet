@@ -8,7 +8,7 @@ use super::registry::{Command, MANY, commands};
 use super::script::boolean;
 use super::{Harness, StepResult, WAIT_TIMEOUT, build, equal, number, write_file};
 use crate::config::APP_ID_ENV;
-use crate::convert::to_i32;
+use crate::convert::{BufferPositions, IterPosition, to_i32};
 use crate::runtime::worker;
 use crate::window::{Location, SessionPhase, Window};
 use gtk4::prelude::*;
@@ -105,10 +105,6 @@ impl Harness {
     /// `quit`, `quit window` or `quit signal TERM|HUP|INT`: only as the last step; once every
     /// step has run, closes the window the way the user does (the session's last commit and
     /// flush), or sends this process the signal (see `end`).
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn quit(&self, args: &[String]) -> StepResult {
         match args {
             [] => Ok(()),
@@ -152,10 +148,6 @@ impl Harness {
 
     /// `drop-backup <state folder> <tab>`: deletes the backup of tab n (1-based) in the
     /// session in that folder, as a disk problem could.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn drop_backup(&self, args: &[String]) -> StepResult {
         let state = Path::new(&args[0]);
         let tab = number(&args[1])?;
@@ -309,10 +301,6 @@ impl Harness {
     }
 
     /// `assert-backups <state folder> <n>`: how many backups the folder holds.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn assert_backups(&self, args: &[String]) -> StepResult {
         let wanted = number(&args[1])?;
         equal(
@@ -323,10 +311,6 @@ impl Harness {
     }
 
     /// `assert-orphans <state folder> <n>`: how many orphaned backups the folder holds.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn assert_orphans(&self, args: &[String]) -> StepResult {
         let wanted = number(&args[1])?;
         equal(
@@ -338,10 +322,6 @@ impl Harness {
 
     /// `assert-session-tabs <state folder> <n>`: how many tabs that folder's `session.json`
     /// lists.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn assert_session_tabs(&self, args: &[String]) -> StepResult {
         let wanted = number(&args[1])?;
         equal(
@@ -353,20 +333,12 @@ impl Harness {
 
     /// `assert-session-contains <state folder> <text>`: that folder's `session.json` has the
     /// text.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn assert_session_contains(&self, args: &[String]) -> StepResult {
         session_has(&args[0], &args[1], true)
     }
 
     /// `assert-session-lacks <state folder> <text>`: that folder's `session.json` lacks the
     /// text.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn assert_session_lacks(&self, args: &[String]) -> StepResult {
         session_has(&args[0], &args[1], false)
     }
@@ -459,8 +431,8 @@ impl Harness {
             let text = page.text();
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             text.hash(&mut hasher);
-            let anchor = buffer.iter_at_mark(&buffer.selection_bound()).offset();
-            let caret = buffer.iter_at_mark(&buffer.get_insert()).offset();
+            let anchor = buffer.iter_at_mark(&buffer.selection_bound()).char_offset();
+            let caret = buffer.iter_at_mark(&buffer.get_insert()).char_offset();
             let state = page.state();
             let language = page
                 .language()
@@ -517,9 +489,12 @@ impl Harness {
             buffer.insert(&mut buffer.end_iter(), &format!("edited {index}\n"));
             buffer.end_user_action();
             if index % 3 == 0 {
-                buffer.select_range(&buffer.iter_at_offset(2), &buffer.iter_at_offset(8));
+                buffer.select_range(
+                    &buffer.iter_at_char_offset(2),
+                    &buffer.iter_at_char_offset(8),
+                );
             } else {
-                buffer.place_cursor(&buffer.iter_at_offset(3));
+                buffer.place_cursor(&buffer.iter_at_char_offset(3));
             }
         }
         for index in 0..untitled {
@@ -530,7 +505,10 @@ impl Harness {
                 true,
             );
             if index % 2 == 1 {
-                buffer.select_range(&buffer.iter_at_offset(0), &buffer.iter_at_offset(5));
+                buffer.select_range(
+                    &buffer.iter_at_char_offset(0),
+                    &buffer.iter_at_char_offset(5),
+                );
             }
         }
         Ok(())

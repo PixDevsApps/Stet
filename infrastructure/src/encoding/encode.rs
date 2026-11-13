@@ -32,7 +32,7 @@ impl Default for DocumentFormat {
 }
 
 /// How many characters [`Unmappable`] lists; its `count` has the total.
-pub const MAX_LISTED_UNMAPPABLE: usize = 100;
+pub(super) const MAX_LISTED_UNMAPPABLE: usize = 100;
 
 /// Output buffer size when encoding only to find unmappable characters.
 const CHECK_BUFFER_LEN: usize = 64 * 1024;
@@ -68,8 +68,9 @@ impl std::error::Error for Unmappable {}
 /// Encodes `text` in `format`, strictly: any character the encoding cannot represent fails
 /// the whole encode instead of being replaced. Every LF is written as the format's line
 /// ending in the same pass (ADR-008), and with `map_placeholder` every
-/// [`super::PLACEHOLDER`] as NUL. Offsets in [`Unmappable`] count characters of `text`, like
-/// `GtkTextIter`. UTF-16 is encoded here, since encoding_rs only decodes it.
+/// [`NUL_PLACEHOLDER`](stet_domain::text::NUL_PLACEHOLDER) as NUL. Offsets in [`Unmappable`]
+/// count characters of `text`, like `GtkTextIter`. UTF-16 is encoded here, since encoding_rs
+/// only decodes it.
 pub fn encode(text: &str, format: &DocumentFormat) -> Result<Vec<u8>, Unmappable> {
     let &DocumentFormat {
         encoding,
@@ -271,7 +272,8 @@ impl<'t> Collector<'t> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encoding::{ENCODINGS, PLACEHOLDER, decode};
+    use crate::encoding::{ENCODINGS, decode};
+    use stet_domain::text::NUL_PLACEHOLDER;
 
     fn format(
         encoding: &'static Encoding,
@@ -322,7 +324,7 @@ mod tests {
             b"a\0b"
         );
         let error = encode(text, &format(WINDOWS_1252, false, false, Eol::Lf)).unwrap_err();
-        assert_eq!(error.chars, vec![(1, PLACEHOLDER)]);
+        assert_eq!(error.chars, vec![(1, NUL_PLACEHOLDER)]);
     }
 
     #[test]
@@ -395,7 +397,7 @@ mod tests {
         #[test]
         fn unicode_round_trips_through_utf8_and_utf16(text in unicode_text(), bom in any::<bool>()) {
             let expected = text.replace('\0', "\u{2400}");
-            let conflict = text.contains(PLACEHOLDER);
+            let conflict = text.contains(NUL_PLACEHOLDER);
             let nuls = text.matches('\0').count();
             for encoding in [UTF_8, UTF_16LE, UTF_16BE] {
                 let bytes = encode(&text, &format(encoding, bom, false, Eol::Lf)).unwrap();

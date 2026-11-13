@@ -71,7 +71,10 @@ impl Harness {
     /// accepts it. Without a portal (headless) GTK shows its own chooser dialog in this
     /// process; it is driven through the deprecated chooser interface, which that dialog still
     /// implements.
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "headless GTK shows its own chooser, driven through the deprecated interface"
+    )]
     async fn choose_file(&self, args: &[String]) -> StepResult {
         let path = Path::new(&args[0]);
         let started = Instant::now();
@@ -110,7 +113,10 @@ impl Harness {
     }
 
     /// `assert-chooser-name <name>`: the name the open Save As chooser proposes.
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "headless GTK shows its own chooser, driven through the deprecated interface"
+    )]
     async fn assert_chooser_name(&self, args: &[String]) -> StepResult {
         let chooser = open_chooser().await?;
         let proposed = chooser.current_name().map(String::from).unwrap_or_default();
@@ -167,7 +173,10 @@ impl Harness {
 }
 
 /// The file chooser that is open, once it shows (GTK's own dialog, headless).
-#[allow(deprecated)]
+#[expect(
+    deprecated,
+    reason = "headless GTK shows its own chooser, driven through the deprecated interface"
+)]
 async fn open_chooser() -> Result<gtk::FileChooserDialog, String> {
     let started = Instant::now();
     loop {

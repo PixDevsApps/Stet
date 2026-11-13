@@ -17,10 +17,14 @@ pub use table::{
 };
 
 use encoding_rs::{UTF_8, UTF_16BE, UTF_16LE};
+use stet_domain::text::NUL_PLACEHOLDER;
 
-pub use stet_domain::text::NUL_PLACEHOLDER as PLACEHOLDER;
-
-const PLACEHOLDER_UTF8: &[u8] = "\u{2400}".as_bytes();
+/// [`NUL_PLACEHOLDER`] in UTF-8.
+const PLACEHOLDER_UTF8: &[u8] = &{
+    let mut bytes = [0; NUL_PLACEHOLDER.len_utf8()];
+    NUL_PLACEHOLDER.encode_utf8(&mut bytes);
+    bytes
+};
 
 /// The byte order mark written for `encoding`; empty for encodings without one.
 pub fn bom_bytes(encoding: &'static Encoding) -> &'static [u8] {

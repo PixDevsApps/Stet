@@ -31,7 +31,7 @@ use stet_domain::diff::{self, CompareOptions, Comparison, IgnoreWhitespace, Side
 use stet_domain::text::{LONG_LINE_CHARS, line_count};
 use stet_infrastructure::fs::{LoadError, read_file};
 
-pub use stet_domain::diff::CompareStats;
+use stet_domain::diff::CompareStats;
 
 /// How long after the last edit a comparison runs again.
 const RECOMPARE_DELAY: Duration = Duration::from_millis(300);

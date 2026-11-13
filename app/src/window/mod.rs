@@ -345,10 +345,6 @@ impl Window {
         &self.inner.shared
     }
 
-    #[expect(
-        clippy::unused_self,
-        reason = "the window's one way to run its futures, called as `window.spawn` throughout"
-    )]
     pub fn spawn(&self, future: impl Future<Output = ()> + 'static) {
         glib::spawn_future_local(future);
     }

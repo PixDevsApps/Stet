@@ -2,6 +2,7 @@
 //! are highlighted in the scheme's `stet:smart-highlight` style, through a second GtkSourceView
 //! search context. Updates are debounced, and large documents skip it.
 
+use crate::convert::IterPosition;
 use crate::editor::EditorPage;
 use crate::window::Window;
 use gtk4::prelude::*;
@@ -11,7 +12,7 @@ use stet_domain::search::{SmartHighlight, translate};
 /// How long the selection must rest before its occurrences are highlighted.
 const SMART_DELAY: Duration = Duration::from_millis(120);
 /// Longer selections are not highlighted.
-const SMART_MAX_CHARS: i32 = 1_000;
+const SMART_MAX_CHARS: usize = 1_000;
 
 impl Window {
     /// The selection of `page` changed: smart highlighting follows it shortly after.
@@ -29,7 +30,7 @@ impl Window {
             .selection_bounds()
             .filter(|(start, end)| {
                 !page.large_file_mode()
-                    && end.offset() - start.offset() <= SMART_MAX_CHARS
+                    && end.char_offset() - start.char_offset() <= SMART_MAX_CHARS
                     && self.settings().smart_highlight
             })
             .and_then(|(start, end)| {

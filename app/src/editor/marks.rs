@@ -32,7 +32,7 @@ use stet_domain::text::{LineIndex, TextEdit};
 pub const BOOKMARK_CATEGORY: &str = "stet-bookmark";
 
 /// How many lines above and below the visible ones get the marks' tags.
-const TAG_MARGIN_LINES: i32 = 100;
+const TAG_MARGIN_LINES: usize = 100;
 
 /// The text tag of a mark style.
 pub fn tag_name(style: MarkStyle) -> &'static str {
@@ -166,7 +166,7 @@ pub struct DocMarks {
     own: Cell<u32>,
     marks: RefCell<Marks>,
     /// The character ranges the marks' tags cover now.
-    tagged: RefCell<Vec<Range<i32>>>,
+    tagged: RefCell<Vec<Range<usize>>>,
 }
 
 impl DocMarks {
@@ -401,15 +401,15 @@ impl DocMarks {
     /// Tags the marks around the lines `views` show, and removes the tags elsewhere.
     pub fn retag(&self, buffer: &sourceview5::Buffer, views: &[sourceview5::View]) {
         let table = buffer.tag_table();
-        let len = buffer.char_count();
+        let len = buffer.total_chars();
         for range in self.tagged.take() {
             let end = range.end.min(len);
             let start = range.start.min(end);
             for style in MarkStyle::ALL {
                 buffer.remove_tag_by_name(
                     tag_name(style),
-                    &buffer.iter_at_offset(start),
-                    &buffer.iter_at_offset(end),
+                    &buffer.iter_at_char_offset(start),
+                    &buffer.iter_at_char_offset(end),
                 );
             }
         }
@@ -424,7 +424,7 @@ impl DocMarks {
                     continue;
                 };
                 let ranges = marks.ranges(style);
-                let (start, end) = (to_usize(window.start), to_usize(window.end));
+                let (start, end) = (window.start, window.end);
                 let from = ranges.partition_point(|range| range.end <= start);
                 for range in ranges[from..].iter().take_while(|range| range.start < end) {
                     buffer.apply_tag(
@@ -439,34 +439,34 @@ impl DocMarks {
     }
 
     /// The character ranges the tags cover, for the self-test.
-    pub fn tagged(&self) -> Vec<Range<i32>> {
+    pub fn tagged(&self) -> Vec<Range<usize>> {
         self.tagged.borrow().clone()
     }
 }
 
 /// The character ranges around the lines each view shows, merged where they overlap.
-fn windows(buffer: &sourceview5::Buffer, views: &[sourceview5::View]) -> Vec<Range<i32>> {
-    let mut windows: Vec<Range<i32>> = views
+fn windows(buffer: &sourceview5::Buffer, views: &[sourceview5::View]) -> Vec<Range<usize>> {
+    let mut windows: Vec<Range<usize>> = views
         .iter()
         .map(|view| {
             let rect = view.visible_rect();
             let top = view
                 .iter_at_location(rect.x(), rect.y())
-                .map_or(0, |iter| iter.line());
+                .map_or(0, |iter| iter.line_number());
             let bottom = view
                 .iter_at_location(rect.x(), rect.y() + rect.height())
-                .map_or_else(|| buffer.line_count(), |iter| iter.line());
+                .map_or_else(|| buffer.total_lines(), |iter| iter.line_number());
             let start = buffer
-                .iter_at_line((top - TAG_MARGIN_LINES).max(0))
-                .map_or(0, |iter| iter.offset());
+                .iter_at_line_number(top.saturating_sub(TAG_MARGIN_LINES))
+                .map_or(0, |iter| iter.char_offset());
             let end = buffer
-                .iter_at_line(bottom.saturating_add(TAG_MARGIN_LINES))
-                .map_or_else(|| buffer.char_count(), |iter| iter.offset());
+                .iter_at_line_number(bottom.saturating_add(TAG_MARGIN_LINES))
+                .map_or_else(|| buffer.total_chars(), |iter| iter.char_offset());
             start..end
         })
         .collect();
     windows.sort_by_key(|window| window.start);
-    let mut merged: Vec<Range<i32>> = Vec::new();
+    let mut merged: Vec<Range<usize>> = Vec::new();
     for window in windows {
         match merged.last_mut() {
             Some(last) if window.start <= last.end => last.end = last.end.max(window.end),

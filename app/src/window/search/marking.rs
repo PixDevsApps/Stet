@@ -321,7 +321,10 @@ impl Window {
         });
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the inline path and the worker job each hand over the operation's results, the edit, its bulk form and the clipboard text, as separate values"
+    )]
     fn finish_line_op(
         &self,
         page: &EditorPage,

@@ -421,7 +421,7 @@ impl StetView {
         };
         let buffer = self.buffer();
         let caret = buffer.iter_at_mark(&buffer.get_insert());
-        if location.offset() == caret.offset()
+        if location.char_offset() == caret.char_offset()
             && location.line_number() == rect.cursor.line
             && !text.is_empty()
             && !text.contains(['\n', '\r'])
@@ -444,7 +444,7 @@ impl StetView {
         };
         let buffer = self.buffer();
         let caret = buffer.iter_at_mark(&buffer.get_insert());
-        let (from, to) = if start.offset() <= end.offset() {
+        let (from, to) = if start.char_offset() <= end.char_offset() {
             (start, end)
         } else {
             (end, start)

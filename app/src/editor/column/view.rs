@@ -533,7 +533,7 @@ impl StetView {
     fn page_lines(&self) -> usize {
         let buffer = self.buffer();
         let line_height = buffer
-            .iter_at_line(0)
+            .iter_at_line_number(0)
             .map_or(1, |iter| self.line_yrange(&iter).1.max(1));
         to_usize((self.visible_rect().height() / line_height).max(1))
     }
@@ -733,7 +733,7 @@ impl StetView {
             return VisualPos::new(line, start);
         }
         let mut next = iter;
-        if !next.forward_cursor_position() || next.line() != iter.line() {
+        if !next.forward_cursor_position() || next.line_number() != iter.line_number() {
             next = end;
         }
         let cells = visual_column(&text, offset(&next), tab) - start;

@@ -160,7 +160,7 @@ impl fmt::Display for Rgb {
 /// palette one hue (Aether's single-hue themes) or none at all, and compare's added, removed
 /// and changed lines, or the five token styles, would look the same. Apart means the hues
 /// spread over at least a quarter of the colour wheel and none is nearly grey.
-pub fn distinct<const N: usize>(colors: [Rgb; N], hues: [f64; N]) -> [Rgb; N] {
+pub(super) fn distinct<const N: usize>(colors: [Rgb; N], hues: [f64; N]) -> [Rgb; N] {
     let hsl = colors.map(Rgb::to_hsl);
     let grey = hsl.iter().any(|&(_, saturation, _)| saturation < 0.15);
     let mut angles: Vec<f64> = hsl.iter().map(|&(hue, _, _)| hue).collect();

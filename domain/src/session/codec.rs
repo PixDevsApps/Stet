@@ -26,7 +26,7 @@ impl<T> Lenient<T> {
 }
 
 /// Deserializes `T`, or gives its default when the value has another shape.
-pub fn lenient<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub(super) fn lenient<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de> + Default,
@@ -37,7 +37,7 @@ where
 }
 
 /// Deserializes a list, skipping elements of another shape; anything but a list is empty.
-pub fn lenient_seq<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+pub(super) fn lenient_seq<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de>,
@@ -74,18 +74,18 @@ impl From<PathRepr<'_>> for PathBuf {
     }
 }
 
-pub mod opt_path {
+pub(super) mod opt_path {
     use super::*;
 
     #[expect(clippy::ref_option, reason = "serde's `serialize_with` signature")]
-    pub fn serialize<S: Serializer>(
+    pub(crate) fn serialize<S: Serializer>(
         path: &Option<PathBuf>,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
         path.as_deref().map(PathRepr::from).serialize(serializer)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
         deserializer: D,
     ) -> Result<Option<PathBuf>, D::Error> {
         let repr: Option<PathRepr<'_>> = lenient(deserializer)?;
@@ -93,14 +93,17 @@ pub mod opt_path {
     }
 }
 
-pub mod path_seq {
+pub(super) mod path_seq {
     use super::*;
 
-    pub fn serialize<S: Serializer>(paths: &[PathBuf], serializer: S) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(
+        paths: &[PathBuf],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         serializer.collect_seq(paths.iter().map(|path| PathRepr::from(path.as_path())))
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
         deserializer: D,
     ) -> Result<Vec<PathBuf>, D::Error> {
         let reprs: Vec<PathRepr<'_>> = lenient_seq(deserializer)?;
@@ -108,7 +111,7 @@ pub mod path_seq {
     }
 }
 
-pub mod opt_eol {
+pub(super) mod opt_eol {
     use super::*;
 
     #[expect(
@@ -116,12 +119,15 @@ pub mod opt_eol {
         clippy::trivially_copy_pass_by_ref,
         reason = "serde's `serialize_with` signature"
     )]
-    pub fn serialize<S: Serializer>(eol: &Option<Eol>, serializer: S) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(
+        eol: &Option<Eol>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         eol.map(Eol::label).serialize(serializer)
     }
 
     /// An unknown label reads as `None`.
-    pub fn deserialize<'de, D: Deserializer<'de>>(
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
         deserializer: D,
     ) -> Result<Option<Eol>, D::Error> {
         let label: Option<String> = lenient(deserializer)?;

@@ -8,7 +8,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use stet_domain::session::{RecordId, Session};
-use stet_domain::text::normalize_to_lf;
+use stet_domain::text::{NUL_PLACEHOLDER, normalize_to_lf};
 
 /// The regular files in `backup/`; directories and symlinks are left alone.
 #[derive(Debug, Default)]
@@ -220,7 +220,7 @@ fn buffer_text(bytes: Vec<u8>) -> String {
         text = normalized;
     }
     if text.contains('\0') {
-        text = text.replace('\0', "\u{2400}");
+        text = text.replace('\0', NUL_PLACEHOLDER.encode_utf8(&mut [0; 4]));
     }
     text
 }

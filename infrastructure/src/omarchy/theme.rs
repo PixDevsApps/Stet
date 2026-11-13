@@ -19,7 +19,7 @@ pub struct CurrentTheme {
 /// Reads the theme in `current` (Omarchy's `current` directory). `None` when it has no
 /// `theme/colors.toml`; an error when that file could not be read.
 pub fn read_current_theme(current: &Path) -> io::Result<Option<CurrentTheme>> {
-    read_current_theme_with(current, super::theme_color_script().as_deref())
+    read_current_theme_with(current, super::paths::theme_color_script().as_deref())
 }
 
 fn read_current_theme_with(

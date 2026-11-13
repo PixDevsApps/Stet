@@ -84,7 +84,7 @@ impl SizePolicy {
 }
 
 /// `MemAvailable` from `/proc/meminfo`, in bytes.
-pub fn mem_available() -> Option<u64> {
+pub(super) fn mem_available() -> Option<u64> {
     parse_mem_available(&std::fs::read_to_string("/proc/meminfo").ok()?)
 }
 

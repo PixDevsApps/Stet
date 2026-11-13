@@ -4,7 +4,7 @@
 use super::registry::{Command, commands};
 use super::script::boolean;
 use super::{Harness, StepResult, equal, number};
-use crate::convert::to_u32;
+use crate::convert::{BufferPositions, to_u32};
 use crate::editor::tabstops;
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -127,8 +127,8 @@ impl Harness {
         }
         let mut worst = 0.0f64;
         let mut checked = 0;
-        for line in 0..buffer.line_count() {
-            let Some(mut iter) = buffer.iter_at_line(line) else {
+        for line in 0..buffer.total_lines() {
+            let Some(mut iter) = buffer.iter_at_line_number(line) else {
                 continue;
             };
             let origin = f64::from(view.iter_location(&iter).x());

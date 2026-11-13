@@ -3,6 +3,10 @@
 //! buffer or list holds `i32::MAX` items, so the conversions clamp instead of failing: a
 //! negative count becomes 0, and an index past GTK's range becomes its largest value, which is
 //! past the end of any buffer or list.
+//!
+//! The text buffer's and iterator's raw position methods are disallowed elsewhere
+//! (`clippy.toml`): every character offset, line number and column goes through
+//! [`BufferPositions`] and [`IterPosition`].
 
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -79,6 +83,8 @@ pub(crate) trait BufferPositions {
     fn iter_at_char_offset(&self, offset: usize) -> gtk::TextIter;
     /// The start of `line`, if the buffer has it.
     fn iter_at_line_number(&self, line: usize) -> Option<gtk::TextIter>;
+    /// The start of `line`, or of the last line when the buffer has fewer lines.
+    fn iter_at_line_or_last(&self, line: usize) -> gtk::TextIter;
     /// `column` characters into `line`, if the buffer has the line.
     fn iter_at_line_column(&self, line: usize, column: usize) -> Option<gtk::TextIter>;
     /// How many characters the buffer holds.
@@ -87,6 +93,10 @@ pub(crate) trait BufferPositions {
     fn total_lines(&self) -> usize;
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the one place that calls GTK's raw position methods"
+)]
 impl<T: IsA<gtk::TextBuffer>> BufferPositions for T {
     fn iter_at_char_offset(&self, offset: usize) -> gtk::TextIter {
         self.iter_at_offset(to_i32(offset))
@@ -94,6 +104,11 @@ impl<T: IsA<gtk::TextBuffer>> BufferPositions for T {
 
     fn iter_at_line_number(&self, line: usize) -> Option<gtk::TextIter> {
         self.iter_at_line(to_i32(line))
+    }
+
+    fn iter_at_line_or_last(&self, line: usize) -> gtk::TextIter {
+        self.iter_at_line_number(line.min(self.total_lines() - 1))
+            .unwrap_or_else(|| self.end_iter())
     }
 
     fn iter_at_line_column(&self, line: usize, column: usize) -> Option<gtk::TextIter> {
@@ -115,8 +130,22 @@ pub(crate) trait IterPosition {
     fn line_number(&self) -> usize;
     /// Characters from the start of the line.
     fn column(&self) -> usize;
+
+    /// The line number as people count lines, from 1.
+    fn display_line(&self) -> usize {
+        self.line_number() + 1
+    }
+
+    /// The column as people count columns, from 1.
+    fn display_column(&self) -> usize {
+        self.column() + 1
+    }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the one place that calls GTK's raw position methods"
+)]
 impl IterPosition for gtk::TextIter {
     fn char_offset(&self) -> usize {
         to_usize(self.offset())

@@ -220,7 +220,7 @@ impl<'a> OffsetMap<'a> {
 }
 
 #[cfg(test)]
-#[allow(
+#[expect(
     clippy::single_range_in_vec_init,
     reason = "single marks are one-element lists of ranges"
 )]

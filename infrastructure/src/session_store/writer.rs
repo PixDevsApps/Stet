@@ -385,7 +385,6 @@ impl BackupWriter {
     #[cfg_attr(
         not(test),
         expect(
-            clippy::unused_self,
             clippy::unnecessary_wraps,
             reason = "tests hook a failure into each write phase"
         )

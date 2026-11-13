@@ -4,7 +4,7 @@
 //! encoding picker), the indentation (a button that opens its popover) and INS/OVR; while two
 //! documents are compared, the comparison's summary.
 
-use crate::convert::{BufferPositions, IterPosition, to_usize};
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::EditorPage;
 use crate::runtime::Debounce;
 use crate::window::Window;
@@ -255,14 +255,14 @@ impl Window {
         let view = page.view();
         let cursor = buffer.iter_at_mark(&buffer.get_insert());
         let (selected, lines) = buffer.selection_bounds().map_or((0, 0), |(start, end)| {
-            let last = if end.line() > start.line() && end.starts_line() {
-                end.line() - 1
+            let last = if end.line_number() > start.line_number() && end.starts_line() {
+                end.line_number() - 1
             } else {
-                end.line()
+                end.line_number()
             };
             (
                 end.char_offset() - start.char_offset(),
-                to_usize(last - start.line() + 1),
+                last - start.line_number() + 1,
             )
         });
         let status = &self.inner.status;

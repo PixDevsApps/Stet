@@ -77,7 +77,7 @@ impl DecodeReport {
 
 /// A file's bytes decoded for the buffer, and everything the banners need.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedDocument {
+pub(super) struct DecodedDocument {
     /// LF-normalized, with NUL mapped to the placeholder: ready to insert.
     pub text: String,
     pub report: DecodeReport,
@@ -96,7 +96,7 @@ pub struct OpenedDocument {
 
 /// Detects the encoding, unless `choice` overrides it, and decodes, maps NUL and normalizes
 /// the line endings in one pass. Pure, for callers that already hold the bytes.
-pub fn decode_document(bytes: &[u8], choice: Option<EncodingChoice>) -> DecodedDocument {
+pub(super) fn decode_document(bytes: &[u8], choice: Option<EncodingChoice>) -> DecodedDocument {
     let detection = detect(bytes);
     let (encoding, bom) = choice.map_or((detection.encoding, detection.bom), |choice| {
         (choice.encoding, choice.bom)
@@ -188,12 +188,13 @@ pub fn text_chunks(text: &str, max_bytes: usize) -> impl Iterator<Item = &str> {
 mod tests {
     use super::*;
     use crate::encoding::fixtures::{fixtures, legacy};
-    use crate::encoding::{ENCODINGS, PLACEHOLDER, decode_to_lf};
+    use crate::encoding::{ENCODINGS, decode_to_lf};
     use crate::fs::SaveMethod;
     use encoding_rs::{ISO_8859_15, SHIFT_JIS, UTF_8, UTF_16LE, WINDOWS_1252};
     use proptest::prelude::*;
     use std::fs;
     use std::time::{Duration, Instant};
+    use stet_domain::text::NUL_PLACEHOLDER;
 
     fn save_options(dir: &Path) -> SaveOptions {
         SaveOptions::new(dir.join("backups"))
@@ -332,7 +333,7 @@ mod tests {
             "a␀b\n".as_bytes()
         );
         let nul = decode_document(b"a\0b\n", None);
-        assert_eq!(nul.text, format!("a{PLACEHOLDER}b\n"));
+        assert_eq!(nul.text, format!("a{NUL_PLACEHOLDER}b\n"));
         assert_eq!(encode(&nul.text, &nul.report.format()).unwrap(), b"a\0b\n");
     }
 

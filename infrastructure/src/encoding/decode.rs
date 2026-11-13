@@ -1,8 +1,8 @@
 use encoding_rs::{CoderResult, Encoder, EncoderResult, Encoding, UTF_8};
 use memchr::memmem;
-use stet_domain::text::{EolStats, LfNormalizer};
+use stet_domain::text::{EolStats, LfNormalizer, NUL_PLACEHOLDER};
 
-use super::{PLACEHOLDER, PLACEHOLDER_UTF8, bom_bytes};
+use super::{PLACEHOLDER_UTF8, bom_bytes};
 
 /// Input is decoded in chunks of this size, so the only full-size buffer is the text itself.
 const CHUNK_LEN: usize = 64 * 1024;
@@ -10,7 +10,7 @@ const CHUNK_LEN: usize = 64 * 1024;
 /// Decoded text and what the decode found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decoded {
-    /// The text, with every U+0000 replaced by [`PLACEHOLDER`].
+    /// The text, with every U+0000 replaced by [`NUL_PLACEHOLDER`].
     pub text: String,
     /// Malformed input was replaced with U+FFFD.
     pub had_errors: bool,
@@ -135,7 +135,7 @@ fn map_nuls(piece: &str, out: &mut String) -> usize {
     let mut start = 0;
     for index in memchr::memchr_iter(0, piece.as_bytes()) {
         out.push_str(&piece[start..index]);
-        out.push(PLACEHOLDER);
+        out.push(NUL_PLACEHOLDER);
         start = index + 1;
         count += 1;
     }

@@ -94,10 +94,6 @@ impl Harness {
 
     /// `unpace-frames`: connects a Broadway web client, so that frames are painted at once
     /// instead of once a second (for timings), and stops the caret blinking.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn unpace_frames(&self, _: &[String]) -> StepResult {
         if let Some(settings) = gtk::Settings::default() {
             settings.set_gtk_cursor_blink(false);
@@ -134,10 +130,6 @@ impl Harness {
     }
 
     /// `report-memory <label>`: prints this process's `VmRSS` and `VmHWM`.
-    #[expect(
-        clippy::unused_self,
-        reason = "the registry calls every handler as a method"
-    )]
     fn report_memory(&self, args: &[String]) -> StepResult {
         let status =
             std::fs::read_to_string("/proc/self/status").map_err(|error| error.to_string())?;
