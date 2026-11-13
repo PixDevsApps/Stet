@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::ops::Range;
 
-use toml::de::DeValue;
+use toml::de::{DeArray, DeValue};
 
 use super::{FileError, closest, entries, parse_toml};
 use crate::actions::{Accelerator, ActionId, ActionKind, KeyScope, Menu};
@@ -105,94 +105,10 @@ impl Keymap {
                 ));
                 continue;
             };
-            let mut keys: Vec<WrittenKey> = Vec::new();
-            for item in array {
-                let span = item.span();
-                let error = |message: String| FileError::at(text, span.start, message);
-                let DeValue::String(written) = item.get_ref() else {
-                    errors.push(error(format!(
-                        "a key is a string in quotes, like \"<Control>d\", not {}",
-                        item.get_ref().type_str()
-                    )));
-                    continue;
-                };
-                let Some(key) = canonical(written) else {
-                    errors.push(error(format!(
-                        "“{written}” is not a key; keys look like <Control>d, <Alt><Shift>Up or F3"
-                    )));
-                    continue;
-                };
-                if !takes_no_typing(&key) {
-                    errors.push(error(format!(
-                        "“{written}” has no Ctrl, Alt or Super, so it would take the key from \
-                         typing (F-keys are the exception)"
-                    )));
-                    continue;
-                }
-                if keys.iter().any(|other| other.key == key) {
-                    errors.push(error(format!("“{written}” is listed twice for {name}")));
-                    continue;
-                }
-                keys.push(WrittenKey {
-                    key,
-                    written: written.to_string(),
-                    span,
-                });
-            }
-            lists.push((id, keys));
+            lists.push((id, written_keys(text, name, array, canonical, &mut errors)));
         }
 
-        let changed: Vec<ActionId> = lists.iter().map(|(id, _)| *id).collect();
-        let mut taken: HashMap<String, (ActionId, Option<usize>)> = HashMap::new();
-        for id in ActionId::ALL.into_iter().filter(|id| !changed.contains(id)) {
-            for key in id.keys().all() {
-                if let Some(key) = canonical(key) {
-                    taken.entry(key).or_insert((id, None));
-                }
-            }
-        }
-        let mut overrides = HashMap::new();
-        for (id, keys) in lists {
-            let mut installed = Vec::with_capacity(keys.len());
-            for WrittenKey { key, written, span } in keys {
-                match taken.get(&key) {
-                    Some(&(other, None)) if other.has_widget_keys() => {
-                        errors.push(FileError::at(
-                            text,
-                            span.start,
-                            format!(
-                                "“{written}” is the text view's own key for {}; pick another key",
-                                other.label()
-                            ),
-                        ));
-                    }
-                    Some(&(other, None)) => errors.push(FileError::at(
-                        text,
-                        span.start,
-                        format!(
-                            "“{written}” is already {}'s key ({}); unbind it first with {} = []",
-                            other.label(),
-                            other.name(),
-                            other.name()
-                        ),
-                    )),
-                    Some(&(other, Some(line))) => errors.push(FileError::at(
-                        text,
-                        span.start,
-                        format!(
-                            "“{written}” is also given to {} on line {line}",
-                            other.name()
-                        ),
-                    )),
-                    None => {
-                        let line = FileError::at(text, span.start, "").line;
-                        taken.insert(key.clone(), (id, Some(line)));
-                        installed.push(key);
-                    }
-                }
-            }
-            overrides.insert(id, installed);
-        }
+        let overrides = install(text, lists, canonical, &mut errors);
         if errors.is_empty() {
             Ok(Self { overrides })
         } else {
@@ -200,6 +116,114 @@ impl Keymap {
             Err(errors)
         }
     }
+}
+
+/// The keys `array` lists for the action `name`, in their canonical spelling; each mistake
+/// goes to `errors`, and its key is left out.
+fn written_keys(
+    text: &str,
+    name: &str,
+    array: &DeArray<'_>,
+    canonical: Canonical<'_>,
+    errors: &mut Vec<FileError>,
+) -> Vec<WrittenKey> {
+    let mut keys: Vec<WrittenKey> = Vec::new();
+    for item in array {
+        let span = item.span();
+        let error = |message: String| FileError::at(text, span.start, message);
+        let DeValue::String(written) = item.get_ref() else {
+            errors.push(error(format!(
+                "a key is a string in quotes, like \"<Control>d\", not {}",
+                item.get_ref().type_str()
+            )));
+            continue;
+        };
+        let Some(key) = canonical(written) else {
+            errors.push(error(format!(
+                "“{written}” is not a key; keys look like <Control>d, <Alt><Shift>Up or F3"
+            )));
+            continue;
+        };
+        if !takes_no_typing(&key) {
+            errors.push(error(format!(
+                "“{written}” has no Ctrl, Alt or Super, so it would take the key from \
+                 typing (F-keys are the exception)"
+            )));
+            continue;
+        }
+        if keys.iter().any(|other| other.key == key) {
+            errors.push(error(format!("“{written}” is listed twice for {name}")));
+            continue;
+        }
+        keys.push(WrittenKey {
+            key,
+            written: written.to_string(),
+            span,
+        });
+    }
+    keys
+}
+
+/// The keys each action of `lists` gets. A key that an action the file leaves alone keeps,
+/// or that the file gives to two actions, is a mistake in `errors`.
+fn install(
+    text: &str,
+    lists: Vec<(ActionId, Vec<WrittenKey>)>,
+    canonical: Canonical<'_>,
+    errors: &mut Vec<FileError>,
+) -> HashMap<ActionId, Vec<String>> {
+    let changed: Vec<ActionId> = lists.iter().map(|(id, _)| *id).collect();
+    let mut taken: HashMap<String, (ActionId, Option<usize>)> = HashMap::new();
+    for id in ActionId::ALL.into_iter().filter(|id| !changed.contains(id)) {
+        for key in id.keys().all() {
+            if let Some(key) = canonical(key) {
+                taken.entry(key).or_insert((id, None));
+            }
+        }
+    }
+    let mut overrides = HashMap::new();
+    for (id, keys) in lists {
+        let mut installed = Vec::with_capacity(keys.len());
+        for WrittenKey { key, written, span } in keys {
+            match taken.get(&key) {
+                Some(&(other, None)) if other.has_widget_keys() => {
+                    errors.push(FileError::at(
+                        text,
+                        span.start,
+                        format!(
+                            "“{written}” is the text view's own key for {}; pick another key",
+                            other.label()
+                        ),
+                    ));
+                }
+                Some(&(other, None)) => errors.push(FileError::at(
+                    text,
+                    span.start,
+                    format!(
+                        "“{written}” is already {}'s key ({}); unbind it first with {} = []",
+                        other.label(),
+                        other.name(),
+                        other.name()
+                    ),
+                )),
+                Some(&(other, Some(line))) => errors.push(FileError::at(
+                    text,
+                    span.start,
+                    format!(
+                        "“{written}” is also given to {} on line {line}",
+                        other.name()
+                    ),
+                )),
+                None => {
+                    let line = FileError::at(text, span.start, "").line;
+                    taken.insert(key.clone(), (id, Some(line)));
+                    installed.push(key);
+                }
+            }
+        }
+        overrides.insert(id, installed);
+    }
+    overrides
 }
 
 /// A key from the file: its canonical spelling, as written, and where.

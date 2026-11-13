@@ -261,15 +261,7 @@ impl Tables<'_> {
     ) -> (i32, Vec<usize>) {
         let text = &compared[start..];
         let (n, m) = (text.len(), query.len());
-        self.bonus.clear();
-        let mut previous = start
-            .checked_sub(1)
-            .map_or(Class::White, |before| Class::of(chars[before]));
-        for &c in &chars[start..] {
-            let class = Class::of(c);
-            self.bonus.push(previous.bonus_before(class));
-            previous = class;
-        }
+        self.fill_bonus(chars, start);
         let track = want_positions && n * m <= MAX_TRACKED_CELLS;
         if track {
             self.from.clear();
@@ -348,21 +340,41 @@ impl Tables<'_> {
         let positions = if !want_positions {
             Vec::new()
         } else if track {
-            let mut positions = vec![0; m];
-            let mut i = end;
-            for j in (0..m).rev() {
-                positions[j] = start + i;
-                if j > 0 {
-                    i = self.from[j * n + i] as usize;
-                }
-            }
-            positions
+            self.traced_positions(end, start, n, m)
         } else {
             greedy_positions(query, text, start)
         };
         *self.score = [row, above];
         *self.chunk = [chunks, chunks_above];
         (best, positions)
+    }
+
+    /// The bonus of each character of `chars[start..]`, from its class and the class before
+    /// it.
+    fn fill_bonus(&mut self, chars: &[char], start: usize) {
+        self.bonus.clear();
+        let mut previous = start
+            .checked_sub(1)
+            .map_or(Class::White, |before| Class::of(chars[before]));
+        for &c in &chars[start..] {
+            let class = Class::of(c);
+            self.bonus.push(previous.bonus_before(class));
+            previous = class;
+        }
+    }
+
+    /// The positions of the best alignment that ends at `end`, traced back through `from`
+    /// for a text of `n` characters from `start` and a query of `m`.
+    fn traced_positions(&self, end: usize, start: usize, n: usize, m: usize) -> Vec<usize> {
+        let mut positions = vec![0; m];
+        let mut i = end;
+        for j in (0..m).rev() {
+            positions[j] = start + i;
+            if j > 0 {
+                i = self.from[j * n + i] as usize;
+            }
+        }
+        positions
     }
 }
 

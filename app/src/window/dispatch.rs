@@ -96,6 +96,11 @@ impl Window {
     }
 
     /// Runs a window action. `param` is the string parameter of `WithString` actions.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one flat, exhaustive table from every window action to its feature; split up, \
+                  it would need wildcards, and a new ActionId would compile unrouted"
+    )]
     pub fn run_action(&self, id: ActionId, param: Option<String>) {
         // Column mode closes its typing burst first, and ends for actions that don't know
         // about columns.

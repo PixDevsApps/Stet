@@ -134,6 +134,10 @@ fn template_row(name: &'static str, template: &'static str, output: &'static str
 }
 
 /// The whole table.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the parity table, one row per case, reads best as one table"
+)]
 pub fn rows() -> Vec<ParityRow> {
     vec![
         // Spike S2, appendix A: pattern probes.

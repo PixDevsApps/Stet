@@ -371,18 +371,7 @@ impl Scanner<'_> {
                 self.replace_chars(2, ".");
                 ITEM
             }
-            'l' | 'u' | 'L' | 'U' => {
-                self.note(Note::BoostCaseClass);
-                self.whole_text |= c.is_uppercase();
-                let class = match c {
-                    'l' => "[[:lower:]]",
-                    'u' => "[[:upper:]]",
-                    'L' => "[^[:lower:]]",
-                    _ => "[^[:upper:]]",
-                };
-                self.replace_chars(2, class);
-                ITEM
-            }
+            'l' | 'u' | 'L' | 'U' => self.case_class(c),
             'n' => {
                 self.anchor(false);
                 self.bump_chars(2);
@@ -395,15 +384,7 @@ impl Scanner<'_> {
                 self.carriage_return()
             }
             'x' | 'o' | '0' | 'c' | 'N' => self.code_point(),
-            '1'..='9' => {
-                if self.peek_nth(2).is_some_and(|next| next.is_ascii_digit()) {
-                    self.note(Note::SingleDigitBackreference);
-                    self.replace_chars(2, &format!(r"\g{{{c}}}"));
-                } else {
-                    self.copy_chars(2);
-                }
-                NULLABLE
-            }
+            '1'..='9' => self.backreference(c),
             'g' | 'k' => {
                 let len = reference_len(self.rest());
                 self.copy_bytes(len);
@@ -425,6 +406,33 @@ impl Scanner<'_> {
                 ITEM
             }
         }
+    }
+
+    /// Boost's `\l`, `\u`, `\L` and `\U` classes, as `[[:lower:]]`, `[[:upper:]]` and their
+    /// negations.
+    fn case_class(&mut self, c: char) -> Atom {
+        self.note(Note::BoostCaseClass);
+        self.whole_text |= c.is_uppercase();
+        let class = match c {
+            'l' => "[[:lower:]]",
+            'u' => "[[:upper:]]",
+            'L' => "[^[:lower:]]",
+            _ => "[^[:upper:]]",
+        };
+        self.replace_chars(2, class);
+        ITEM
+    }
+
+    /// `\1` to `\9`; `\10` is back-reference 1 followed by `0` in Boost, so it becomes
+    /// `\g{1}0`.
+    fn backreference(&mut self, c: char) -> Atom {
+        if self.peek_nth(2).is_some_and(|next| next.is_ascii_digit()) {
+            self.note(Note::SingleDigitBackreference);
+            self.replace_chars(2, &format!(r"\g{{{c}}}"));
+        } else {
+            self.copy_chars(2);
+        }
+        NULLABLE
     }
 
     /// `\xHH`, `\x{H..}`, `\o{O..}`, `\0OOO`, `\cX` and `\N{U+H..}` (or a bare `\N`).

@@ -36,6 +36,62 @@ struct After {
     plain_text: Option<String>,
 }
 
+impl Before {
+    /// The confirmation's text: what the change does, what it replaces, what is missing for
+    /// it to work, and how to undo it.
+    fn question(&self) -> String {
+        let mut body = format!(
+            "SUPER+SHIFT+N: writes “{COMMAND}” to {} (now: {}).\n\nDouble-click in the file \
+             manager: runs xdg-mime default {DESKTOP_ID} for {} file types, text/plain among \
+             them (now: {}).",
+            shown(&self.editor_file),
+            self.editor.as_deref().unwrap_or("nvim, Omarchy's default"),
+            self.types.len(),
+            self.plain_text.as_deref().unwrap_or("none"),
+        );
+        if !self.on_path {
+            let _ = write!(
+                body,
+                "\n\n“{COMMAND}” is not on PATH, so omarchy-launch-editor would fall back to \
+                 nvim until Stet is installed."
+            );
+        }
+        if self.desktop_file.is_none() {
+            let _ = write!(
+                body,
+                "\n\n{DESKTOP_ID} is not installed, so double-clicked files can't open in Stet \
+                 until it is."
+            );
+        }
+        body.push_str(
+            "\n\nTo undo: omarchy-default-editor nvim, and xdg-mime default nvim.desktop \
+             text/plain (and the other types).",
+        );
+        body
+    }
+
+    /// The report once the change is made.
+    fn report(&self, after: &After) -> String {
+        format!(
+            "{} now holds “{COMMAND}” (it held {}), so SUPER+SHIFT+N opens Stet.\n\n\
+             {} file types open with {DESKTOP_ID}; xdg-mime now reports {} for \
+             text/plain (it reported {}).",
+            shown(&self.editor_file),
+            self.editor
+                .as_deref()
+                .map_or_else(|| "nothing".to_owned(), |editor| format!("“{editor}”")),
+            self.types.len(),
+            after.plain_text.as_deref().unwrap_or("nothing"),
+            self.plain_text.as_deref().unwrap_or("nothing"),
+        )
+    }
+}
+
+/// `path` with the home folder as `~`.
+fn shown(path: &Path) -> String {
+    tilde(path, std::env::home_dir().as_deref())
+}
+
 impl Window {
     pub(in crate::window) async fn set_as_default_editor(&self) {
         if stet_infrastructure::sandbox::is_flatpak() {
@@ -57,38 +113,7 @@ impl Window {
             self.toast("Could not look up the current default editor");
             return;
         };
-        let home = std::env::home_dir();
-        let shown = |path: &Path| tilde(path, home.as_deref());
-        let mut body = format!(
-            "SUPER+SHIFT+N: writes “{COMMAND}” to {} (now: {}).\n\nDouble-click in the file \
-             manager: runs xdg-mime default {DESKTOP_ID} for {} file types, text/plain among \
-             them (now: {}).",
-            shown(&before.editor_file),
-            before
-                .editor
-                .as_deref()
-                .unwrap_or("nvim, Omarchy's default"),
-            before.types.len(),
-            before.plain_text.as_deref().unwrap_or("none"),
-        );
-        if !before.on_path {
-            let _ = write!(
-                body,
-                "\n\n“{COMMAND}” is not on PATH, so omarchy-launch-editor would fall back to \
-                 nvim until Stet is installed."
-            );
-        }
-        if before.desktop_file.is_none() {
-            let _ = write!(
-                body,
-                "\n\n{DESKTOP_ID} is not installed, so double-clicked files can't open in Stet \
-                 until it is."
-            );
-        }
-        body.push_str(
-            "\n\nTo undo: omarchy-default-editor nvim, and xdg-mime default nvim.desktop \
-             text/plain (and the other types).",
-        );
+        let body = before.question();
         let confirmed = self
             .confirm(
                 "Make Stet the default editor?",
@@ -113,19 +138,7 @@ impl Window {
         .await;
         match applied {
             Some(Ok(after)) => {
-                let report = format!(
-                    "{} now holds “{COMMAND}” (it held {}), so SUPER+SHIFT+N opens Stet.\n\n\
-                     {} file types open with {DESKTOP_ID}; xdg-mime now reports {} for \
-                     text/plain (it reported {}).",
-                    shown(&before.editor_file),
-                    before
-                        .editor
-                        .as_deref()
-                        .map_or_else(|| "nothing".to_owned(), |editor| format!("“{editor}”")),
-                    before.types.len(),
-                    after.plain_text.as_deref().unwrap_or("nothing"),
-                    before.plain_text.as_deref().unwrap_or("nothing"),
-                );
+                let report = before.report(&after);
                 tracing::info!(types = before.types.len(), "set as the default editor");
                 self.show_message("Stet is the default editor", &report)
                     .await;

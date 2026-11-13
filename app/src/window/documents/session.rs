@@ -241,38 +241,7 @@ impl Window {
         );
         self.inner.session.store.replace(Some(store));
 
-        let recent_files = match recent {
-            Some((recent, file)) => {
-                self.inner.session.migrated_recent.replace(Some(file));
-                recent
-            }
-            None => RecentFiles::new(session.recent_files.iter().cloned()),
-        };
-        self.inner.shared.set_recent(&recent_files);
-        let history = |entries: &[String]| History::from_entries(entries.to_vec(), HISTORY_LIMIT);
-        self.set_search_history(SearchHistory {
-            find: history(&session.find_history),
-            replace: history(&session.replace_history),
-            directories: history(&session.directory_history),
-            filters: history(&session.filter_history),
-        });
-        let window = session.window;
-        if window.width > 0 && window.height > 0 {
-            self.inner
-                .window
-                .set_default_size(window.width, window.height);
-        }
-        if window.maximized {
-            self.inner.window.maximize();
-        }
-        self.inner
-            .shared
-            .appearance
-            .set_zoom(Zoom::new(window.zoom));
-        self.inner
-            .split
-            .position
-            .set((window.split_position > 0).then_some(window.split_position));
+        self.restore_state(&session, recent);
 
         let initial = self.pages();
         let missing: BTreeSet<&RecordId> = missing_backups.iter().collect();
@@ -334,6 +303,44 @@ impl Window {
         self.inner.session.set_phase(Phase::On);
         self.start_backups();
         self.update_actions();
+    }
+
+    /// Puts back what the session keeps besides the tabs: the recent files (from
+    /// `recent.json` when it was migrated), the histories, the window's size, the zoom and
+    /// the divider.
+    fn restore_state(&self, session: &Session, recent: Option<(RecentFiles, PathBuf)>) {
+        let recent_files = match recent {
+            Some((recent, file)) => {
+                self.inner.session.migrated_recent.replace(Some(file));
+                recent
+            }
+            None => RecentFiles::new(session.recent_files.iter().cloned()),
+        };
+        self.inner.shared.set_recent(&recent_files);
+        let history = |entries: &[String]| History::from_entries(entries.to_vec(), HISTORY_LIMIT);
+        self.set_search_history(SearchHistory {
+            find: history(&session.find_history),
+            replace: history(&session.replace_history),
+            directories: history(&session.directory_history),
+            filters: history(&session.filter_history),
+        });
+        let window = session.window;
+        if window.width > 0 && window.height > 0 {
+            self.inner
+                .window
+                .set_default_size(window.width, window.height);
+        }
+        if window.maximized {
+            self.inner.window.maximize();
+        }
+        self.inner
+            .shared
+            .appearance
+            .set_zoom(Zoom::new(window.zoom));
+        self.inner
+            .split
+            .position
+            .set((window.split_position > 0).then_some(window.split_position));
     }
 
     /// A tab for `record`, in its view, that loads its text when first shown.

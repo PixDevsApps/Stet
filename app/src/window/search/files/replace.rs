@@ -470,31 +470,15 @@ impl Window {
                 },
             ))
         };
-        let Some(page) = self.page_for_file(&path).await else {
-            return unchanged(Skip::DocumentClosed);
+        let (page, label) = match self.loaded_document(&path, home.as_deref()).await {
+            Ok(found) => found,
+            Err(reason) => return unchanged(reason),
         };
-        let label = tilde(
-            &page.path().unwrap_or_else(|| path.clone()),
-            home.as_deref(),
-        );
-        let loaded = self.ensure_loaded(&page).await;
-        if loaded {
-            page.loaded(LOAD_WAIT).await;
-        }
-        if self.tab_page(&page).is_none() {
-            return unchanged(Skip::DocumentClosed);
-        }
-        if !loaded || page.is_loading() {
-            return unchanged(Skip::DocumentNotLoaded);
-        }
         let skipped = |reason: Skip| {
             let node = skipped_node(label.clone(), path.clone(), &reason, None);
             Some((
                 FileNode {
-                    target: FileTarget::Page {
-                        page: page.downgrade(),
-                        path: page.path(),
-                    },
+                    target: page_target(&page),
                     ..node
                 },
                 Totals {
@@ -520,10 +504,7 @@ impl Window {
                 return Some((
                     FileNode {
                         label,
-                        target: FileTarget::Page {
-                            page: page.downgrade(),
-                            path: page.path(),
-                        },
+                        target: page_target(&page),
                         hits: Vec::new(),
                         summary: Some(format!("failed: {error}")),
                     },
@@ -557,18 +538,8 @@ impl Window {
         .unwrap_or_default();
         let outcome = if !changed || dirty {
             DocumentOutcome::Unsaved
-        } else if self.saves_exactly(&page).await {
-            let saved = match page.path() {
-                Some(file) => self.write_to(&page, file, false).await,
-                None => false,
-            };
-            if saved {
-                DocumentOutcome::Saved
-            } else {
-                DocumentOutcome::NotSaved
-            }
         } else {
-            DocumentOutcome::NotSaved
+            self.save_replaced(&page).await
         };
         let mut summary = file_summary(count, Some(outcome));
         if !changed {
@@ -577,10 +548,7 @@ impl Window {
         Some((
             FileNode {
                 label,
-                target: FileTarget::Page {
-                    page: page.downgrade(),
-                    path: page.path(),
-                },
+                target: page_target(&page),
                 hits,
                 summary: Some(summary),
             },
@@ -590,6 +558,45 @@ impl Window {
                 ..Totals::default()
             },
         ))
+    }
+
+    /// The open document whose file is `path`, loaded, and its label in the results; or why
+    /// it is left alone.
+    async fn loaded_document(
+        &self,
+        path: &Path,
+        home: Option<&Path>,
+    ) -> Result<(EditorPage, String), Skip> {
+        let page = self.page_for_file(path).await.ok_or(Skip::DocumentClosed)?;
+        let label = tilde(&page.path().unwrap_or_else(|| path.to_owned()), home);
+        let loaded = self.ensure_loaded(&page).await;
+        if loaded {
+            page.loaded(LOAD_WAIT).await;
+        }
+        if self.tab_page(&page).is_none() {
+            return Err(Skip::DocumentClosed);
+        }
+        if !loaded || page.is_loading() {
+            return Err(Skip::DocumentNotLoaded);
+        }
+        Ok((page, label))
+    }
+
+    /// Saves an open document that had no unsaved changes before its replacements, when
+    /// saving writes its bytes back exactly.
+    async fn save_replaced(&self, page: &EditorPage) -> DocumentOutcome {
+        if !self.saves_exactly(page).await {
+            return DocumentOutcome::NotSaved;
+        }
+        let saved = match page.path() {
+            Some(file) => self.write_to(page, file, false).await,
+            None => false,
+        };
+        if saved {
+            DocumentOutcome::Saved
+        } else {
+            DocumentOutcome::NotSaved
+        }
     }
 
     /// The tab whose file is `path` (links resolved), looked up on a worker.
@@ -641,6 +648,14 @@ impl Window {
 }
 
 /// A row for a file Replace in Files left alone.
+/// The results' target for the open document `page`.
+fn page_target(page: &EditorPage) -> FileTarget {
+    FileTarget::Page {
+        page: page.downgrade(),
+        path: page.path(),
+    }
+}
+
 fn skipped_node(label: String, path: PathBuf, reason: &Skip, matches: Option<usize>) -> FileNode {
     let summary = match matches {
         Some(matches) => format!(

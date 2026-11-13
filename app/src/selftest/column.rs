@@ -2,8 +2,9 @@
 //! the way GtkTextView commits text, Alt+drag through the gesture's handlers, the rectangular
 //! clipboard, the Column Editor, undo steps and timings, and the accessibility override.
 
-use super::script::{Step, boolean};
-use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number};
+use super::registry::{Command, commands};
+use super::script::boolean;
+use super::{Harness, StepResult, WAIT_TIMEOUT, build, equal, number};
 use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::column::{StetView, dialog, keys};
 use crate::sys::accessible_text;
@@ -18,6 +19,34 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
 use stet_domain::column::{Rect, VisualPos};
+
+pub(super) const COMMANDS: &[Command] = commands![
+    "column-select" (4, 4) => column_select,
+    "column-key" (1, 1) => async column_key,
+    "column-type" (1, 1) => column_type,
+    "column-commit" (1, 1) => column_commit,
+    "column-drag" (4, 5) => column_drag,
+    "column-click" (2, 2) => column_click,
+    "column-checkpoint" (1, 1) => column_checkpoint,
+    "clipboard-text" (1, 1) => clipboard_text,
+    "column-editor" (1, 7) => async column_editor,
+    "bench-undo-redo" (2, 2) => async bench_undo_redo,
+    "add-source-mark" (1, 1) => add_source_mark,
+    "write-column-lines" (2, 2) => write_column_lines,
+    "assert-column" (1, 4) => assert_column,
+    "assert-burst" (1, 1) => assert_burst,
+    "assert-undo-steps" (2, 2) => assert_undo_steps,
+    "assert-clipboard-mime" (2, 2) => async assert_clipboard_mime,
+    "assert-column-op" (1, 2) => assert_column_op,
+    "assert-column-painted" (1, 1) => async assert_column_painted,
+    "assert-column-editor" (1, 1) => assert_column_editor,
+    "assert-a11y-selection" (0, 0) => assert_a11y_selection,
+    "assert-key-route" (2, 2) => assert_key_route,
+    "assert-controller-order" (0, 0) => assert_controller_order,
+    "assert-visible-line" (1, 1) => assert_visible_line,
+    "assert-hit-test" (1, 1) => assert_hit_test,
+    "assert-source-marks" (1, 1) => assert_source_marks,
+];
 
 /// The category of the source marks the self-test makes.
 const MARK_CATEGORY: &str = "stet-selftest";
@@ -113,164 +142,172 @@ impl Harness {
         Ok(self.page()?.column_view().clone())
     }
 
-    /// Runs a column-mode command; `None` when `step` is not one.
-    pub(super) async fn column_step(&self, step: &Step) -> Option<StepResult> {
-        let args = &step.args;
-        let arg = |index: usize| args[index].as_str();
-        Some(match step.command.as_str() {
-            "column-select" => match (pos(arg(0), arg(1)), pos(arg(2), arg(3)), self.column_view())
-            {
-                (Ok(anchor), Ok(cursor), Ok(view)) => {
-                    view.grab_focus();
-                    view.set_rect(Rect::new(anchor, cursor));
-                    Ok(())
-                }
-                (Err(error), _, _) | (_, Err(error), _) | (_, _, Err(error)) => Err(error),
-            },
-            "column-key" => self.column_key(arg(0)).await,
-            "column-type" => self.column_view().map(|view| {
-                view.grab_focus();
-                for ch in arg(0).chars() {
-                    commit(view.upcast_ref(), &ch.to_string());
-                }
-            }),
-            "column-commit" => self.column_view().map(|view| {
-                view.grab_focus();
-                commit(view.upcast_ref(), arg(0));
-            }),
-            "column-drag" => self.column_drag(args),
-            "column-click" => self.column_click(arg(0), arg(1)),
-            "column-checkpoint" => self.page().map(|page| {
-                let text = page.text();
-                CHECKPOINTS.with(|checkpoints| {
-                    checkpoints.borrow_mut().insert(arg(0).to_owned(), text);
-                });
-            }),
-            "clipboard-text" => {
-                self.window.window().clipboard().set_text(arg(0));
-                Ok(())
-            }
-            "assert-clipboard-mime" => {
-                let clipboard = self.window.window().clipboard();
-                match crate::editor::column::clipboard::read(&clipboard, arg(0)).await {
-                    Ok(text) => equal(&format!("clipboard as {}", arg(0)), text, arg(1).to_owned()),
-                    Err(error) => Err(format!("the clipboard has no {}: {error}", arg(0))),
-                }
-            }
-            "column-editor" => self.column_editor(args).await,
-            "write-column-lines" => match number(arg(1)) {
-                Ok(count) => {
-                    super::write_file(std::path::Path::new(arg(0)), s5_lines(count).as_bytes())
-                }
-                Err(error) => Err(error),
-            },
-            "bench-undo-redo" => self.bench_undo_redo(arg(0), arg(1)).await,
-            "add-source-mark" => self.page().and_then(|page| {
-                let buffer = page.buffer();
-                let line = number(arg(0))?;
-                let iter = line
-                    .checked_sub(1)
-                    .and_then(|line| buffer.iter_at_line_number(line))
-                    .ok_or_else(|| format!("there is no line {line}"))?;
-                buffer.create_source_mark(None, MARK_CATEGORY, &iter);
-                Ok(())
-            }),
-            // `<n>` rows exactly, or `<n` for fewer than n (only the visible rows of a tall
-            // rectangle are painted).
-            "assert-column-painted" => match self.wait_frames(2).await {
-                Ok(()) => self.column_view().and_then(|view| {
-                    let painted = view.painted_rows();
-                    match arg(0).strip_prefix('<') {
-                        Some(limit) if painted > 0 && painted < number(limit)? => {
-                            println!("  # {painted} rows painted");
-                            Ok(())
-                        }
-                        Some(limit) => Err(format!("{painted} rows painted, not 1 to {limit}")),
-                        None => equal("painted rows", painted, number(arg(0))?),
-                    }
-                }),
-                Err(error) => Err(error),
-            },
-            _ => return None,
-        })
+    /// `column-select <line> <column> <line> <column>`: column mode with that rectangle,
+    /// anchor first, cursor corner second (1-based; columns past a line's end are virtual
+    /// space), with the focus in the editor.
+    fn column_select(&self, args: &[String]) -> StepResult {
+        let anchor = pos(&args[0], &args[1])?;
+        let cursor = pos(&args[2], &args[3])?;
+        let view = self.column_view()?;
+        view.grab_focus();
+        view.set_rect(Rect::new(anchor, cursor));
+        Ok(())
     }
 
-    /// Checks a column-mode assertion; `None` when `assertion` is not one.
-    pub(super) fn column_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
-        let arg = |index: usize| args[index].as_str();
-        Some(match assertion {
-            "assert-column" => self.check_column(args),
-            "assert-burst" => self
-                .column_view()
-                .and_then(|view| equal("typing burst open", view.burst_open(), boolean(arg(0))?)),
-            "assert-undo-steps" => self.check_undo_steps(arg(0), arg(1)),
-            "assert-column-op" => self.check_column_op(args),
-            "assert-column-editor" => self.check_editor(arg(0)),
-            "assert-a11y-selection" => self.check_a11y_selection(),
-            "assert-key-route" => self.check_key_route(arg(0), arg(1)),
-            "assert-controller-order" => self.check_controller_order(),
-            // Every cell of a line, and a few past its end, maps to a point of the widget that
-            // maps back to the same cell (what Alt+drag relies on).
-            "assert-hit-test" => self.column_view().and_then(|view| {
-                let line = number(arg(0))?.checked_sub(1).ok_or("lines count from 1")?;
-                let width = stet_domain::column::text_width(
-                    &view.line_text(line),
-                    0,
-                    view.tab_width() as usize,
-                );
-                let wrong: Vec<String> = (0..width + 4)
-                    .filter_map(|column| {
-                        let pos = VisualPos::new(line, column);
-                        let (x, y) = view.point_of(pos);
-                        let back = view.pos_at(x, y);
-                        (back != pos).then(|| format!("{column}→{}", back.column))
-                    })
-                    .collect();
-                if wrong.is_empty() {
-                    println!("  # line {}: {} cells map back", line + 1, width + 4);
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "cells that map back elsewhere: {}",
-                        wrong.join(", ")
-                    ))
-                }
-            }),
-            "assert-visible-line" => self.column_view().and_then(|view| {
-                let line = number(arg(0))?;
-                let visible = view.visible_rect();
-                let top = view.line_at_y(visible.y()).0.line_number() + 1;
-                let bottom = view
-                    .line_at_y(visible.y() + visible.height())
-                    .0
-                    .line_number()
-                    + 1;
-                if (top..=bottom).contains(&line) {
-                    Ok(())
-                } else {
-                    Err(format!("lines {top} to {bottom} are visible, not {line}"))
-                }
-            }),
-            "assert-source-marks" => self.page().and_then(|page| {
-                let buffer = page.buffer();
-                let lines: Vec<String> = (0..buffer.line_count())
-                    .filter(|line| {
-                        !buffer
-                            .source_marks_at_line(*line, Some(MARK_CATEGORY))
-                            .is_empty()
-                    })
-                    .map(|line| (line + 1).to_string())
-                    .collect();
-                equal("lines with marks", lines.join(","), arg(0).to_owned())
-            }),
-            _ => return None,
-        })
+    /// `column-type <text>`: commits the text one character at a time, as typing does.
+    fn column_type(&self, args: &[String]) -> StepResult {
+        let view = self.column_view()?;
+        view.grab_focus();
+        for ch in args[0].chars() {
+            commit(view.upcast_ref(), &ch.to_string());
+        }
+        Ok(())
     }
 
-    /// Sends a key the way GTK dispatches it to the editor: the window's capture-phase
-    /// controller (which closes a typing burst), the application accelerators, column mode's
-    /// key controller on the view, then the view's own bindings; text keys are committed.
-    async fn column_key(&self, accel: &str) -> StepResult {
+    /// `column-commit <text>`: commits the text all at once, as an input method does.
+    fn column_commit(&self, args: &[String]) -> StepResult {
+        let view = self.column_view()?;
+        view.grab_focus();
+        commit(view.upcast_ref(), &args[0]);
+        Ok(())
+    }
+
+    /// `column-checkpoint <name>`: remembers the current tab's text, for `assert-undo-steps`
+    /// and `bench-undo-redo`.
+    fn column_checkpoint(&self, args: &[String]) -> StepResult {
+        let text = self.page()?.text();
+        CHECKPOINTS.with(|checkpoints| {
+            checkpoints.borrow_mut().insert(args[0].clone(), text);
+        });
+        Ok(())
+    }
+
+    /// `clipboard-text <text>`: puts plain text on the clipboard.
+    fn clipboard_text(&self, args: &[String]) {
+        self.window.window().clipboard().set_text(&args[0]);
+    }
+
+    /// `assert-clipboard-mime <mime type> <text>`: the clipboard's content in that type.
+    async fn assert_clipboard_mime(&self, args: &[String]) -> StepResult {
+        let clipboard = self.window.window().clipboard();
+        match crate::editor::column::clipboard::read(&clipboard, &args[0]).await {
+            Ok(text) => equal(&format!("clipboard as {}", args[0]), text, args[1].clone()),
+            Err(error) => Err(format!("the clipboard has no {}: {error}", args[0])),
+        }
+    }
+
+    /// `write-column-lines <path> <count>`: writes that many lines of spike S5's shapes.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn write_column_lines(&self, args: &[String]) -> StepResult {
+        let count = number(&args[1])?;
+        super::write_file(std::path::Path::new(&args[0]), s5_lines(count).as_bytes())
+    }
+
+    /// `add-source-mark <line>`: adds a source mark of the self-test's category on the line.
+    fn add_source_mark(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        let buffer = page.buffer();
+        let line = number(&args[0])?;
+        let iter = line
+            .checked_sub(1)
+            .and_then(|line| buffer.iter_at_line_number(line))
+            .ok_or_else(|| format!("there is no line {line}"))?;
+        buffer.create_source_mark(None, MARK_CATEGORY, &iter);
+        Ok(())
+    }
+
+    /// `assert-column-painted <n>|<<n>`: column mode painted n rows, or fewer than n but some
+    /// (only the visible rows of a tall rectangle are painted), once two frames were painted.
+    async fn assert_column_painted(&self, args: &[String]) -> StepResult {
+        self.wait_frames(2).await?;
+        let painted = self.column_view()?.painted_rows();
+        match args[0].strip_prefix('<') {
+            Some(limit) if painted > 0 && painted < number(limit)? => {
+                println!("  # {painted} rows painted");
+                Ok(())
+            }
+            Some(limit) => Err(format!("{painted} rows painted, not 1 to {limit}")),
+            None => equal("painted rows", painted, number(&args[0])?),
+        }
+    }
+
+    /// `assert-burst true|false`: whether a typing burst is open.
+    fn assert_burst(&self, args: &[String]) -> StepResult {
+        let view = self.column_view()?;
+        equal("typing burst open", view.burst_open(), boolean(&args[0])?)
+    }
+
+    /// `assert-hit-test <line>`: every cell of the line, and a few past its end, maps to a
+    /// point of the widget that maps back to the same cell (what Alt+drag relies on).
+    fn assert_hit_test(&self, args: &[String]) -> StepResult {
+        let view = self.column_view()?;
+        let line = number(&args[0])?
+            .checked_sub(1)
+            .ok_or("lines count from 1")?;
+        let width =
+            stet_domain::column::text_width(&view.line_text(line), 0, view.tab_width() as usize);
+        let wrong: Vec<String> = (0..width + 4)
+            .filter_map(|column| {
+                let pos = VisualPos::new(line, column);
+                let (x, y) = view.point_of(pos);
+                let back = view.pos_at(x, y);
+                (back != pos).then(|| format!("{column}→{}", back.column))
+            })
+            .collect();
+        if wrong.is_empty() {
+            println!("  # line {}: {} cells map back", line + 1, width + 4);
+            Ok(())
+        } else {
+            Err(format!(
+                "cells that map back elsewhere: {}",
+                wrong.join(", ")
+            ))
+        }
+    }
+
+    /// `assert-visible-line <line>`: the line is on screen in the current view.
+    fn assert_visible_line(&self, args: &[String]) -> StepResult {
+        let view = self.column_view()?;
+        let line = number(&args[0])?;
+        let visible = view.visible_rect();
+        let top = view.line_at_y(visible.y()).0.line_number() + 1;
+        let bottom = view
+            .line_at_y(visible.y() + visible.height())
+            .0
+            .line_number()
+            + 1;
+        if (top..=bottom).contains(&line) {
+            Ok(())
+        } else {
+            Err(format!("lines {top} to {bottom} are visible, not {line}"))
+        }
+    }
+
+    /// `assert-source-marks <lines>`: the lines with the self-test's source marks, joined by
+    /// commas.
+    fn assert_source_marks(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        let buffer = page.buffer();
+        let lines: Vec<String> = (0..buffer.line_count())
+            .filter(|line| {
+                !buffer
+                    .source_marks_at_line(*line, Some(MARK_CATEGORY))
+                    .is_empty()
+            })
+            .map(|line| (line + 1).to_string())
+            .collect();
+        equal("lines with marks", lines.join(","), args[0].clone())
+    }
+
+    /// `column-key <key>`: sends the key the way GTK dispatches it to the editor: the window's
+    /// capture-phase controller (which closes a typing burst), the application accelerators,
+    /// column mode's key controller on the view, then the view's own bindings; Enter and text
+    /// keys are committed.
+    async fn column_key(&self, args: &[String]) -> StepResult {
+        let accel = args[0].as_str();
         let (key, mods) =
             gtk::accelerator_parse(accel).ok_or_else(|| format!("bad key {accel}"))?;
         let view = self.column_view()?;
@@ -321,8 +358,9 @@ impl Harness {
         }
     }
 
-    /// `column-drag l1 c1 l2 c2 [shift]`: an Alt+drag (Alt+Shift with `shift`) from one cell to
-    /// another, through the drag gesture's handlers.
+    /// `column-drag <line> <column> <line> <column> [shift]`: an Alt+drag (Alt+Shift with
+    /// `shift`; the same cell twice is an Alt+click) from one cell to another, through the drag
+    /// gesture's handlers.
     fn column_drag(&self, args: &[String]) -> StepResult {
         let view = self.column_view()?;
         let from = pos(&args[0], &args[1])?;
@@ -344,10 +382,11 @@ impl Harness {
         Ok(())
     }
 
-    /// A plain click on a cell: column mode lets it go, then GTK puts the caret there.
-    fn column_click(&self, line: &str, column: &str) -> StepResult {
+    /// `column-click <line> <column>`: a plain click on a cell: column mode lets it go, then
+    /// GTK puts the caret there.
+    fn column_click(&self, args: &[String]) -> StepResult {
         let view = self.column_view()?;
-        let at = pos(line, column)?;
+        let at = pos(&args[0], &args[1])?;
         let (x, y) = view.point_of(at);
         if view.pointer_begin(x, y, false, false) {
             return Err("a plain click was taken by column mode".to_owned());
@@ -358,7 +397,10 @@ impl Harness {
         Ok(())
     }
 
-    fn check_column(&self, args: &[String]) -> StepResult {
+    /// `assert-column none` or `assert-column <line> <column> <line> <column>`: column mode is
+    /// off, or on with that rectangle (anchor, then cursor corner); GTK's caret shows only
+    /// when it is off.
+    fn assert_column(&self, args: &[String]) -> StepResult {
         let view = self.column_view()?;
         let rect = view.rect();
         let cursor_shown = view.is_cursor_visible();
@@ -395,9 +437,10 @@ impl Harness {
         }
     }
 
-    /// Undoes until the text is `checkpoint`'s, expecting exactly `steps` steps, then redoes
-    /// them, expecting the text from before.
-    fn check_undo_steps(&self, checkpoint: &str, steps: &str) -> StepResult {
+    /// `assert-undo-steps <checkpoint> <n>`: undoes until the text is the checkpoint's,
+    /// expecting exactly n steps, then redoes them, expecting the text from before.
+    fn assert_undo_steps(&self, args: &[String]) -> StepResult {
+        let (checkpoint, steps) = (args[0].as_str(), args[1].as_str());
         let page = self.page()?;
         let buffer = page.buffer();
         let wanted = number(steps)?;
@@ -429,8 +472,9 @@ impl Harness {
         equal("undo steps", taken, wanted)
     }
 
-    /// `assert-column-op <limit ms> [bulk|single]`: the last column operation's cost.
-    fn check_column_op(&self, args: &[String]) -> StepResult {
+    /// `assert-column-op <limit ms> [bulk|single]`: the last column operation took no longer,
+    /// and was one bulk edit or not.
+    fn assert_column_op(&self, args: &[String]) -> StepResult {
         let view = self.column_view()?;
         let stats = view
             .last_op()
@@ -442,11 +486,7 @@ impl Harness {
             if stats.bulk { " as one bulk edit" } else { "" },
             ms(stats.took),
             ms(stats.applying),
-            if cfg!(debug_assertions) {
-                "debug"
-            } else {
-                "release"
-            }
+            build()
         );
         if let Some(kind) = args.get(1) {
             let bulk = match kind.as_str() {
@@ -464,9 +504,10 @@ impl Harness {
         }
     }
 
-    /// Undo and then redo, each timed and checked against `limit`; the undo must give
-    /// `checkpoint`'s text and the redo the text from before.
-    async fn bench_undo_redo(&self, checkpoint: &str, limit: &str) -> StepResult {
+    /// `bench-undo-redo <checkpoint> <limit ms>`: one undo and one redo, each timed and held to
+    /// the limit; the undo must give the checkpoint's text and the redo the text from before.
+    async fn bench_undo_redo(&self, args: &[String]) -> StepResult {
+        let (checkpoint, limit) = (args[0].as_str(), args[1].as_str());
         let page = self.page()?;
         let buffer = page.buffer();
         let limit = Duration::from_millis(number(limit)? as u64);
@@ -493,11 +534,7 @@ impl Harness {
             ms(idle),
             ms(redo),
             ms(redo_idle),
-            if cfg!(debug_assertions) {
-                "debug"
-            } else {
-                "release"
-            }
+            build()
         );
         if !undone {
             return Err(format!("one undo did not give {checkpoint}"));
@@ -511,6 +548,9 @@ impl Harness {
         Ok(())
     }
 
+    /// `column-editor open`, `text <text>`, `numbers <initial> <step> <repeat> <leading>
+    /// <format> [<uppercase>]`, `ok`, `enter` or `cancel`: opens, fills and answers the Column
+    /// Editor (`enter` activates the focused field).
     async fn column_editor(&self, args: &[String]) -> StepResult {
         let verb = args[0].as_str();
         if verb == "open" {
@@ -588,10 +628,10 @@ impl Harness {
         Ok(())
     }
 
-    /// The editor's GtkAccessibleText get_selection with a selection present: called with NULL
-    /// ranges as GTK's AT-SPI AddSelection does (which crashes GTK 4.22's own), then with
-    /// storage, which must give the selection.
-    fn check_a11y_selection(&self) -> StepResult {
+    /// `assert-a11y-selection`: the editor's GtkAccessibleText `get_selection` with a
+    /// selection present: called with NULL ranges as GTK's AT-SPI AddSelection does (which
+    /// crashes GTK 4.22's own), then with storage, which must give the selection.
+    fn assert_a11y_selection(&self, _: &[String]) -> StepResult {
         let view = self.column_view()?;
         let buffer = view.buffer();
         let (start, end) = buffer
@@ -618,9 +658,11 @@ impl Harness {
         Ok(())
     }
 
-    /// Which handler a key reaches first: `app:<action>` for an application accelerator, else
-    /// `binding:<action>` for the editor's own binding.
-    fn check_key_route(&self, accel: &str, wanted: &str) -> StepResult {
+    /// `assert-key-route <key> <route>`: which handler the key reaches first: `app:<action>`
+    /// for an application accelerator, else `binding:<action>` for the editor's own binding,
+    /// or `none`.
+    fn assert_key_route(&self, args: &[String]) -> StepResult {
+        let (accel, wanted) = (args[0].as_str(), args[1].as_str());
         let (key, mods) =
             gtk::accelerator_parse(accel).ok_or_else(|| format!("bad key {accel}"))?;
         let view = self.column_view()?;
@@ -646,11 +688,11 @@ impl Harness {
 }
 
 impl Harness {
-    /// Column mode's controllers run first where they must: on the window, the burst closer
-    /// before the application accelerators; on the view, the column keys before
-    /// GtkSourceView's own capture-phase key handler (which feeds the input method). GTK runs a
-    /// widget's controllers of one phase in list order, newest first.
-    fn check_controller_order(&self) -> StepResult {
+    /// `assert-controller-order`: column mode's controllers run first where they must: on the
+    /// window, the burst closer before the application accelerators; on the view, the column
+    /// keys before GtkSourceView's own capture-phase key handler (which feeds the input
+    /// method). GTK runs a widget's controllers of one phase in list order, newest first.
+    fn assert_controller_order(&self, _: &[String]) -> StepResult {
         fn listed(widget: &gtk::Widget) -> Vec<gtk::EventController> {
             let controllers = widget.observe_controllers();
             (0..controllers.n_items())
@@ -737,9 +779,11 @@ async fn idle_after(started: Instant) -> Duration {
 }
 
 impl Harness {
-    /// `open`, `closed`, `focused` (the keyboard focus is in it), `error:none`,
-    /// `error:<text>`, or `<field>=<value>` for `text`, `initial`, `step` or `repeat`.
-    fn check_editor(&self, wanted: &str) -> StepResult {
+    /// `assert-column-editor <state>`: the Column Editor is `open`, `closed` or `focused` (the
+    /// keyboard focus is in it), shows `error:none` or `error:<text>`, or has
+    /// `<field>=<value>` for `text`, `initial`, `step` or `repeat`.
+    fn assert_column_editor(&self, args: &[String]) -> StepResult {
+        let wanted = args[0].as_str();
         let editor = dialog::current();
         match wanted {
             "open" => return equal("Column Editor open", editor.is_some(), true),

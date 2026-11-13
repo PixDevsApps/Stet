@@ -8,108 +8,17 @@ use std::fmt::Write as _;
 pub fn generate(kind: &str, bytes: usize) -> Result<String, String> {
     let mut out = String::with_capacity(bytes + 256);
     match kind {
-        "log" => {
-            let mut index = 0u64;
-            while out.len() < bytes {
-                let _ = writeln!(
-                    out,
-                    "2026-10-01T12:{:02}:{:02}.{:03}Z INFO  [worker-{:02}] GET /api/v1/items/{} \
-                     status=200 duration_ms={}.{} user=user{}",
-                    index / 60_000 % 60,
-                    index / 1000 % 60,
-                    index % 1000,
-                    index % 16,
-                    index * 7 % 100_000,
-                    index % 900,
-                    index % 10,
-                    index % 50
-                );
-                index += 1;
-            }
-        }
-        "rust" => {
-            let mut index = 0u64;
-            while out.len() < bytes {
-                let _ = write!(
-                    out,
-                    "/// Item number {index}.\n#[derive(Debug, Clone, Default)]\npub struct \
-                     Item{index} {{\n    pub id: u64,\n    pub name: String,\n}}\n\nimpl \
-                     Item{index} {{\n    pub fn total(&self, values: &[u64]) -> u64 {{\n        \
-                     // Sum the values and add the id.\n        values.iter().sum::<u64>() + \
-                     self.id * {index}\n    }}\n}}\n\n"
-                );
-                index += 1;
-            }
-        }
-        "json-line" | "json-line-unclosed" => {
-            out.push_str("{\"version\":1,\"items\":[");
-            let mut index = 0u64;
-            while out.len() < bytes {
-                if index > 0 {
-                    out.push(',');
-                }
-                let _ = write!(
-                    out,
-                    "{{\"id\":{index},\"name\":\"item {index}\",\"active\":{},\"tags\":[\"a\",\
-                     \"b\",\"c\"],\"score\":{index}.5,\"parent\":null}}",
-                    index.is_multiple_of(3)
-                );
-                index += 1;
-            }
-            if kind == "json-line" {
-                out.push_str("]}");
-            }
-        }
-        "json-lines" => {
-            out.push_str("[\n");
-            let mut index = 0u64;
-            while out.len() < bytes {
-                if index > 0 {
-                    out.push_str(",\n");
-                }
-                let _ = write!(
-                    out,
-                    "{{\"id\":{index},\"name\":\"item {index}\",\"tags\":[\"a\",\"b\"],\
-                     \"score\":{index}.5}}"
-                );
-                index += 1;
-            }
-            out.push_str("\n]\n");
-        }
-        "numbers" => {
-            let mut index = 0u64;
-            while out.len() < bytes {
-                let _ = writeln!(out, "  {}  ", index * 7919 % 1_000_003);
-                index += 1;
-            }
-        }
-        "xml-line" => {
-            out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?><items>");
-            let mut index = 0u64;
-            while out.len() < bytes {
-                let _ = write!(
-                    out,
-                    "<item id=\"{index}\"><name>item {index}</name><tags><tag>a</tag><tag>b\
-                     </tag></tags></item>"
-                );
-                index += 1;
-            }
-            out.push_str("</items>");
-        }
+        "log" => log(&mut out, bytes),
+        "rust" => rust(&mut out, bytes),
+        "json-line" => json_line(&mut out, bytes, true),
+        "json-line-unclosed" => json_line(&mut out, bytes, false),
+        "json-lines" => json_lines(&mut out, bytes),
+        "numbers" => numbers(&mut out, bytes),
+        "xml-line" => xml_line(&mut out, bytes),
         // Two versions of a text for Compare: `lines-new` is `lines-old` with lines
         // changed, removed and added, and a block of six lines moved further down.
-        "lines-old" | "lines-new" => {
-            let old = numbered_lines(bytes);
-            let lines = if kind == "lines-old" {
-                old
-            } else {
-                edited_lines(&old)
-            };
-            for line in lines {
-                out.push_str(&line);
-                out.push('\n');
-            }
-        }
+        "lines-old" => push_lines(&mut out, numbered_lines(bytes)),
+        "lines-new" => push_lines(&mut out, edited_lines(&numbered_lines(bytes))),
         other => {
             return Err(format!(
                 "unknown kind {other}; use log, rust, json-line, json-line-unclosed, json-lines, \
@@ -118,6 +27,108 @@ pub fn generate(kind: &str, bytes: usize) -> Result<String, String> {
         }
     }
     Ok(out)
+}
+
+fn log(out: &mut String, bytes: usize) {
+    let mut index = 0u64;
+    while out.len() < bytes {
+        let _ = writeln!(
+            out,
+            "2026-10-01T12:{:02}:{:02}.{:03}Z INFO  [worker-{:02}] GET /api/v1/items/{} \
+             status=200 duration_ms={}.{} user=user{}",
+            index / 60_000 % 60,
+            index / 1000 % 60,
+            index % 1000,
+            index % 16,
+            index * 7 % 100_000,
+            index % 900,
+            index % 10,
+            index % 50
+        );
+        index += 1;
+    }
+}
+
+fn rust(out: &mut String, bytes: usize) {
+    let mut index = 0u64;
+    while out.len() < bytes {
+        let _ = write!(
+            out,
+            "/// Item number {index}.\n#[derive(Debug, Clone, Default)]\npub struct \
+             Item{index} {{\n    pub id: u64,\n    pub name: String,\n}}\n\nimpl \
+             Item{index} {{\n    pub fn total(&self, values: &[u64]) -> u64 {{\n        \
+             // Sum the values and add the id.\n        values.iter().sum::<u64>() + \
+             self.id * {index}\n    }}\n}}\n\n"
+        );
+        index += 1;
+    }
+}
+
+/// One line of JSON; without `closed`, its array and object are left open.
+fn json_line(out: &mut String, bytes: usize, closed: bool) {
+    out.push_str("{\"version\":1,\"items\":[");
+    let mut index = 0u64;
+    while out.len() < bytes {
+        if index > 0 {
+            out.push(',');
+        }
+        let _ = write!(
+            out,
+            "{{\"id\":{index},\"name\":\"item {index}\",\"active\":{},\"tags\":[\"a\",\
+             \"b\",\"c\"],\"score\":{index}.5,\"parent\":null}}",
+            index.is_multiple_of(3)
+        );
+        index += 1;
+    }
+    if closed {
+        out.push_str("]}");
+    }
+}
+
+fn json_lines(out: &mut String, bytes: usize) {
+    out.push_str("[\n");
+    let mut index = 0u64;
+    while out.len() < bytes {
+        if index > 0 {
+            out.push_str(",\n");
+        }
+        let _ = write!(
+            out,
+            "{{\"id\":{index},\"name\":\"item {index}\",\"tags\":[\"a\",\"b\"],\
+             \"score\":{index}.5}}"
+        );
+        index += 1;
+    }
+    out.push_str("\n]\n");
+}
+
+fn numbers(out: &mut String, bytes: usize) {
+    let mut index = 0u64;
+    while out.len() < bytes {
+        let _ = writeln!(out, "  {}  ", index * 7919 % 1_000_003);
+        index += 1;
+    }
+}
+
+fn xml_line(out: &mut String, bytes: usize) {
+    out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?><items>");
+    let mut index = 0u64;
+    while out.len() < bytes {
+        let _ = write!(
+            out,
+            "<item id=\"{index}\"><name>item {index}</name><tags><tag>a</tag><tag>b\
+             </tag></tags></item>"
+        );
+        index += 1;
+    }
+    out.push_str("</items>");
+}
+
+fn push_lines(out: &mut String, lines: Vec<String>) {
+    for line in lines {
+        out.push_str(&line);
+        out.push('\n');
+    }
 }
 
 /// Numbered lines of at least `bytes` bytes in all.

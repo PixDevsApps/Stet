@@ -136,13 +136,7 @@ impl EditorDialog {
         let step = entry();
         let repeat = entry();
         let leading = gtk::DropDown::from_strings(&LEADING.map(|(_, label)| label));
-        let bases: Vec<gtk::CheckButton> = BASES
-            .iter()
-            .map(|(_, label, _)| gtk::CheckButton::with_mnemonic(label))
-            .collect();
-        for base in &bases[1..] {
-            base.set_group(Some(&bases[0]));
-        }
+        let bases = base_buttons();
         let uppercase = gtk::CheckButton::with_mnemonic("_Uppercase");
         // GTK 4.22 names a mnemonic check button with its underscore; screen readers get the
         // plain label (and the text field the label of its option).
@@ -152,9 +146,6 @@ impl EditorDialog {
             (&uppercase, "Uppercase"),
         ] {
             button.update_property(&[gtk::accessible::Property::Label(name)]);
-        }
-        for (button, (_, label, _)) in bases.iter().zip(BASES) {
-            button.update_property(&[gtk::accessible::Property::Label(&label.replace('_', ""))]);
         }
         text.update_property(&[gtk::accessible::Property::Label("Text to insert")]);
         let error = gtk::Label::builder()
@@ -209,32 +200,7 @@ impl EditorDialog {
         formats.append(&uppercase);
         grid.attach(&formats, 1, 4, 3, 1);
 
-        let buttons = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(8)
-            .halign(gtk::Align::End)
-            .build();
-        buttons.append(&cancel);
-        buttons.append(&ok);
-        let content = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(12)
-            .margin_top(12)
-            .margin_bottom(18)
-            .margin_start(18)
-            .margin_end(18)
-            .build();
-        content.append(&grid);
-        content.append(&error);
-        content.append(&buttons);
-        let toolbar = adw::ToolbarView::new();
-        toolbar.add_top_bar(&adw::HeaderBar::new());
-        toolbar.set_content(Some(&content));
-        let dialog = adw::Dialog::builder()
-            .title("Column Editor")
-            .content_width(520)
-            .child(&toolbar)
-            .build();
+        let dialog = dialog_around(&grid, &error, &cancel, &ok);
         dialog.add_css_class("stet-column-editor");
         dialog.set_default_widget(Some(&ok));
         Self {
@@ -489,6 +455,58 @@ fn parse_number(text: &str, radix: u32) -> Option<i64> {
     } else {
         i64::try_from(magnitude).ok()
     }
+}
+
+/// The format's radio buttons, each named for screen readers without its mnemonic's
+/// underscore (GTK 4.22 keeps it).
+fn base_buttons() -> Vec<gtk::CheckButton> {
+    let bases: Vec<gtk::CheckButton> = BASES
+        .iter()
+        .map(|(_, label, _)| {
+            let button = gtk::CheckButton::with_mnemonic(label);
+            button.update_property(&[gtk::accessible::Property::Label(&label.replace('_', ""))]);
+            button
+        })
+        .collect();
+    for base in &bases[1..] {
+        base.set_group(Some(&bases[0]));
+    }
+    bases
+}
+
+/// The Column Editor's dialog around its form: the error below it, then Cancel and OK.
+fn dialog_around(
+    form: &gtk::Grid,
+    error: &gtk::Label,
+    cancel: &gtk::Button,
+    ok: &gtk::Button,
+) -> adw::Dialog {
+    let buttons = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(8)
+        .halign(gtk::Align::End)
+        .build();
+    buttons.append(cancel);
+    buttons.append(ok);
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(12)
+        .margin_top(12)
+        .margin_bottom(18)
+        .margin_start(18)
+        .margin_end(18)
+        .build();
+    content.append(form);
+    content.append(error);
+    content.append(&buttons);
+    let toolbar = adw::ToolbarView::new();
+    toolbar.add_top_bar(&adw::HeaderBar::new());
+    toolbar.set_content(Some(&content));
+    adw::Dialog::builder()
+        .title("Column Editor")
+        .content_width(520)
+        .child(&toolbar)
+        .build()
 }
 
 #[cfg(test)]

@@ -113,11 +113,11 @@ fn a_first_run_starts_empty() {
     assert!(restored.orphans.is_empty() && restored.missing_backups.is_empty());
 }
 
-#[test]
-fn round_trips_forty_tabs_and_keeps_backups_of_unopened_tabs() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut texts = BTreeMap::new();
-    let tabs: Vec<TabRecord> = (0..40)
+/// Forty tabs of every kind: untitled with text (one of them large), edited files with a
+/// format and a fingerprint, pinned read-only files and clean untitled tabs; their texts go to
+/// `texts`.
+fn forty_tabs(texts: &mut BTreeMap<RecordId, String>) -> Vec<TabRecord> {
+    (0..40)
         .map(|index| {
             let id = new_id();
             let number = index + 1;
@@ -163,7 +163,14 @@ fn round_trips_forty_tabs_and_keeps_backups_of_unopened_tabs() {
                 },
             }
         })
-        .collect();
+        .collect()
+}
+
+#[test]
+fn round_trips_forty_tabs_and_keeps_backups_of_unopened_tabs() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut texts = BTreeMap::new();
+    let tabs = forty_tabs(&mut texts);
     let session = Session {
         schema_version: SCHEMA_VERSION,
         tabs,

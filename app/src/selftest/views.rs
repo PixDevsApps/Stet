@@ -2,8 +2,9 @@
 //! view and Compare (docs/TESTING.md). Views are numbered as the user sees them: 1 is the main
 //! view, 2 the second one.
 
-use super::script::{Step, boolean};
-use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number};
+use super::registry::{Command, commands};
+use super::script::boolean;
+use super::{Harness, StepResult, WAIT_TIMEOUT, build, equal, number};
 use crate::convert::{BufferPositions, IterPosition, to_i32};
 use crate::editor::EditorPage;
 use gtk4 as gtk;
@@ -15,555 +16,618 @@ use std::time::{Duration, Instant};
 use stet_domain::diff::{LineKind, Side};
 use stet_domain::marks::MarkStyle;
 
-/// The commands and their argument counts (minimum, maximum), as in `script::COMMANDS`.
-pub const COMMANDS: &[(&str, usize, usize)] = &[
-    ("gutter-click", 1, 1),
-    ("mark-style", 1, 1),
-    ("mark-option", 2, 2),
-    ("view-focus", 1, 1),
-    ("drag-tab", 1, 1),
-    ("drop-tab", 2, 2),
-    ("scroll-to-line", 1, 1),
-    ("set-split-position", 1, 1),
-    ("wait-compare", 0, 0),
-    ("report-compare", 0, 0),
-    ("report-mark", 0, 0),
-    ("assert-bookmarks", 1, 1),
-    ("assert-bookmark-count", 1, 1),
-    ("assert-gutter", 0, 0),
-    ("assert-bookmark-steps", 1, 1),
-    ("assert-marks", 2, 2),
-    ("assert-marked-text", 3, 3),
-    ("assert-mark-tags", 2, 2),
-    ("assert-mark-stats", 1, 1),
-    ("assert-line-op", 2, 2),
-    ("assert-active-view", 1, 1),
-    ("assert-split", 1, 1),
-    ("assert-menu-at", 1, 1),
-    ("click-new-tab", 1, 1),
-    ("assert-new-tab-at", 1, 1),
-    // Check for Updates.
-    ("release-server", 1, 2),
-    ("click-dialog-button", 1, 1),
-    ("assert-menu-within", 0, 0),
-    ("assert-menu-submenus", 0, 0),
-    ("popup-submenu", 1, 1),
-    ("assert-view-tabs", 2, 2),
-    ("assert-view-shows", 2, 2),
-    ("assert-same-document", 2, 2),
-    ("assert-view-cursor", 3, 3),
-    ("assert-split-position", 1, 1),
-    ("assert-comparing", 1, 1),
-    ("assert-compare-line", 3, 3),
-    ("assert-compare-paint", 3, 3),
-    ("assert-text-background", 3, 3),
-    ("assert-compare-inline", 3, 3),
-    ("assert-compare-pads", 2, 2),
-    ("assert-compare-stats", 4, 4),
-    ("assert-compare-aligned", 0, 0),
-    ("assert-compare-clean", 0, 0),
-    ("assert-status-lacks", 1, 1),
-    ("assert-scroll-level", 0, 0),
-    ("assert-compare-under", 1, 2),
-    ("assert-compare-painted-under", 1, 2),
+pub(super) const COMMANDS: &[Command] = commands![
+    "gutter-click" (1, 1) => gutter_click,
+    "mark-style" (1, 1) => set_mark_style,
+    "mark-option" (2, 2) => mark_option,
+    "view-focus" (1, 1) => async view_focus,
+    "drag-tab" (1, 1) => async drag_tab,
+    "drop-tab" (2, 2) => async drop_tab,
+    "scroll-to-line" (1, 1) => async scroll_to_line,
+    "set-split-position" (1, 1) => set_split_position,
+    "click-new-tab" (1, 1) => async click_new_tab,
+    "popup-submenu" (1, 1) => async popup_submenu,
+    "release-server" (1, 2) => release_server,
+    "wait-compare" (0, 0) => async wait_compare,
+    "report-compare" (0, 0) => report_compare,
+    "report-mark" (0, 0) => report_mark,
+    "assert-bookmarks" (1, 1) => assert_bookmarks,
+    "assert-bookmark-count" (1, 1) => assert_bookmark_count,
+    "assert-gutter" (0, 0) => assert_gutter,
+    "assert-bookmark-steps" (1, 1) => assert_bookmark_steps,
+    "assert-marks" (2, 2) => assert_marks,
+    "assert-marked-text" (3, 3) => assert_marked_text,
+    "assert-mark-tags" (2, 2) => assert_mark_tags,
+    "assert-mark-stats" (1, 1) => assert_mark_stats,
+    "assert-line-op" (2, 2) => assert_line_op,
+    "assert-active-view" (1, 1) => assert_active_view,
+    "assert-split" (1, 1) => assert_split,
+    "assert-menu-at" (1, 1) => async assert_menu_at,
+    "assert-new-tab-at" (1, 1) => async assert_new_tab_at,
+    "assert-menu-within" (0, 0) => async assert_menu_within,
+    "assert-menu-submenus" (0, 0) => async assert_menu_submenus,
+    "assert-view-tabs" (2, 2) => assert_view_tabs,
+    "assert-view-shows" (2, 2) => assert_view_shows,
+    "assert-same-document" (2, 2) => assert_same_document,
+    "assert-view-cursor" (3, 3) => assert_view_cursor,
+    "assert-split-position" (1, 1) => assert_split_position,
+    "assert-comparing" (1, 1) => assert_comparing,
+    "assert-compare-line" (3, 3) => assert_compare_line,
+    "assert-compare-paint" (3, 3) => assert_compare_paint,
+    "assert-text-background" (3, 3) => assert_text_background,
+    "assert-compare-inline" (3, 3) => assert_compare_inline,
+    "assert-compare-pads" (2, 2) => assert_compare_pads,
+    "assert-compare-stats" (4, 4) => assert_compare_stats,
+    "assert-compare-aligned" (0, 0) => assert_compare_aligned,
+    "assert-compare-clean" (0, 0) => assert_compare_clean,
+    "assert-status-lacks" (1, 1) => assert_status_lacks,
+    "assert-scroll-level" (0, 0) => assert_scroll_level,
+    "assert-compare-under" (1, 2) => assert_compare_under,
+    "assert-compare-painted-under" (1, 2) => async assert_compare_painted_under,
 ];
 
+/// Checks a duration against the limit in `args` for this build: the first argument, or in a
+/// debug build the second when given.
+fn within_limit(args: &[String], took: Duration, what: &str) -> StepResult {
+    let debug = cfg!(debug_assertions) && args.len() > 1;
+    let limit = Duration::from_millis(number(&args[usize::from(debug)])? as u64);
+    if took <= limit {
+        Ok(())
+    } else {
+        Err(format!("{what} {took:?}, over {limit:?}"))
+    }
+}
+
 impl Harness {
-    /// Runs one of these commands; `None` when `step` is not one.
-    pub(super) async fn views_step(&self, step: &Step) -> Option<StepResult> {
-        let arg = |index: usize| step.args[index].as_str();
-        Some(match step.command.as_str() {
-            // What GtkSourceView's gutter does for a click on a line's mark area.
-            "gutter-click" => self.page().and_then(|page| {
-                let line = number(arg(0))?;
-                let buffer = page.buffer();
-                let iter = buffer
-                    .iter_at_line_number(line.saturating_sub(1))
-                    .ok_or_else(|| format!("there is no line {line}"))?;
-                let state = gtk::gdk::ModifierType::empty();
-                page.view().emit_by_name::<()>(
-                    "line-mark-activated",
-                    &[&iter, &gtk::gdk::BUTTON_PRIMARY, &state, &1i32],
-                );
-                Ok(())
-            }),
-            "mark-style" => mark_style(arg(0)).map(|style| {
-                self.window.set_mark_style(style);
-            }),
-            "mark-option" => boolean(arg(1)).and_then(|on| match arg(0) {
-                name @ ("bookmark" | "purge") => {
-                    self.window.set_find_option(name, on);
-                    Ok(())
-                }
-                other => Err(format!("no Mark option {other}; use bookmark or purge")),
-            }),
-            "assert-menu-at" => match view_index(arg(0)) {
-                Ok(index) => self.check_menu_at(index).await,
-                Err(error) => Err(error),
-            },
-            "assert-menu-within" => self.check_menu_within().await,
-            "click-new-tab" => match view_index(arg(0)) {
-                Ok(index) => {
-                    self.window.new_tab_button(index).emit_clicked();
-                    self.wait_until_settled().await;
-                    Ok(())
-                }
-                Err(error) => Err(error),
-            },
-            "release-server" => {
-                let body = step.args.get(1).cloned().unwrap_or_default();
-                release_server(arg(0), body).map(|url| self.window.set_update_url(Some(url)))
-            }
-            "click-dialog-button" => {
-                let clicked = self
-                    .window
-                    .open_dialog()
-                    .is_some_and(|dialog| crate::window::dialogs::click_button(&dialog, arg(0)));
-                if clicked {
-                    self.wait_until_settled().await;
-                    Ok(())
-                } else {
-                    Err(format!("no open dialog has a button {}", arg(0)))
-                }
-            }
-            "assert-new-tab-at" => match view_index(arg(0)) {
-                Ok(index) => self.check_new_tab_at(index).await,
-                Err(error) => Err(error),
-            },
-            "assert-menu-submenus" => self.check_menu_submenus().await,
-            "popup-submenu" => self.popup_submenu(arg(0)).await,
-            "view-focus" => match view_index(arg(0)) {
-                Ok(index) => match self.window.view_page(index) {
-                    Some(page) => {
-                        page.view().grab_focus();
-                        self.wait_until_settled().await;
-                        Ok(())
-                    }
-                    None => Err(format!("view {} shows no tab", arg(0))),
-                },
-                Err(error) => Err(error),
-            },
-            // What libadwaita does when a tab is dropped on the other view's strip.
-            "drag-tab" => match number(arg(0)) {
-                Ok(index) => match self.window.tab_at(index) {
-                    Some((tabs, tab_page)) => {
-                        let other = if tabs == self.window.tab_view(0) {
-                            1
-                        } else {
-                            0
-                        };
-                        let target = self.window.tab_view(other);
-                        tabs.transfer_page(&tab_page, &target, target.n_pages());
-                        self.wait_until_settled().await;
-                        Ok(())
-                    }
-                    None => Err(format!("there is no tab {index}")),
-                },
-                Err(error) => Err(error),
-            },
-            // What happens when a tab is dropped on a strip's + or the empty part after it:
-            // the strip accepts the drop, and libadwaita asks the tab's view for a new
-            // window's tab view and attaches the tab there, first.
-            "drop-tab" => match (number(arg(0)), view_index(arg(1))) {
-                (Ok(index), Ok(view)) => match self.window.tab_at(index) {
-                    Some((tabs, tab_page)) => {
-                        let value = glib::BoxedValue(tab_page.to_value());
-                        let accepted = self
-                            .window
-                            .tab_drop_target(view)
-                            .emit_by_name::<bool>("drop", &[&value, &0f64, &0f64]);
-                        // The signal takes the reference its handler returns, and the
-                        // binding's handler returns one it doesn't own. libadwaita, emitting
-                        // from C, gives it back; emitted from here, dropping the answer would
-                        // take it from the window.
-                        let stage = tabs
-                            .emit_by_name::<Option<adw::TabView>>("create-window", &[])
-                            .map(std::mem::ManuallyDrop::new);
-                        match stage {
-                            Some(stage) if accepted => {
-                                tabs.transfer_page(&tab_page, &stage, 0);
-                                self.wait_until_settled().await;
-                                Ok(())
-                            }
-                            _ => Err(format!("the strip of view {} did not take the tab", arg(1))),
-                        }
-                    }
-                    None => Err(format!("there is no tab {index}")),
-                },
-                (Err(error), _) | (_, Err(error)) => Err(error),
-            },
-            "scroll-to-line" => match (self.page(), number(arg(0))) {
-                (Ok(page), Ok(line)) => {
-                    let view = page.view();
-                    let buffer = page.buffer();
-                    match buffer.iter_at_line_number(line.saturating_sub(1)) {
-                        Some(iter) => {
-                            let (y, _) = view.line_yrange(&iter);
-                            if let Some(adjustment) = view.vadjustment() {
-                                adjustment.set_value(f64::from(y));
-                            }
-                            self.wait_until_settled().await;
-                            Ok(())
-                        }
-                        None => Err(format!("there is no line {line}")),
-                    }
-                }
-                (Err(error), _) | (_, Err(error)) => Err(error),
-            },
-            "set-split-position" => number(arg(0)).map(|position| {
-                self.window.set_split_position(to_i32(position));
-            }),
-            "wait-compare" => {
-                let started = Instant::now();
-                loop {
-                    let done = self.window.comparing()
-                        && !self.window.compare_busy()
-                        && self.window.comparison().is_some();
-                    if done {
-                        self.wait_until_settled().await;
-                        break Ok(());
-                    }
-                    if started.elapsed() > WAIT_TIMEOUT {
-                        break Err("the comparison never showed".to_owned());
-                    }
-                    glib::timeout_future(Duration::from_millis(5)).await;
-                }
-            }
-            // The first frame painted after the comparison showed, from the snapshots; needs
-            // `unpace-frames`, or Broadway paints once a second.
-            "assert-compare-painted-under" => {
-                let started = Instant::now();
-                let run = loop {
-                    match self.window.compare_run() {
-                        Some(run) if run.painted.is_some() => break Some(run),
-                        _ if started.elapsed() > WAIT_TIMEOUT => break None,
-                        _ => glib::timeout_future(Duration::from_millis(2)).await,
-                    }
-                };
-                match run {
-                    Some(run) => {
-                        report_compare(&run);
-                        let debug = cfg!(debug_assertions) && step.args.len() > 1;
-                        let painted = run.painted.unwrap_or_default();
-                        number(arg(usize::from(debug))).and_then(|limit| {
-                            let limit = Duration::from_millis(limit as u64);
-                            if painted <= limit {
-                                Ok(())
-                            } else {
-                                Err(format!(
-                                    "the comparison was on screen after {painted:?}, over {limit:?}"
-                                ))
-                            }
-                        })
-                    }
-                    None => Err("no frame was painted after the comparison".to_owned()),
-                }
-            }
-            "report-compare" => match self.window.compare_run() {
-                Some(run) => {
-                    report_compare(&run);
-                    Ok(())
-                }
-                None => Err("no comparison has run".to_owned()),
-            },
-            "report-mark" => match self.window.mark_stats() {
-                Some(stats) => {
-                    println!(
-                        "  # mark: {} matches{}, {} lines bookmarked, worker {}, {:.1} ms",
-                        stats.matches,
-                        if stats.truncated { "+" } else { "" },
-                        stats.bookmarked,
-                        stats.worker,
-                        stats.took.as_secs_f64() * 1e3
-                    );
-                    Ok(())
-                }
-                None => Err("nothing was marked".to_owned()),
-            },
-            _ => return None,
-        })
+    /// `gutter-click <line>`: what GtkSourceView's gutter does for a click on the line's mark
+    /// area (`line-mark-activated`, primary button).
+    fn gutter_click(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        let line = number(&args[0])?;
+        let buffer = page.buffer();
+        let iter = buffer
+            .iter_at_line_number(line.saturating_sub(1))
+            .ok_or_else(|| format!("there is no line {line}"))?;
+        let state = gtk::gdk::ModifierType::empty();
+        page.view().emit_by_name::<()>(
+            "line-mark-activated",
+            &[&iter, &gtk::gdk::BUTTON_PRIMARY, &state, &1i32],
+        );
+        Ok(())
     }
 
-    /// Checks one of these assertions; `None` when `assertion` is not one.
-    pub(super) fn views_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
-        let arg = |index: usize| args[index].as_str();
-        Some(match assertion {
-            "assert-bookmarks" => self.page().and_then(|page| {
-                let lines: Vec<String> = page
-                    .bookmarks()
-                    .lines()
-                    .iter()
-                    .map(|line| (line + 1).to_string())
-                    .collect();
-                let shown = if lines.is_empty() {
-                    "none".to_owned()
-                } else {
-                    lines.join(",")
-                };
-                equal("bookmarked lines", shown, arg(0).to_owned())
-            }),
-            "assert-bookmark-count" => self
-                .page()
-                .and_then(|page| equal("bookmarks", page.bookmarks().len(), number(arg(0))?)),
-            "assert-gutter" => self.page().and_then(|page| {
-                let view = page.view();
-                if !view.shows_line_marks() {
-                    return Err("the gutter shows no line marks".to_owned());
-                }
-                if page.bookmark_pixbuf().is_some() {
-                    Ok(())
-                } else {
-                    Err("bookmarks have no picture in the gutter".to_owned())
-                }
-            }),
-            "assert-bookmark-steps" => self.page().and_then(|page| {
-                equal(
-                    "bookmark history steps",
-                    page.marks().history_steps(),
-                    number(arg(0))?,
-                )
-            }),
-            "assert-marks" => mark_style(arg(0))
-                .and_then(|style| equal("marks", self.window.marked(style).len(), number(arg(1))?)),
-            "assert-marked-text" => mark_style(arg(0)).and_then(|style| {
-                let page = self.page()?;
-                let index = number(arg(1))?;
-                let marks = self.window.marked(style);
-                let range = marks
-                    .get(index.saturating_sub(1))
-                    .ok_or_else(|| format!("there are {} marks", marks.len()))?;
-                let buffer = page.buffer();
-                let text = buffer.text(
-                    &buffer.iter_at_char_offset(range.start),
-                    &buffer.iter_at_char_offset(range.end),
-                    true,
-                );
-                equal("marked text", text.to_string(), arg(2).to_owned())
-            }),
-            "assert-mark-tags" => mark_style(arg(0)).and_then(|style| {
-                let page = self.page()?;
-                equal(
-                    "tagged marks",
-                    tagged_ranges(&page, crate::editor::marks::tag_name(style)),
-                    number(arg(1))?,
-                )
-            }),
-            "assert-mark-stats" => {
-                boolean(arg(0)).and_then(|worker| match self.window.mark_stats() {
-                    Some(stats) => equal("marked on a worker", stats.worker, worker),
-                    None => Err("nothing was marked".to_owned()),
-                })
+    /// `mark-style mark|1…5`: the Mark row's style.
+    fn set_mark_style(&self, args: &[String]) -> StepResult {
+        self.window.set_mark_style(mark_style(&args[0])?);
+        Ok(())
+    }
+
+    /// `mark-option bookmark|purge true|false`: a Mark row option.
+    fn mark_option(&self, args: &[String]) -> StepResult {
+        let on = boolean(&args[1])?;
+        match args[0].as_str() {
+            name @ ("bookmark" | "purge") => {
+                self.window.set_find_option(name, on);
+                Ok(())
             }
-            "assert-line-op" => match (
-                self.window.line_op_stats(),
-                boolean(arg(0)),
-                boolean(arg(1)),
-            ) {
-                (Some(stats), Ok(worker), Ok(bulk)) => {
-                    println!(
-                        "  # bookmarked lines: {} edits, bulk {}, worker {}, {:.1} ms",
-                        stats.edits,
-                        stats.bulk,
-                        stats.worker,
-                        stats.took.as_secs_f64() * 1e3
-                    );
-                    equal("(worker, bulk)", (stats.worker, stats.bulk), (worker, bulk))
-                }
-                (None, _, _) => Err("no bookmarked-line operation has run".to_owned()),
-                (_, Err(error), _) | (_, _, Err(error)) => Err(error),
-            },
-            "assert-active-view" => view_index(arg(0))
-                .and_then(|index| equal("active view", self.window.active_view(), index)),
-            "assert-split" => {
-                boolean(arg(0)).and_then(|split| equal("split", self.window.is_split(), split))
+            other => Err(format!("no Mark option {other}; use bookmark or purge")),
+        }
+    }
+
+    /// `view-focus 1|2`: gives the editor in front of the view the focus, as a click there
+    /// does, and lets the main loop settle.
+    async fn view_focus(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        let page = self
+            .window
+            .view_page(index)
+            .ok_or_else(|| format!("view {} shows no tab", args[0]))?;
+        page.view().grab_focus();
+        self.wait_until_settled().await;
+        Ok(())
+    }
+
+    /// `drag-tab <n>`: what libadwaita does when tab n is dropped on the other view's strip.
+    async fn drag_tab(&self, args: &[String]) -> StepResult {
+        let index = number(&args[0])?;
+        let (tabs, tab_page) = self
+            .window
+            .tab_at(index)
+            .ok_or_else(|| format!("there is no tab {index}"))?;
+        let other = usize::from(tabs == self.window.tab_view(0));
+        let target = self.window.tab_view(other);
+        tabs.transfer_page(&tab_page, &target, target.n_pages());
+        self.wait_until_settled().await;
+        Ok(())
+    }
+
+    /// `drop-tab <n> 1|2`: what happens when tab n is dropped on a strip's + or the empty part
+    /// after it: the strip accepts the drop, and libadwaita asks the tab's view for a new
+    /// window's tab view and attaches the tab there, first.
+    async fn drop_tab(&self, args: &[String]) -> StepResult {
+        let index = number(&args[0])?;
+        let view = view_index(&args[1])?;
+        let (tabs, tab_page) = self
+            .window
+            .tab_at(index)
+            .ok_or_else(|| format!("there is no tab {index}"))?;
+        let value = glib::BoxedValue(tab_page.to_value());
+        let accepted = self
+            .window
+            .tab_drop_target(view)
+            .emit_by_name::<bool>("drop", &[&value, &0f64, &0f64]);
+        // The signal takes the reference its handler returns, and the binding's handler
+        // returns one it doesn't own. libadwaita, emitting from C, gives it back; emitted from
+        // here, dropping the answer would take it from the window.
+        let stage = tabs
+            .emit_by_name::<Option<adw::TabView>>("create-window", &[])
+            .map(std::mem::ManuallyDrop::new);
+        match stage {
+            Some(stage) if accepted => {
+                tabs.transfer_page(&tab_page, &stage, 0);
+                self.wait_until_settled().await;
+                Ok(())
             }
-            "assert-view-tabs" => view_index(arg(0)).and_then(|index| {
-                equal(
-                    "tabs in the view",
-                    self.window.view_pages(index).len(),
-                    number(arg(1))?,
-                )
-            }),
-            "assert-view-shows" => view_index(arg(0)).and_then(|index| {
-                let name = self
-                    .window
-                    .view_page(index)
-                    .map_or_else(|| "nothing".to_owned(), |page| page.name());
-                equal("shown tab", name, arg(1).to_owned())
-            }),
-            "assert-same-document" => {
-                let pages = self.window.pages();
-                let page = |word: &str| {
-                    let index = number(word)?;
-                    pages
-                        .get(index.saturating_sub(1))
-                        .cloned()
-                        .ok_or_else(|| format!("there is no tab {index}"))
-                };
-                match (page(arg(0)), page(arg(1))) {
-                    (Ok(first), Ok(second)) => {
-                        let same =
-                            first.same_document(&second) && first.buffer() == second.buffer();
-                        equal("one document and buffer", same, true)
-                    }
-                    (Err(error), _) | (_, Err(error)) => Err(error),
-                }
+            _ => Err(format!(
+                "the strip of view {} did not take the tab",
+                args[1]
+            )),
+        }
+    }
+
+    /// `scroll-to-line <line>`: scrolls the current editor so that the line is at the top.
+    async fn scroll_to_line(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        let line = number(&args[0])?;
+        let view = page.view();
+        let iter = page
+            .buffer()
+            .iter_at_line_number(line.saturating_sub(1))
+            .ok_or_else(|| format!("there is no line {line}"))?;
+        let (y, _) = view.line_yrange(&iter);
+        if let Some(adjustment) = view.vadjustment() {
+            adjustment.set_value(f64::from(y));
+        }
+        self.wait_until_settled().await;
+        Ok(())
+    }
+
+    /// `set-split-position <pixels>`: moves the divider, or keeps the position for the next
+    /// split.
+    fn set_split_position(&self, args: &[String]) -> StepResult {
+        self.window.set_split_position(to_i32(number(&args[0])?));
+        Ok(())
+    }
+
+    /// `click-new-tab 1|2`: clicks the + of that view's strip and lets the main loop settle.
+    async fn click_new_tab(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        self.window.new_tab_button(index).emit_clicked();
+        self.wait_until_settled().await;
+        Ok(())
+    }
+
+    /// `release-server <status> [<body>]` or `release-server none`: a server on 127.0.0.1
+    /// answers Check for Updates' next request in GitHub's place, once, with that HTTP status
+    /// and body; `none` gives a port where nothing listens.
+    fn release_server(&self, args: &[String]) -> StepResult {
+        let body = args.get(1).cloned().unwrap_or_default();
+        let url = release_server(&args[0], body)?;
+        self.window.set_update_url(Some(url));
+        Ok(())
+    }
+
+    /// `wait-compare`: waits until a comparison shows and none is due, then lets the main
+    /// loop settle.
+    async fn wait_compare(&self, _: &[String]) -> StepResult {
+        let started = Instant::now();
+        loop {
+            let done = self.window.comparing()
+                && !self.window.compare_busy()
+                && self.window.comparison().is_some();
+            if done {
+                self.wait_until_settled().await;
+                return Ok(());
             }
-            "assert-view-cursor" => view_index(arg(0)).and_then(|index| {
-                let page = self
-                    .window
-                    .view_page(index)
-                    .ok_or_else(|| format!("view {} shows no tab", arg(0)))?;
-                let (caret, _) = page.own_selection();
-                let iter = page.buffer().iter_at_char_offset(caret);
-                equal(
-                    "cursor (line, column)",
-                    (iter.line_number() + 1, iter.column() + 1),
-                    (number(arg(1))?, number(arg(2))?),
-                )
-            }),
-            "assert-split-position" => number(arg(0)).and_then(|wanted| {
-                equal(
-                    "divider position",
-                    self.window.split_position(),
-                    to_i32(wanted),
-                )
-            }),
-            "assert-comparing" => boolean(arg(0))
-                .and_then(|wanted| equal("comparing", self.window.comparing(), wanted)),
-            "assert-compare-line" => self.compare_page(arg(0)).and_then(|(page, _, _)| {
-                let line = number(arg(1))?;
-                let kind = crate::editor::comparison::line_kind_at(&page, line.saturating_sub(1));
-                equal("line kind", kind_name(kind).to_owned(), arg(2).to_owned())
-            }),
-            "assert-compare-paint" => self.compare_page(arg(0)).and_then(|(page, _, _)| {
-                let line = number(arg(1))?.saturating_sub(1);
-                let (painted, [red, green, blue, _]) = painted_kind(&page, line)?;
-                if painted == arg(2) {
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "line {} is painted {painted} (#{red:02x}{green:02x}{blue:02x}), wanted {}",
-                        line + 1,
-                        arg(2)
-                    ))
-                }
-            }),
-            "assert-text-background" => self.page().and_then(|page| {
-                let (line, column) = (number(arg(0))?, number(arg(1))?);
-                text_background(
-                    &page,
-                    line.saturating_sub(1),
-                    column.saturating_sub(1),
-                    arg(2),
-                )
-            }),
-            "assert-compare-inline" => self.compare_page(arg(0)).and_then(|(page, _, _)| {
-                let line = number(arg(1))?;
-                let ranges =
-                    crate::editor::comparison::inline_ranges_at(&page, line.saturating_sub(1));
-                let shown = if ranges.is_empty() {
-                    "none".to_owned()
-                } else {
-                    ranges
-                        .iter()
-                        .map(|range| format!("{}..{}", range.start, range.end))
-                        .collect::<Vec<_>>()
-                        .join(",")
-                };
-                equal("changed columns", shown, arg(2).to_owned())
-            }),
-            "assert-compare-pads" => self.compare_page(arg(0)).and_then(|(page, _, _)| {
-                equal(
-                    "padding blocks",
-                    page.column_view().pads().len(),
-                    number(arg(1))?,
-                )
-            }),
-            "assert-compare-stats" => match self.window.comparison() {
-                Some((_, _, comparison)) => {
-                    let stats = comparison.stats;
-                    let wanted = (
-                        number(arg(0)),
-                        number(arg(1)),
-                        number(arg(2)),
-                        number(arg(3)),
-                    );
-                    match wanted {
-                        (Ok(added), Ok(removed), Ok(changed), Ok(moved)) => equal(
-                            "(added, removed, changed, moved)",
-                            (stats.added, stats.removed, stats.changed, stats.moved),
-                            (added, removed, changed, moved),
-                        ),
-                        (Err(error), ..)
-                        | (_, Err(error), ..)
-                        | (.., Err(error), _)
-                        | (.., Err(error)) => Err(error),
-                    }
-                }
-                None => Err("no comparison is shown".to_owned()),
-            },
-            "assert-compare-aligned" => self.check_aligned(),
-            // No line of the current document is coloured or padded for a comparison.
-            "assert-compare-clean" => self.page().and_then(|page| {
-                let lines = page.buffer().total_lines();
-                let coloured = (0..lines)
-                    .filter(|line| crate::editor::comparison::line_kind_at(&page, *line).is_some())
-                    .count();
-                let view = page.view();
-                equal(
-                    "(coloured lines, padding blocks, margins)",
-                    (
-                        coloured,
-                        page.column_view().pads().len(),
-                        view.top_margin() + view.bottom_margin(),
-                    ),
-                    (0, 0, 0),
-                )
-            }),
-            "assert-status-lacks" => {
-                let status = self.window.status_text();
-                if status.contains(arg(0)) {
-                    Err(format!("status {status:?} has {:?}", arg(0)))
-                } else {
-                    Ok(())
-                }
+            if started.elapsed() > WAIT_TIMEOUT {
+                return Err("the comparison never showed".to_owned());
             }
-            "assert-scroll-level" => {
-                let values: Vec<f64> = (0..2)
-                    .filter_map(|index| self.window.view_page(index))
-                    .filter_map(|page| page.view().vadjustment())
-                    .map(|adjustment| adjustment.value())
-                    .collect();
-                match values.as_slice() {
-                    [first, second] if (first - second).abs() < 1.0 => Ok(()),
-                    [first, second] => {
-                        Err(format!("the views are scrolled to {first} and {second}"))
-                    }
-                    _ => Err("the window is not split".to_owned()),
+            glib::timeout_future(Duration::from_millis(5)).await;
+        }
+    }
+
+    /// `assert-compare-painted-under <release ms> [<debug ms>]`: the first frame painted after
+    /// the comparison showed came within the limit, from the snapshots; needs `unpace-frames`,
+    /// or Broadway paints once a second.
+    async fn assert_compare_painted_under(&self, args: &[String]) -> StepResult {
+        let started = Instant::now();
+        let run = loop {
+            match self.window.compare_run() {
+                Some(run) if run.painted.is_some() => break run,
+                _ if started.elapsed() > WAIT_TIMEOUT => {
+                    return Err("no frame was painted after the comparison".to_owned());
                 }
+                _ => glib::timeout_future(Duration::from_millis(2)).await,
             }
-            "assert-compare-under" => match self.window.compare_run() {
-                Some(run) => {
-                    report_compare(&run);
-                    // The bar is for release builds; a debug build may get its own limit.
-                    let debug = cfg!(debug_assertions) && args.len() > 1;
-                    number(arg(usize::from(debug))).and_then(|limit| {
-                        let limit = Duration::from_millis(limit as u64);
-                        if run.total <= limit {
-                            Ok(())
-                        } else {
-                            Err(format!(
-                                "the comparison took {:?}, over {limit:?}",
-                                run.total
-                            ))
-                        }
-                    })
-                }
-                None => Err("no comparison has run".to_owned()),
-            },
-            _ => return None,
-        })
+        };
+        report_compare(&run);
+        let painted = run.painted.unwrap_or_default();
+        within_limit(args, painted, "the comparison was on screen after")
+    }
+
+    /// `report-compare`: prints the last comparison's line counts, summary and timings
+    /// (snapshot, diff on the worker, presentation, total).
+    fn report_compare(&self, _: &[String]) -> StepResult {
+        let run = self
+            .window
+            .compare_run()
+            .ok_or_else(|| "no comparison has run".to_owned())?;
+        report_compare(&run);
+        Ok(())
+    }
+
+    /// `report-mark`: prints the last Mark's matches, bookmarked lines and time.
+    fn report_mark(&self, _: &[String]) -> StepResult {
+        let stats = self
+            .window
+            .mark_stats()
+            .ok_or_else(|| "nothing was marked".to_owned())?;
+        println!(
+            "  # mark: {} matches{}, {} lines bookmarked, worker {}, {:.1} ms",
+            stats.matches,
+            if stats.truncated { "+" } else { "" },
+            stats.bookmarked,
+            stats.worker,
+            stats.took.as_secs_f64() * 1e3
+        );
+        Ok(())
+    }
+
+    /// `assert-bookmarks <lines>|none`: the current tab's bookmarked lines (1-based), joined by
+    /// commas.
+    fn assert_bookmarks(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        let lines: Vec<String> = page
+            .bookmarks()
+            .lines()
+            .iter()
+            .map(|line| (line + 1).to_string())
+            .collect();
+        let shown = if lines.is_empty() {
+            "none".to_owned()
+        } else {
+            lines.join(",")
+        };
+        equal("bookmarked lines", shown, args[0].clone())
+    }
+
+    /// `assert-bookmark-count <n>`: how many bookmarks the current tab has.
+    fn assert_bookmark_count(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        equal("bookmarks", page.bookmarks().len(), number(&args[0])?)
+    }
+
+    /// `assert-gutter`: the current view's gutter shows line marks, with a bookmark picture.
+    fn assert_gutter(&self, _: &[String]) -> StepResult {
+        let page = self.page()?;
+        if !page.view().shows_line_marks() {
+            return Err("the gutter shows no line marks".to_owned());
+        }
+        if page.bookmark_pixbuf().is_some() {
+            Ok(())
+        } else {
+            Err("bookmarks have no picture in the gutter".to_owned())
+        }
+    }
+
+    /// `assert-bookmark-steps <n>`: how many steps the current tab keeps for undoing and
+    /// redoing bookmarks.
+    fn assert_bookmark_steps(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        equal(
+            "bookmark history steps",
+            page.marks().history_steps(),
+            number(&args[0])?,
+        )
+    }
+
+    /// `assert-marks mark|1…5 <n>`: how many marks of the style there are.
+    fn assert_marks(&self, args: &[String]) -> StepResult {
+        let style = mark_style(&args[0])?;
+        equal("marks", self.window.marked(style).len(), number(&args[1])?)
+    }
+
+    /// `assert-marked-text mark|1…5 <n> <text>`: the text of the style's n-th mark.
+    fn assert_marked_text(&self, args: &[String]) -> StepResult {
+        let style = mark_style(&args[0])?;
+        let page = self.page()?;
+        let index = number(&args[1])?;
+        let marks = self.window.marked(style);
+        let range = marks
+            .get(index.saturating_sub(1))
+            .ok_or_else(|| format!("there are {} marks", marks.len()))?;
+        let buffer = page.buffer();
+        let text = buffer.text(
+            &buffer.iter_at_char_offset(range.start),
+            &buffer.iter_at_char_offset(range.end),
+            true,
+        );
+        equal("marked text", text.to_string(), args[2].clone())
+    }
+
+    /// `assert-mark-tags mark|1…5 <n>`: how many runs of text the style's tag covers.
+    fn assert_mark_tags(&self, args: &[String]) -> StepResult {
+        let style = mark_style(&args[0])?;
+        let page = self.page()?;
+        equal(
+            "tagged marks",
+            tagged_ranges(&page, crate::editor::marks::tag_name(style)),
+            number(&args[1])?,
+        )
+    }
+
+    /// `assert-mark-stats true|false`: whether the last Mark ran on a worker.
+    fn assert_mark_stats(&self, args: &[String]) -> StepResult {
+        let worker = boolean(&args[0])?;
+        let stats = self
+            .window
+            .mark_stats()
+            .ok_or_else(|| "nothing was marked".to_owned())?;
+        equal("marked on a worker", stats.worker, worker)
+    }
+
+    /// `assert-line-op true|false true|false`: whether the last bookmarked-line operation ran
+    /// on a worker, and as one bulk edit.
+    fn assert_line_op(&self, args: &[String]) -> StepResult {
+        let stats = self
+            .window
+            .line_op_stats()
+            .ok_or_else(|| "no bookmarked-line operation has run".to_owned())?;
+        let (worker, bulk) = (boolean(&args[0])?, boolean(&args[1])?);
+        println!(
+            "  # bookmarked lines: {} edits, bulk {}, worker {}, {:.1} ms",
+            stats.edits,
+            stats.bulk,
+            stats.worker,
+            stats.took.as_secs_f64() * 1e3
+        );
+        equal("(worker, bulk)", (stats.worker, stats.bulk), (worker, bulk))
+    }
+
+    /// `assert-active-view 1|2`: the active view.
+    fn assert_active_view(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        equal("active view", self.window.active_view(), index)
+    }
+
+    /// `assert-split true|false`: whether both views show tabs.
+    fn assert_split(&self, args: &[String]) -> StepResult {
+        let split = boolean(&args[0])?;
+        equal("split", self.window.is_split(), split)
+    }
+
+    /// `assert-menu-at 1|2`: the menu is at the start of that view's tab strip, left of its
+    /// first tab, once the strip has been laid out.
+    async fn assert_menu_at(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        self.check_menu_at(index).await
+    }
+
+    /// `assert-new-tab-at 1|2`: that view's + follows its last tab (−1 to 12 px), or, once the
+    /// tabs scroll, the end of the tabs on screen, and lies within the strip.
+    async fn assert_new_tab_at(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        self.check_new_tab_at(index).await
+    }
+
+    /// `assert-view-tabs 1|2 <n>`: how many tabs the view has.
+    fn assert_view_tabs(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        equal(
+            "tabs in the view",
+            self.window.view_pages(index).len(),
+            number(&args[1])?,
+        )
+    }
+
+    /// `assert-view-shows 1|2 <name>|nothing`: the tab in front of the view.
+    fn assert_view_shows(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        let name = self
+            .window
+            .view_page(index)
+            .map_or_else(|| "nothing".to_owned(), |page| page.name());
+        equal("shown tab", name, args[1].clone())
+    }
+
+    /// `assert-same-document <tab> <tab>`: the two tabs show one document and buffer.
+    fn assert_same_document(&self, args: &[String]) -> StepResult {
+        let pages = self.window.pages();
+        let page = |word: &str| {
+            let index = number(word)?;
+            pages
+                .get(index.saturating_sub(1))
+                .cloned()
+                .ok_or_else(|| format!("there is no tab {index}"))
+        };
+        let (first, second) = (page(&args[0])?, page(&args[1])?);
+        let same = first.same_document(&second) && first.buffer() == second.buffer();
+        equal("one document and buffer", same, true)
+    }
+
+    /// `assert-view-cursor 1|2 <line> <column>`: the caret of the tab in front of the view
+    /// (1-based).
+    fn assert_view_cursor(&self, args: &[String]) -> StepResult {
+        let index = view_index(&args[0])?;
+        let page = self
+            .window
+            .view_page(index)
+            .ok_or_else(|| format!("view {} shows no tab", args[0]))?;
+        let (caret, _) = page.own_selection();
+        let iter = page.buffer().iter_at_char_offset(caret);
+        equal(
+            "cursor (line, column)",
+            (iter.line_number() + 1, iter.column() + 1),
+            (number(&args[1])?, number(&args[2])?),
+        )
+    }
+
+    /// `assert-split-position <pixels>`: the divider's position.
+    fn assert_split_position(&self, args: &[String]) -> StepResult {
+        let wanted = number(&args[0])?;
+        equal(
+            "divider position",
+            self.window.split_position(),
+            to_i32(wanted),
+        )
+    }
+
+    /// `assert-comparing true|false`: whether a comparison is on.
+    fn assert_comparing(&self, args: &[String]) -> StepResult {
+        let wanted = boolean(&args[0])?;
+        equal("comparing", self.window.comparing(), wanted)
+    }
+
+    /// `assert-compare-line old|new <line> added|removed|changed|moved|none`: the kind of a
+    /// line on that side of the comparison.
+    fn assert_compare_line(&self, args: &[String]) -> StepResult {
+        let (page, _, _) = self.compare_page(&args[0])?;
+        let line = number(&args[1])?;
+        let kind = crate::editor::comparison::line_kind_at(&page, line.saturating_sub(1));
+        equal("line kind", kind_name(kind).to_owned(), args[2].clone())
+    }
+
+    /// `assert-compare-paint old|new <line> <kind>`: the comparison background painted at the
+    /// right end of the line, as rendered.
+    fn assert_compare_paint(&self, args: &[String]) -> StepResult {
+        let (page, _, _) = self.compare_page(&args[0])?;
+        let line = number(&args[1])?.saturating_sub(1);
+        let (painted, [red, green, blue, _]) = painted_kind(&page, line)?;
+        if painted == args[2] {
+            Ok(())
+        } else {
+            Err(format!(
+                "line {} is painted {painted} (#{red:02x}{green:02x}{blue:02x}), wanted {}",
+                line + 1,
+                args[2]
+            ))
+        }
+    }
+
+    /// `assert-text-background <line> <column> <style>`: the current view paints the
+    /// character's top left corner, above any glyph, in the background of the scheme's style.
+    fn assert_text_background(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        let (line, column) = (number(&args[0])?, number(&args[1])?);
+        text_background(
+            &page,
+            line.saturating_sub(1),
+            column.saturating_sub(1),
+            &args[2],
+        )
+    }
+
+    /// `assert-compare-inline old|new <line> <ranges>|none`: the changed columns of a line,
+    /// as `start..end` joined by commas.
+    fn assert_compare_inline(&self, args: &[String]) -> StepResult {
+        let (page, _, _) = self.compare_page(&args[0])?;
+        let line = number(&args[1])?;
+        let ranges = crate::editor::comparison::inline_ranges_at(&page, line.saturating_sub(1));
+        let shown = if ranges.is_empty() {
+            "none".to_owned()
+        } else {
+            ranges
+                .iter()
+                .map(|range| format!("{}..{}", range.start, range.end))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        equal("changed columns", shown, args[2].clone())
+    }
+
+    /// `assert-compare-pads old|new <n>`: how many padding blocks that side has.
+    fn assert_compare_pads(&self, args: &[String]) -> StepResult {
+        let (page, _, _) = self.compare_page(&args[0])?;
+        equal(
+            "padding blocks",
+            page.column_view().pads().len(),
+            number(&args[1])?,
+        )
+    }
+
+    /// `assert-compare-stats <added> <removed> <changed> <moved>`: the comparison's counts.
+    fn assert_compare_stats(&self, args: &[String]) -> StepResult {
+        let (_, _, comparison) = self
+            .window
+            .comparison()
+            .ok_or_else(|| "no comparison is shown".to_owned())?;
+        let stats = comparison.stats;
+        let wanted = (
+            number(&args[0])?,
+            number(&args[1])?,
+            number(&args[2])?,
+            number(&args[3])?,
+        );
+        equal(
+            "(added, removed, changed, moved)",
+            (stats.added, stats.removed, stats.changed, stats.moved),
+            wanted,
+        )
+    }
+
+    /// `assert-compare-clean`: no line of the current document is coloured or padded for a
+    /// comparison.
+    fn assert_compare_clean(&self, _: &[String]) -> StepResult {
+        let page = self.page()?;
+        let lines = page.buffer().total_lines();
+        let coloured = (0..lines)
+            .filter(|line| crate::editor::comparison::line_kind_at(&page, *line).is_some())
+            .count();
+        let view = page.view();
+        equal(
+            "(coloured lines, padding blocks, margins)",
+            (
+                coloured,
+                page.column_view().pads().len(),
+                view.top_margin() + view.bottom_margin(),
+            ),
+            (0, 0, 0),
+        )
+    }
+
+    /// `assert-status-lacks <text>`: the status bar does not have the text.
+    fn assert_status_lacks(&self, args: &[String]) -> StepResult {
+        let status = self.window.status_text();
+        if status.contains(args[0].as_str()) {
+            Err(format!("status {status:?} has {:?}", args[0]))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// `assert-scroll-level`: both views are scrolled to the same place.
+    fn assert_scroll_level(&self, _: &[String]) -> StepResult {
+        let values: Vec<f64> = (0..2)
+            .filter_map(|index| self.window.view_page(index))
+            .filter_map(|page| page.view().vadjustment())
+            .map(|adjustment| adjustment.value())
+            .collect();
+        match values.as_slice() {
+            [first, second] if (first - second).abs() < 1.0 => Ok(()),
+            [first, second] => Err(format!("the views are scrolled to {first} and {second}")),
+            _ => Err("the window is not split".to_owned()),
+        }
+    }
+
+    /// `assert-compare-under <release ms> [<debug ms>]`: the last comparison took no longer
+    /// end to end; a debug build takes the second limit, when given.
+    fn assert_compare_under(&self, args: &[String]) -> StepResult {
+        let run = self
+            .window
+            .compare_run()
+            .ok_or_else(|| "no comparison has run".to_owned())?;
+        report_compare(&run);
+        within_limit(args, run.total, "the comparison took")
     }
 
     /// The tab that shows the `old` or `new` side of the comparison.
@@ -582,9 +646,9 @@ impl Harness {
         }
     }
 
-    /// Every row of the comparison where both sides have a line puts the two lines at the
-    /// same height in their views.
-    fn check_aligned(&self) -> StepResult {
+    /// `assert-compare-aligned`: every row of the comparison where both sides have a line puts
+    /// the two lines at the same height in their views.
+    fn assert_compare_aligned(&self, _: &[String]) -> StepResult {
         let (old, _, comparison) = self.compare_page("old")?;
         let (new, _, _) = self.compare_page("new")?;
         let alignment = &comparison.alignment;
@@ -638,11 +702,7 @@ fn report_compare(run: &crate::window::CompareRun) {
         ms(run.diff),
         ms(run.present),
         ms(run.total),
-        if cfg!(debug_assertions) {
-            "debug"
-        } else {
-            "release"
-        },
+        build(),
         run.runs
     );
 }
@@ -752,17 +812,18 @@ impl Harness {
 }
 
 impl Harness {
-    /// The open menu lies within the window: it opens from the button's left edge rather than
-    /// centred on it, half outside the window, and above its bottom edge.
-    async fn check_menu_within(&self) -> StepResult {
+    /// `assert-menu-within`: the open menu lies within the window: it opens from the button's
+    /// left edge rather than centred on it, half outside the window, and above its bottom edge.
+    async fn assert_menu_within(&self, _: &[String]) -> StepResult {
         self.wait_frames(2).await?;
         self.menu_within(&self.open_menu()?)
     }
 
-    /// The open menu opens its submenus beside it, as resting the pointer on their items does,
-    /// and each lies within the window, one taller than the room below its item scrolling:
-    /// every submenu of the first page, and the tallest of the others.
-    async fn check_menu_submenus(&self) -> StepResult {
+    /// `assert-menu-submenus`: the open menu opens its submenus beside it, as resting the
+    /// pointer on their items does, and each lies within the window, one taller than the room
+    /// below its item scrolling: every submenu of the first page, and the tallest of the
+    /// others.
+    async fn assert_menu_submenus(&self, _: &[String]) -> StepResult {
         let popover = self.open_menu()?;
         let menu = popover
             .downcast_ref::<gtk::PopoverMenu>()
@@ -827,8 +888,10 @@ impl Harness {
         Ok(())
     }
 
-    /// Opens the open menu's submenu `name`, as resting the pointer on its item does.
-    async fn popup_submenu(&self, name: &str) -> StepResult {
+    /// `popup-submenu <label>`: opens that submenu of the open menu, as resting the pointer on
+    /// its item does.
+    async fn popup_submenu(&self, args: &[String]) -> StepResult {
+        let name = args[0].as_str();
         let popover = self.open_menu()?;
         let submenu = crate::window::menus_in(popover.upcast_ref())
             .into_iter()

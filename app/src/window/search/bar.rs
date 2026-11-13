@@ -340,6 +340,11 @@ fn key_controller(widget: &impl IsA<gtk::Widget>) -> gtk::EventControllerKey {
 }
 
 impl FindBar {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "a widget-tree builder: the four rows' widgets top to bottom, then the bar \
+                  that keeps them; it reads best as one piece"
+    )]
     pub fn new() -> Rc<Self> {
         let entry = gtk::SearchEntry::builder()
             .placeholder_text("Find")

@@ -155,11 +155,25 @@ impl Window {
         let Some(page) = self.current_page() else {
             return;
         };
+        if let Some((reach, operation)) = self.text_edit(&page, tool) {
+            self.run_tool(&page, reach, operation, describe(tool));
+        }
+    }
+
+    /// The edit `tool` makes to `page`'s text and how far it reaches; `None` when the tool
+    /// acts at once instead (copying, moving the caret, asking first, validating) or has
+    /// nothing to act on.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one flat, exhaustive table from each text tool to its edit; a wildcard would \
+                  let a new tool compile unhandled"
+    )]
+    fn text_edit(&self, page: &EditorPage, tool: TextTool) -> Option<(Reach, Operation)> {
         let tab_width = page.indentation().tab_width as usize;
         let simple = |op: fn(&str, &Target) -> Change| -> Operation {
             Box::new(move |text, target| Ok(op(text, &target)))
         };
-        let (reach, operation): (Reach, Operation) = match tool {
+        Some(match tool {
             TextTool::Uppercase => Self::case_tool(Case::Upper),
             TextTool::Lowercase => Self::case_tool(Case::Lower),
             TextTool::ProperCase => Self::case_tool(Case::Proper),
@@ -176,40 +190,27 @@ impl Window {
             TextTool::BlankLineBelow => (Reach::Caret, simple(lines::insert_blank_below)),
             TextTool::TransposeLine => (Reach::Caret, simple(transpose)),
             TextTool::CutLine => {
-                if Self::copy_lines(&page) {
-                    (Reach::Caret, simple(lines::delete))
-                } else {
-                    return;
+                if !Self::copy_lines(page) {
+                    return None;
                 }
+                (Reach::Caret, simple(lines::delete))
             }
             TextTool::CopyLine => {
-                Self::copy_lines(&page);
-                return;
+                Self::copy_lines(page);
+                return None;
             }
-            TextTool::RemoveDuplicateLines => (
-                Reach::Document,
-                Box::new(|text, target| {
-                    Ok(lines::remove_duplicates(text, &target, Duplicates::All))
-                }),
-            ),
-            TextTool::RemoveConsecutiveDuplicateLines => (
-                Reach::Document,
-                Box::new(|text, target| {
-                    Ok(lines::remove_duplicates(
-                        text,
-                        &target,
-                        Duplicates::Consecutive,
-                    ))
-                }),
-            ),
-            TextTool::RemoveEmptyLines => (
-                Reach::Document,
-                Box::new(|text, target| Ok(lines::remove_empty(text, &target, EmptyLines::Empty))),
-            ),
-            TextTool::RemoveBlankLines => (
-                Reach::Document,
-                Box::new(|text, target| Ok(lines::remove_empty(text, &target, EmptyLines::Blank))),
-            ),
+            TextTool::RemoveDuplicateLines => document_tool(move |text, target| {
+                lines::remove_duplicates(text, target, Duplicates::All)
+            }),
+            TextTool::RemoveConsecutiveDuplicateLines => document_tool(move |text, target| {
+                lines::remove_duplicates(text, target, Duplicates::Consecutive)
+            }),
+            TextTool::RemoveEmptyLines => document_tool(move |text, target| {
+                lines::remove_empty(text, target, EmptyLines::Empty)
+            }),
+            TextTool::RemoveBlankLines => document_tool(move |text, target| {
+                lines::remove_empty(text, target, EmptyLines::Blank)
+            }),
             TextTool::ReverseLines => (Reach::Document, simple(lines::reverse)),
             TextTool::SortLexicalAscending => sort(SortKey::Lexical, Order::Ascending),
             TextTool::SortLexicalDescending => sort(SortKey::Lexical, Order::Descending),
@@ -225,91 +226,47 @@ impl Window {
             TextTool::SortDecimalDotDescending => sort(SortKey::DecimalDot, Order::Descending),
             TextTool::SortLengthAscending => sort(SortKey::Length, Order::Ascending),
             TextTool::SortLengthDescending => sort(SortKey::Length, Order::Descending),
-            TextTool::ToggleComment => {
-                let Some(tool) = self.comment_tool(&page, comment::toggle_line) else {
-                    return;
-                };
-                tool
-            }
-            TextTool::CommentLines => {
-                let Some(tool) = self.comment_tool(&page, comment::comment_lines) else {
-                    return;
-                };
-                tool
-            }
-            TextTool::UncommentLines => {
-                let Some(tool) = self.comment_tool(&page, comment::uncomment_lines) else {
-                    return;
-                };
-                tool
-            }
-            TextTool::ToggleBlockComment => {
-                let Some(tool) = self.comment_tool(&page, comment::toggle_block) else {
-                    return;
-                };
-                tool
-            }
+            TextTool::ToggleComment => self.comment_tool(page, comment::toggle_line)?,
+            TextTool::CommentLines => self.comment_tool(page, comment::comment_lines)?,
+            TextTool::UncommentLines => self.comment_tool(page, comment::uncomment_lines)?,
+            TextTool::ToggleBlockComment => self.comment_tool(page, comment::toggle_block)?,
             TextTool::TrimTrailing => trim(Trim::Trailing),
             TextTool::TrimLeading => trim(Trim::Leading),
             TextTool::TrimBoth => trim(Trim::Both),
-            TextTool::TabsToSpaces => (
-                Reach::Document,
-                Box::new(move |text, target| {
-                    Ok(lines::tabs_to_spaces(
-                        text,
-                        &target,
-                        tab_width,
-                        Columns::All,
-                    ))
-                }),
-            ),
+            TextTool::TabsToSpaces => document_tool(move |text, target| {
+                lines::tabs_to_spaces(text, target, tab_width, Columns::All)
+            }),
             TextTool::SpacesToTabs | TextTool::SpacesToTabsLeading => {
                 let scope = if tool == TextTool::SpacesToTabs {
                     Columns::All
                 } else {
                     Columns::Leading
                 };
-                (
-                    Reach::Document,
-                    Box::new(move |text, target| {
-                        Ok(lines::spaces_to_tabs(text, &target, tab_width, scope))
-                    }),
-                )
+                document_tool(move |text, target| {
+                    lines::spaces_to_tabs(text, target, tab_width, scope)
+                })
             }
             TextTool::AddPrefixSuffix => {
-                let window = self.clone();
+                let (window, page) = (self.clone(), page.clone());
                 self.spawn(async move { window.ask_prefix_suffix(&page).await });
-                return;
+                return None;
             }
             TextTool::InsertNumbers => {
-                let window = self.clone();
+                let (window, page) = (self.clone(), page.clone());
                 self.spawn(async move { window.ask_numbers(&page).await });
-                return;
+                return None;
             }
             TextTool::GoToMatchingBrace | TextTool::SelectToMatchingBrace => {
-                let select = tool == TextTool::SelectToMatchingBrace;
-                self.note_jump();
-                page.view().emit_move_to_matching_bracket(select);
-                let buffer = page.buffer();
-                if select {
-                    // GtkSourceView stops before the far bracket; both brackets are selected.
-                    let mut insert = buffer.iter_at_mark(&buffer.get_insert());
-                    let bound = buffer.iter_at_mark(&buffer.selection_bound());
-                    if insert > bound && matches!(insert.char(), ')' | ']' | '}' | '>') {
-                        insert.forward_char();
-                        buffer.move_mark(&buffer.get_insert(), &insert);
-                    }
-                }
-                page.view().scroll_mark_onscreen(&buffer.get_insert());
-                return;
+                self.to_matching_brace(page, tool == TextTool::SelectToMatchingBrace);
+                return None;
             }
             TextTool::SelectAndFindNext => {
-                self.select_and_find(&page, true);
-                return;
+                self.select_and_find(page, true);
+                return None;
             }
             TextTool::SelectAndFindPrevious => {
-                self.select_and_find(&page, false);
-                return;
+                self.select_and_find(page, false);
+                return None;
             }
             TextTool::FormatJson => {
                 let indent = indent_unit(page.indentation());
@@ -330,11 +287,27 @@ impl Window {
                 )
             }
             TextTool::ValidateJson | TextTool::ValidateXml => {
-                self.validate(&page, tool == TextTool::ValidateJson);
-                return;
+                self.validate(page, tool == TextTool::ValidateJson);
+                return None;
             }
-        };
-        self.run_tool(&page, reach, operation, describe(tool));
+        })
+    }
+
+    /// Go to (or with `select`, Select to) Matching Brace.
+    fn to_matching_brace(&self, page: &EditorPage, select: bool) {
+        self.note_jump();
+        page.view().emit_move_to_matching_bracket(select);
+        let buffer = page.buffer();
+        if select {
+            // GtkSourceView stops before the far bracket; both brackets are selected.
+            let mut insert = buffer.iter_at_mark(&buffer.get_insert());
+            let bound = buffer.iter_at_mark(&buffer.selection_bound());
+            if insert > bound && matches!(insert.char(), ')' | ']' | '}' | '>') {
+                insert.forward_char();
+                buffer.move_mark(&buffer.get_insert(), &insert);
+            }
+        }
+        page.view().scroll_mark_onscreen(&buffer.get_insert());
     }
 
     fn case_tool(case: Case) -> (Reach, Operation) {
@@ -773,6 +746,16 @@ impl Window {
         }
         view.set_extra_menu(Some(&crate::actions::editor_menu(&self.keymap())));
     }
+}
+
+/// A tool over the whole document, or the selection, that cannot fail.
+fn document_tool(
+    edit: impl FnOnce(&str, &Target) -> Change + Send + 'static,
+) -> (Reach, Operation) {
+    (
+        Reach::Document,
+        Box::new(move |text, target| Ok(edit(text, &target))),
+    )
 }
 
 fn sort(key: SortKey, order: Order) -> (Reach, Operation) {

@@ -3,7 +3,8 @@
 //! the document map, the Keyboard Shortcuts overview and Set as Default Editor
 //! (docs/TESTING.md).
 
-use super::script::{Step, boolean};
+use super::registry::{Command, commands};
+use super::script::boolean;
 use super::{Harness, StepResult, equal, labels_in, number};
 use crate::actions::EDITOR_SHORTCUTS;
 use crate::convert::BufferPositions;
@@ -16,307 +17,276 @@ use libadwaita::prelude::*;
 use std::path::Path;
 use stet_domain::actions::{ActionId, KeyScope, OVERRIDDEN_BUILTINS};
 
-/// The commands and their argument counts (minimum, maximum), as in `script::COMMANDS`.
-pub const COMMANDS: &[(&str, usize, usize)] = &[
-    ("sandbox-home", 0, 0),
-    ("set-text", 1, 1),
-    ("action-nowait", 1, 1),
-    ("wait-tool", 0, 0),
-    ("record-launches", 0, 0),
-    ("editor-key", 1, 1),
-    ("dialog-set", 2, 2),
-    ("dialog-enter", 1, 1),
-    ("indent-choose", 1, 1),
-    ("tab-menu", 1, 1),
-    ("tab-menu-close", 0, 0),
-    ("tab-press", 3, 3),
-    ("editor-menu", 0, 0),
-    ("editor-menu-close", 0, 0),
-    ("close-shortcuts", 0, 0),
-    ("assert-launched", 1, 1),
-    ("assert-editor-key", 2, 2),
-    ("assert-editor-keys", 0, 0),
-    ("assert-tool-stats", 2, 2),
-    ("assert-tool-pieces", 1, 1),
-    ("assert-indentation", 1, 1),
-    ("assert-map", 1, 1),
-    ("assert-tab-menu", 1, 1),
-    ("assert-editor-menu", 1, 1),
-    ("assert-shortcuts", 1, 1),
-    ("assert-preferences-error", 2, 2),
-    ("assert-editor-font", 1, 1),
-    ("assert-file-contains", 2, 2),
-    ("assert-dialog-selection", 2, 2),
-    ("assert-line", 2, 2),
+pub(super) const COMMANDS: &[Command] = commands![
+    "sandbox-home" (0, 0) => sandbox_home,
+    "set-text" (1, 1) => set_text,
+    "wait-tool" (0, 0) => async wait_tool,
+    "record-launches" (0, 0) => record_launches,
+    "editor-key" (1, 1) => async editor_key,
+    "indent-choose" (1, 1) => async indent_choose,
+    "tab-menu" (1, 1) => tab_menu,
+    "tab-menu-close" (0, 0) => async tab_menu_close,
+    "tab-press" (3, 3) => async tab_press,
+    "editor-menu" (0, 0) => async editor_menu,
+    "editor-menu-close" (0, 0) => editor_menu_close,
+    "close-shortcuts" (0, 0) => close_shortcuts,
+    "assert-launched" (1, 1) => assert_launched,
+    "assert-editor-key" (2, 2) => assert_editor_key,
+    "assert-editor-keys" (0, 0) => assert_editor_keys,
+    "assert-tool-stats" (2, 2) => assert_tool_stats,
+    "assert-tool-pieces" (1, 1) => assert_tool_pieces,
+    "assert-indentation" (1, 1) => assert_indentation,
+    "assert-map" (1, 1) => assert_map,
+    "assert-tab-menu" (1, 1) => assert_tab_menu,
+    "assert-editor-menu" (1, 1) => assert_editor_menu,
+    "assert-shortcuts" (1, 1) => assert_shortcuts,
+    "assert-preferences-error" (2, 2) => assert_preferences_error,
+    "assert-line" (2, 2) => assert_line,
 ];
 
 impl Harness {
-    /// Runs one of these commands; `None` when `step` is not one.
-    pub(super) async fn tools_step(&self, step: &Step) -> Option<StepResult> {
-        let arg = |index: usize| step.args[index].as_str();
-        Some(match step.command.as_str() {
-            // Applied before the app started (see `run`).
-            "sandbox-home" => Ok(()),
-            // A new text with no undo history and the caret at the start.
-            "set-text" => match self.page() {
-                Ok(page) => {
-                    let buffer = page.buffer();
-                    buffer.begin_irreversible_action();
-                    buffer.set_text(arg(0));
-                    buffer.end_irreversible_action();
-                    buffer.place_cursor(&buffer.start_iter());
-                    Ok(())
-                }
-                Err(error) => Err(error),
-            },
-            "wait-tool" => self.wait_tool().await,
-            // Starts an action and goes on at once, so the next step runs while its worker
-            // does (`action` lets the main loop settle first).
-            "action-nowait" => self.activate(arg(0), None),
-            "record-launches" => {
-                self.window.shared().record_launches();
-                Ok(())
-            }
-            "editor-key" => {
-                let pressed = self.editor_key(arg(0));
-                self.wait_until_settled().await;
-                pressed
-            }
-            "dialog-set" => self.dialog_set(arg(0), arg(1)),
-            // Enter in a dialog's entry row, as GtkText activates it.
-            "dialog-enter" => match self.window.open_dialog() {
-                Some(dialog) => {
-                    match find_row(dialog.upcast_ref(), arg(0)).and_then(|row| find_text(&row)) {
-                        Some(text) => {
-                            text.emit_by_name::<()>("activate", &[]);
-                            self.wait_idle().await
-                        }
-                        None => Err(format!("the dialog has no entry {:?}", arg(0))),
-                    }
-                }
-                None => Err("no dialog is open".to_owned()),
-            },
-            "indent-choose" => match indent_choice(arg(0)) {
-                Ok(choice) => {
-                    self.window.pick_indentation(choice);
-                    self.wait_idle().await
-                }
-                Err(error) => Err(error),
-            },
-            "tab-menu" => match number(arg(0)) {
-                Ok(index) => match self.window.tab_at(index) {
-                    Some((tabs, page)) => {
-                        tabs.emit_by_name::<()>("setup-menu", &[&Some(page)]);
-                        Ok(())
-                    }
-                    None => Err(format!("there is no tab {index}")),
-                },
-                Err(error) => Err(error),
-            },
-            "tab-press" => self.tab_press(arg(0), arg(1), arg(2)).await,
-            "tab-menu-close" => {
-                self.window
-                    .tab_view(0)
-                    .emit_by_name::<()>("setup-menu", &[&None::<adw::TabPage>]);
-                self.wait_until_settled().await;
-                Ok(())
-            }
-            "editor-menu" => match self.page() {
-                Ok(page) => {
-                    let view = page.view();
-                    view.grab_focus();
-                    match WidgetExt::activate_action(view, "menu.popup", None) {
-                        Ok(()) => {
-                            self.wait_until_settled().await;
-                            Ok(())
-                        }
-                        Err(error) => Err(format!("the editor has no context menu: {error}")),
-                    }
-                }
-                Err(error) => Err(error),
-            },
-            "editor-menu-close" => match self.page() {
-                Ok(page) => match context_popover(page.view().upcast_ref()) {
-                    Some(popover) => {
-                        popover.popdown();
-                        Ok(())
-                    }
-                    None => Err("the editor's context menu is not open".to_owned()),
-                },
-                Err(error) => Err(error),
-            },
-            "close-shortcuts" => match self.window.window().visible_dialog() {
-                Some(dialog) => {
-                    dialog.close();
-                    Ok(())
-                }
-                None => Err("no dialog is open".to_owned()),
-            },
-            _ => return None,
-        })
+    /// `sandbox-home`: only as the first step; `run` points `HOME` and the XDG directories at
+    /// `$TMP/home` before GTK starts, so the step itself does nothing.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn sandbox_home(&self, _: &[String]) {}
+
+    /// `set-text <text>`: replaces the current tab's text without an undo step, the caret at
+    /// the start.
+    fn set_text(&self, args: &[String]) -> StepResult {
+        let buffer = self.page()?.buffer();
+        buffer.begin_irreversible_action();
+        buffer.set_text(&args[0]);
+        buffer.end_irreversible_action();
+        buffer.place_cursor(&buffer.start_iter());
+        Ok(())
     }
 
-    /// Checks one of these assertions; `None` when `assertion` is not one.
-    pub(super) fn tools_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
-        let arg = |index: usize| args[index].as_str();
-        Some(match assertion {
-            // The last desktop command ends with the given words (what comes before depends
-            // on whether setsid and uwsm-app are installed).
-            "assert-launched" => {
-                let launches = self.window.shared().launches();
-                match launches.last() {
-                    Some(command) => {
-                        let command = command
-                            .iter()
-                            .map(|part| part.to_string_lossy().into_owned())
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        if command.ends_with(arg(0)) {
-                            Ok(())
-                        } else {
-                            Err(format!("the last command was {command:?}"))
-                        }
-                    }
-                    None => Err("nothing was launched".to_owned()),
-                }
-            }
-            "assert-editor-key" => self.check_editor_key(arg(0), arg(1)),
-            "assert-editor-keys" => self.check_editor_keys(),
-            "assert-tool-stats" => {
-                let stats = self.window.tool_stats();
-                match (stats, boolean(arg(0)), boolean(arg(1))) {
-                    (Some(stats), Ok(worker), Ok(bulk)) => {
-                        println!(
-                            "  # text tool: {} edits, bulk {}, worker {}, {} pieces, {:.1} ms",
-                            stats.edits,
-                            stats.bulk,
-                            stats.worker,
-                            stats.pieces,
-                            stats.took.as_secs_f64() * 1e3
-                        );
-                        equal("(worker, bulk)", (stats.worker, stats.bulk), (worker, bulk))
-                    }
-                    (None, _, _) => Err("no text tool has run".to_owned()),
-                    (_, Err(error), _) | (_, _, Err(error)) => Err(error),
-                }
-            }
-            "assert-tool-pieces" => match (self.window.tool_stats(), number(arg(0))) {
-                (Some(stats), Ok(minimum)) if stats.pieces >= minimum => Ok(()),
-                (Some(stats), Ok(minimum)) => Err(format!(
-                    "the result went in as {} pieces, fewer than {minimum}",
-                    stats.pieces
-                )),
-                (None, _) => Err("no text tool has run".to_owned()),
-                (_, Err(error)) => Err(error),
-            },
-            "assert-indentation" => match self.page() {
-                Ok(page) => equal("indentation", page.indentation().label(), arg(0).to_owned()),
-                Err(error) => Err(error),
-            },
-            "assert-map" => match (self.page(), boolean(arg(0))) {
-                (Ok(page), Ok(wanted)) => equal("document map", page.map_shown(), wanted),
-                (Err(error), _) | (_, Err(error)) => Err(error),
-            },
-            "assert-tab-menu" => match self.window.tab_view(0).menu_model() {
-                Some(model) => contains_label(&model, arg(0)),
-                None => Err("the tabs have no context menu".to_owned()),
-            },
-            "assert-editor-menu" => match self.page().map(|page| page.view().extra_menu()) {
-                Ok(Some(model)) => contains_label(&model, arg(0)),
-                Ok(None) => Err("the editor has no extra menu".to_owned()),
-                Err(error) => Err(error),
-            },
-            "assert-shortcuts" => match self
-                .window
-                .window()
-                .visible_dialog()
-                .and_downcast::<adw::ShortcutsDialog>()
-            {
-                Some(dialog) => {
-                    let text = shortcut_texts(dialog.upcast_ref()).join("\n");
-                    if text.contains(arg(0)) {
-                        Ok(())
-                    } else {
-                        Err(format!("the overview lacks {:?}", arg(0)))
-                    }
-                }
-                None => Err("the Keyboard Shortcuts overview is not open".to_owned()),
-            },
-            "assert-preferences-error" => {
-                let errors = self.window.shared().preferences.errors();
-                let index = match arg(0) {
-                    "config" => 0,
-                    "keys" => 1,
-                    other => return Some(Err(format!("{other}: use config or keys"))),
-                };
-                let found: Vec<String> = errors[index].iter().map(ToString::to_string).collect();
-                match arg(1) {
-                    "none" if found.is_empty() => Ok(()),
-                    "none" => Err(format!("errors: {found:?}")),
-                    wanted if found.iter().any(|error| error.contains(wanted)) => Ok(()),
-                    wanted => Err(format!("no error has {wanted:?}; errors: {found:?}")),
-                }
-            }
-            "assert-editor-font" => equal(
-                "editor font",
-                self.window
-                    .shared()
-                    .appearance
-                    .editor_family()
-                    .unwrap_or_default(),
-                arg(0).to_owned(),
-            ),
-            "assert-line" => match (self.page(), number(arg(0))) {
-                (Ok(page), Ok(line)) => {
-                    let buffer = page.buffer();
-                    match line
-                        .checked_sub(1)
-                        .and_then(|line| buffer.iter_at_line_number(line))
-                    {
-                        Some(start) => {
-                            let mut end = start;
-                            if !end.ends_line() {
-                                end.forward_to_line_end();
-                            }
-                            equal(
-                                &format!("line {line}"),
-                                buffer.text(&start, &end, true).to_string(),
-                                arg(1).to_owned(),
-                            )
-                        }
-                        None => Err(format!("there is no line {line}")),
-                    }
-                }
-                (Err(error), _) | (_, Err(error)) => Err(error),
-            },
-            "assert-dialog-selection" => match self.window.open_dialog() {
-                Some(dialog) => match find_row(dialog.upcast_ref(), arg(0))
-                    .and_then(|row| row.downcast::<adw::EntryRow>().ok())
-                {
-                    Some(entry) => equal(
-                        &format!("the selection in {}", arg(0)),
-                        entry
-                            .selection_bounds()
-                            .map(|(start, end)| entry.chars(start, end).to_string())
-                            .unwrap_or_default(),
-                        arg(1).to_owned(),
-                    ),
-                    None => Err(format!("the dialog has no entry {:?}", arg(0))),
-                },
-                None => Err("no dialog is open".to_owned()),
-            },
-            "assert-file-contains" => match std::fs::read_to_string(arg(0)) {
-                Ok(text) if text.contains(arg(1)) => Ok(()),
-                Ok(text) => Err(format!("{} holds {text:?}, without {:?}", arg(0), arg(1))),
-                Err(error) => Err(format!("{}: {error}", arg(0))),
-            },
-            _ => return None,
-        })
+    /// `record-launches`: records desktop commands (terminal, file manager) instead of running
+    /// them, for `assert-launched`.
+    fn record_launches(&self, _: &[String]) {
+        self.window.shared().record_launches();
     }
 
-    /// Waits until the current tab's text tool has finished: its worker returned and a large
-    /// result is in.
-    async fn wait_tool(&self) -> StepResult {
+    /// `editor-key <key>`: runs the current editor's shortcut for the key (`<Control>d`) as GTK
+    /// does when the key reaches the editor, and lets the main loop settle.
+    async fn editor_key(&self, args: &[String]) -> StepResult {
+        let pressed = self.press_editor_key(&args[0]);
+        self.wait_until_settled().await;
+        pressed
+    }
+
+    /// `indent-choose spaces|tabs|width:N|detect|to-spaces|to-tabs`: a choice in the
+    /// indentation popover; waits for its work.
+    async fn indent_choose(&self, args: &[String]) -> StepResult {
+        self.window.pick_indentation(indent_choice(&args[0])?);
+        self.wait_idle().await
+    }
+
+    /// `tab-menu <n>`: sets up the tab menu for tab n, as a right-click does before the menu
+    /// opens.
+    fn tab_menu(&self, args: &[String]) -> StepResult {
+        let index = number(&args[0])?;
+        let (tabs, page) = self
+            .window
+            .tab_at(index)
+            .ok_or_else(|| format!("there is no tab {index}"))?;
+        tabs.emit_by_name::<()>("setup-menu", &[&Some(page)]);
+        Ok(())
+    }
+
+    /// `tab-menu-close`: what the tab menu's closing does, and lets the main loop settle.
+    async fn tab_menu_close(&self, _: &[String]) {
+        self.window
+            .tab_view(0)
+            .emit_by_name::<()>("setup-menu", &[&None::<adw::TabPage>]);
+        self.wait_until_settled().await;
+    }
+
+    /// `editor-menu`: opens the current editor's context menu, with the focus in the editor.
+    async fn editor_menu(&self, _: &[String]) -> StepResult {
+        let page = self.page()?;
+        let view = page.view();
+        view.grab_focus();
+        WidgetExt::activate_action(view, "menu.popup", None)
+            .map_err(|error| format!("the editor has no context menu: {error}"))?;
+        self.wait_until_settled().await;
+        Ok(())
+    }
+
+    /// `editor-menu-close`: closes the current editor's context menu.
+    fn editor_menu_close(&self, _: &[String]) -> StepResult {
+        let page = self.page()?;
+        let popover = context_popover(page.view().upcast_ref())
+            .ok_or_else(|| "the editor's context menu is not open".to_owned())?;
+        popover.popdown();
+        Ok(())
+    }
+
+    /// `close-shortcuts`: closes the Keyboard Shortcuts overview (the window's dialog).
+    fn close_shortcuts(&self, _: &[String]) -> StepResult {
+        let dialog = self
+            .window
+            .window()
+            .visible_dialog()
+            .ok_or_else(|| "no dialog is open".to_owned())?;
+        dialog.close();
+        Ok(())
+    }
+
+    /// `assert-launched <words>`: the last desktop command ends with the words (what comes
+    /// before depends on whether setsid and uwsm-app are installed).
+    fn assert_launched(&self, args: &[String]) -> StepResult {
+        let launches = self.window.shared().launches();
+        let command = launches
+            .last()
+            .ok_or_else(|| "nothing was launched".to_owned())?
+            .iter()
+            .map(|part| part.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if command.ends_with(args[0].as_str()) {
+            Ok(())
+        } else {
+            Err(format!("the last command was {command:?}"))
+        }
+    }
+
+    /// `assert-editor-key <key> <action>|swallow|none`: what the editor does with the key: an
+    /// action's name, `swallow`, or `none`.
+    fn assert_editor_key(&self, args: &[String]) -> StepResult {
+        self.check_editor_key(&args[0], &args[1])
+    }
+
+    /// `assert-tool-stats true|false true|false`: whether the last text tool ran on a worker,
+    /// and as one bulk edit.
+    fn assert_tool_stats(&self, args: &[String]) -> StepResult {
+        let stats = self
+            .window
+            .tool_stats()
+            .ok_or_else(|| "no text tool has run".to_owned())?;
+        let (worker, bulk) = (boolean(&args[0])?, boolean(&args[1])?);
+        println!(
+            "  # text tool: {} edits, bulk {}, worker {}, {} pieces, {:.1} ms",
+            stats.edits,
+            stats.bulk,
+            stats.worker,
+            stats.pieces,
+            stats.took.as_secs_f64() * 1e3
+        );
+        equal("(worker, bulk)", (stats.worker, stats.bulk), (worker, bulk))
+    }
+
+    /// `assert-tool-pieces <n>`: the last text tool's result went in as at least n pieces.
+    fn assert_tool_pieces(&self, args: &[String]) -> StepResult {
+        let stats = self
+            .window
+            .tool_stats()
+            .ok_or_else(|| "no text tool has run".to_owned())?;
+        let minimum = number(&args[0])?;
+        if stats.pieces >= minimum {
+            Ok(())
+        } else {
+            Err(format!(
+                "the result went in as {} pieces, fewer than {minimum}",
+                stats.pieces
+            ))
+        }
+    }
+
+    /// `assert-indentation <label>`: the current tab's indentation, as the status bar shows
+    /// it.
+    fn assert_indentation(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        equal("indentation", page.indentation().label(), args[0].clone())
+    }
+
+    /// `assert-map true|false`: whether the current tab shows the document map.
+    fn assert_map(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        equal("document map", page.map_shown(), boolean(&args[0])?)
+    }
+
+    /// `assert-tab-menu <label>`: the tab menu has an item with that label.
+    fn assert_tab_menu(&self, args: &[String]) -> StepResult {
+        let model = self
+            .window
+            .tab_view(0)
+            .menu_model()
+            .ok_or_else(|| "the tabs have no context menu".to_owned())?;
+        contains_label(&model, &args[0])
+    }
+
+    /// `assert-editor-menu <label>`: the editor's context menu has an item with that label.
+    fn assert_editor_menu(&self, args: &[String]) -> StepResult {
+        let model = self
+            .page()?
+            .view()
+            .extra_menu()
+            .ok_or_else(|| "the editor has no extra menu".to_owned())?;
+        contains_label(&model, &args[0])
+    }
+
+    /// `assert-shortcuts <text>`: the open Keyboard Shortcuts overview has the text among its
+    /// titles and accelerators.
+    fn assert_shortcuts(&self, args: &[String]) -> StepResult {
+        let dialog = self
+            .window
+            .window()
+            .visible_dialog()
+            .and_downcast::<adw::ShortcutsDialog>()
+            .ok_or_else(|| "the Keyboard Shortcuts overview is not open".to_owned())?;
+        let text = shortcut_texts(dialog.upcast_ref()).join("\n");
+        if text.contains(args[0].as_str()) {
+            Ok(())
+        } else {
+            Err(format!("the overview lacks {:?}", args[0]))
+        }
+    }
+
+    /// `assert-preferences-error config|keys <text>|none`: an error the last load of
+    /// `config.toml` or `keys.toml` reported has the text, or there is none.
+    fn assert_preferences_error(&self, args: &[String]) -> StepResult {
+        let errors = self.window.shared().preferences.errors();
+        let index = match args[0].as_str() {
+            "config" => 0,
+            "keys" => 1,
+            other => return Err(format!("{other}: use config or keys")),
+        };
+        let found: Vec<String> = errors[index].iter().map(ToString::to_string).collect();
+        match args[1].as_str() {
+            "none" if found.is_empty() => Ok(()),
+            "none" => Err(format!("errors: {found:?}")),
+            wanted if found.iter().any(|error| error.contains(wanted)) => Ok(()),
+            wanted => Err(format!("no error has {wanted:?}; errors: {found:?}")),
+        }
+    }
+
+    /// `assert-line <n> <text>`: line n of the current tab (1-based), without its line break.
+    fn assert_line(&self, args: &[String]) -> StepResult {
+        let page = self.page()?;
+        let line = number(&args[0])?;
+        let buffer = page.buffer();
+        let start = line
+            .checked_sub(1)
+            .and_then(|line| buffer.iter_at_line_number(line))
+            .ok_or_else(|| format!("there is no line {line}"))?;
+        let mut end = start;
+        if !end.ends_line() {
+            end.forward_to_line_end();
+        }
+        equal(
+            &format!("line {line}"),
+            buffer.text(&start, &end, true).to_string(),
+            args[1].clone(),
+        )
+    }
+
+    /// `wait-tool`: waits until the current tab's text tool has finished: its worker returned
+    /// and a large result is in.
+    async fn wait_tool(&self, _: &[String]) -> StepResult {
         let started = std::time::Instant::now();
         loop {
             self.wait_idle().await?;
@@ -383,7 +353,7 @@ impl Harness {
 
     /// Presses `key` in the current editor through its shortcut controller, as GTK does when
     /// the editor has the focus and the key reaches it.
-    fn editor_key(&self, key: &str) -> StepResult {
+    fn press_editor_key(&self, key: &str) -> StepResult {
         let page = self.page()?;
         let shortcut = self.editor_shortcut(key)?;
         let action = shortcut.action().ok_or("the shortcut has no action")?;
@@ -398,9 +368,10 @@ impl Harness {
         }
     }
 
-    /// Every text tool's keys are the editor's shortcuts; every built-in binding ADR-009
-    /// overrides is a real GtkSourceView or GtkTextView binding, and the editor takes it.
-    fn check_editor_keys(&self) -> StepResult {
+    /// `assert-editor-keys`: every text tool's keys are the editor's shortcuts; every built-in
+    /// binding ADR-009 overrides is a real GtkSourceView or GtkTextView binding, and the editor
+    /// takes it; the tab views' own shortcuts are off.
+    fn assert_editor_keys(&self, _: &[String]) -> StepResult {
         let keymap = self.window.keymap();
         let mut problems = Vec::new();
         let mut count = 0;
@@ -449,12 +420,14 @@ impl Harness {
         }
     }
 
-    /// A press on tab `number`'s title or close button, or on its strip just after it, as the
-    /// `presses`th press of a click. Only Stet's handling of the press runs, not the strip's:
-    /// it doesn't select or close the tab.
-    async fn tab_press(&self, number: &str, part: &str, presses: &str) -> StepResult {
-        let index = super::number(number)?;
-        let presses = i32::try_from(super::number(presses)?).map_err(|error| error.to_string())?;
+    /// `tab-press <n> title|close|after <presses>`: a press on tab n's title or close button,
+    /// or on its strip just after it, as that press of a click, once the tab has come to rest.
+    /// Only Stet's handling of the press runs, not the strip's: it doesn't select or close the
+    /// tab.
+    async fn tab_press(&self, args: &[String]) -> StepResult {
+        let part = args[1].as_str();
+        let index = number(&args[0])?;
+        let presses = i32::try_from(number(&args[2])?).map_err(|error| error.to_string())?;
         // A tab that just opened or moved slides into place: the press goes where it rests.
         let started = std::time::Instant::now();
         let mut last = None;
@@ -511,37 +484,6 @@ impl Harness {
             .ok_or("the tab is not inside its strip")?;
         Ok((bar, widget, f64::from(point.x()), f64::from(point.y())))
     }
-
-    /// Fills a field of the open dialog: an entry row's text, a combo row's choice or a
-    /// switch row's state, found by its title.
-    fn dialog_set(&self, title: &str, value: &str) -> StepResult {
-        let dialog = self
-            .window
-            .open_dialog()
-            .ok_or_else(|| "no dialog is open".to_owned())?;
-        let row = find_row(dialog.upcast_ref(), title)
-            .ok_or_else(|| format!("the dialog has no field {title:?}"))?;
-        if let Some(entry) = row.downcast_ref::<adw::EntryRow>() {
-            entry.set_text(value);
-            return Ok(());
-        }
-        if let Some(switch) = row.downcast_ref::<adw::SwitchRow>() {
-            switch.set_active(boolean(value)?);
-            return Ok(());
-        }
-        if let Some(combo) = row.downcast_ref::<adw::ComboRow>() {
-            let model = combo
-                .model()
-                .and_downcast::<gtk::StringList>()
-                .ok_or("the choices are not a string list")?;
-            let index = (0..model.n_items())
-                .find(|index| model.string(*index).is_some_and(|text| text == value))
-                .ok_or_else(|| format!("{title} has no choice {value:?}"))?;
-            combo.set_selected(index);
-            return Ok(());
-        }
-        Err(format!("{title} is not a field the harness can fill"))
-    }
 }
 
 fn indent_choice(word: &str) -> Result<IndentChoice, String> {
@@ -562,23 +504,6 @@ fn indent_choice(word: &str) -> Result<IndentChoice, String> {
     })
 }
 
-/// The row titled `title` under `widget`.
-fn find_row(widget: &gtk::Widget, title: &str) -> Option<gtk::Widget> {
-    if let Some(row) = widget.downcast_ref::<adw::PreferencesRow>()
-        && row.title() == title
-    {
-        return Some(widget.clone());
-    }
-    let mut child = widget.first_child();
-    while let Some(current) = child {
-        if let Some(found) = find_row(&current, title) {
-            return Some(found);
-        }
-        child = current.next_sibling();
-    }
-    None
-}
-
 /// A tab's close button, while it shows.
 fn find_close_button(widget: &gtk::Widget) -> Option<gtk::Widget> {
     if widget.has_css_class("tab-close-button") && widget.is_drawable() {
@@ -587,21 +512,6 @@ fn find_close_button(widget: &gtk::Widget) -> Option<gtk::Widget> {
     let mut child = widget.first_child();
     while let Some(current) = child {
         if let Some(found) = find_close_button(&current) {
-            return Some(found);
-        }
-        child = current.next_sibling();
-    }
-    None
-}
-
-/// The GtkText inside an entry row.
-fn find_text(widget: &gtk::Widget) -> Option<gtk::Text> {
-    if let Some(text) = widget.downcast_ref::<gtk::Text>() {
-        return Some(text.clone());
-    }
-    let mut child = widget.first_child();
-    while let Some(current) = child {
-        if let Some(found) = find_text(&current) {
             return Some(found);
         }
         child = current.next_sibling();

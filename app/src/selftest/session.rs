@@ -4,8 +4,9 @@
 //! and then restored by a new process; and a private D-Bus bus for activation, whose only
 //! service directory holds Stet's own test service file.
 
-use super::script::{Step, boolean};
-use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
+use super::registry::{Command, MANY, commands};
+use super::script::boolean;
+use super::{Harness, StepResult, WAIT_TIMEOUT, build, equal, number, write_file};
 use crate::config::APP_ID_ENV;
 use crate::convert::to_i32;
 use crate::runtime::worker;
@@ -18,7 +19,7 @@ use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, Command as Process, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 use stet_domain::session::Session;
 
@@ -31,31 +32,42 @@ const PROCESS_TIMEOUT: Duration = Duration::from_secs(240);
 /// How long `spawn-wait` waits for a background `stet`.
 const SPAWN_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// The commands this module runs as steps.
-const STEPS: &[&str] = &[
-    "quit",
-    "session-commit",
-    "session-flush",
-    "wait-backed-up",
-    "tabs-digest",
-    "generate-tabs",
-    "drop-backup",
-    "spawn-bg",
-    "spawn-wait",
-    "child-start",
-    "child-run",
-    "child-signal",
-    "child-wait",
-    "test-bus-start",
-    "test-bus-spawn",
-    "bus-action",
-    "test-bus-stop",
-    "report-session",
-    "report-restore",
-    "assert-tabs-digest",
-    "wait-exists",
-    "assert-restore-time",
-    "set-window-size",
+pub(super) const COMMANDS: &[Command] = commands![
+    "quit" (0, 2) => quit,
+    "session-commit" (0, 0) => session_commit,
+    "session-flush" (0, 0) => async session_flush,
+    "wait-backed-up" (1, 1) => async wait_backed_up,
+    "tabs-digest" (1, 1) => async tabs_digest,
+    "generate-tabs" (3, 3) => async generate_tabs,
+    "drop-backup" (2, 2) => drop_backup,
+    "spawn-bg" (2, MANY) => spawn_bg,
+    "spawn-wait" (2, 2) => async spawn_wait,
+    "child-start" (3, 3) => child_start,
+    "child-run" (3, 3) => async child_run,
+    "child-signal" (2, 2) => child_signal,
+    "child-wait" (2, 2) => async child_wait,
+    "test-bus-start" (1, 2) => async test_bus_start,
+    "test-bus-spawn" (2, MANY) => test_bus_spawn,
+    "bus-action" (1, 2) => async bus_action,
+    "test-bus-stop" (0, 0) => async test_bus_stop,
+    "report-session" (0, 0) => report_session,
+    "report-restore" (0, 0) => async report_restore,
+    "wait-exists" (1, 1) => async wait_exists,
+    "set-window-size" (2, 2) => set_window_size,
+    "assert-tabs-digest" (1, 1) => async assert_tabs_digest,
+    "assert-restore-time" (1, 2) => async assert_restore_time,
+    "assert-session" (1, 1) => assert_session,
+    "assert-stub" (2, 2) => assert_stub,
+    "assert-backed-up" (1, 1) => assert_backed_up,
+    "assert-waiting" (1, 1) => assert_waiting,
+    "assert-backups" (2, 2) => assert_backups,
+    "assert-orphans" (2, 2) => assert_orphans,
+    "assert-session-tabs" (2, 2) => assert_session_tabs,
+    "assert-session-contains" (2, 2) => assert_session_contains,
+    "assert-session-lacks" (2, 2) => assert_session_lacks,
+    "assert-running" (2, 2) => assert_running,
+    "assert-bus-owner" (1, 1) => async assert_bus_owner,
+    "assert-window-size" (2, 2) => assert_window_size,
 ];
 
 /// A private session bus for D-Bus activation (`test-bus-start`).
@@ -90,208 +102,314 @@ impl TestBus {
 }
 
 impl Harness {
-    /// Runs a session command; `None` when `step` is not one.
-    pub(super) async fn session_step(&self, step: &Step) -> Option<StepResult> {
-        if !STEPS.contains(&step.command.as_str()) {
-            return None;
-        }
-        Some(self.run_session_step(step).await)
-    }
-
-    async fn run_session_step(&self, step: &Step) -> StepResult {
-        let args = &step.args;
-        let arg = |index: usize| args[index].as_str();
-        match step.command.as_str() {
-            // Ends the run once every step has run (see `run`).
-            "quit" => match args.as_slice() {
-                [] => Ok(()),
-                [how] if how == "window" => Ok(()),
-                [how, signal] if how == "signal" => signal_number(signal).map(|_| ()),
-                _ => Err("use quit, quit window or quit signal TERM|HUP|INT".to_owned()),
-            },
-            "session-commit" => {
-                self.window.commit_session(false);
-                Ok(())
-            }
-            "session-flush" => self.window.flush_session().await,
-            "wait-backed-up" => self.wait_backed_up(number(arg(0))?).await,
-            "tabs-digest" => {
-                let digest = self.digest().await?;
-                write_file(Path::new(arg(0)), digest.as_bytes())
-            }
-            "assert-tabs-digest" => {
-                let wanted = fs::read_to_string(arg(0)).map_err(|error| error.to_string())?;
-                let digest = self.digest().await?;
-                if digest == wanted {
-                    println!("  # {}", digest.lines().next().unwrap_or_default());
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "the tabs differ from {}:\n--- then\n{wanted}--- now\n{digest}",
-                        arg(0)
-                    ))
-                }
-            }
-            "generate-tabs" => {
-                self.generate_tabs(Path::new(arg(0)), number(arg(1))?, number(arg(2))?)
-                    .await
-            }
-            "drop-backup" => drop_backup(Path::new(arg(0)), number(arg(1))?),
-            "spawn-bg" => self.spawn_bg(arg(0), &args[1..], false),
-            "test-bus-spawn" => self.spawn_bg(arg(0), &args[1..], true),
-            "spawn-wait" => self.wait_process(arg(0), arg(1), SPAWN_TIMEOUT).await,
-            "child-wait" => self.wait_process(arg(0), arg(1), PROCESS_TIMEOUT).await,
-            "child-start" => self.start_child(arg(0), Path::new(arg(1)), Path::new(arg(2))),
-            "child-run" => {
-                let name = format!("child{}", self.children.get() + 1);
-                self.start_child(&name, Path::new(arg(0)), Path::new(arg(1)))?;
-                self.wait_process(&name, arg(2), PROCESS_TIMEOUT).await
-            }
-            "child-signal" => self.signal_process(arg(0), arg(1)),
-            "test-bus-start" => {
-                self.start_test_bus(arg(0), args.get(1).map(String::as_str))
-                    .await
-            }
-            "bus-action" => {
-                self.bus_action(arg(0), args.get(1).map(String::as_str))
-                    .await
-            }
-            "test-bus-stop" => self.stop_test_bus().await,
-            "report-session" => self.report_session(),
-            "report-restore" => {
-                self.wait_first_frame().await?;
-                self.report_restore()
-            }
-            "assert-restore-time" => {
-                self.wait_first_frame().await?;
-                self.check_restore_time(args)
-            }
-            // The size the window keeps in the session, as a resize by the user sets it.
-            "set-window-size" => {
-                let (width, height) = (number(arg(0))?, number(arg(1))?);
-                self.window
-                    .window()
-                    .set_default_size(to_i32(width), to_i32(height));
-                Ok(())
-            }
-            // A child self-test leaves a file when it is ready; it may take a while to start.
-            "wait-exists" => {
-                let started = Instant::now();
-                while !Path::new(arg(0)).exists() {
-                    if started.elapsed() > PROCESS_TIMEOUT {
-                        return Err(format!("{} never appeared", arg(0)));
-                    }
-                    glib::timeout_future(Duration::from_millis(20)).await;
-                }
-                Ok(())
-            }
-            other => Err(format!("unknown command {other}")),
+    /// `quit`, `quit window` or `quit signal TERM|HUP|INT`: only as the last step; once every
+    /// step has run, closes the window the way the user does (the session's last commit and
+    /// flush), or sends this process the signal (see `end`).
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn quit(&self, args: &[String]) -> StepResult {
+        match args {
+            [] => Ok(()),
+            [how] if how == "window" => Ok(()),
+            [how, signal] if how == "signal" => signal_number(signal).map(|_| ()),
+            _ => Err("use quit, quit window or quit signal TERM|HUP|INT".to_owned()),
         }
     }
 
-    /// Runs a session assertion; `None` when `assertion` is not one.
-    pub(super) fn session_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
-        let arg = |index: usize| args[index].as_str();
-        Some(match assertion {
-            "assert-session" => {
-                let phase = match self.window.session_phase() {
-                    SessionPhase::On => "on",
-                    SessionPhase::Off => "off",
-                    SessionPhase::Pending => "pending",
-                };
-                equal("session", phase.to_owned(), arg(0).to_owned())
-            }
-            "assert-stub" => number(arg(0)).and_then(|index| {
-                let pages = self.window.pages();
-                let page = pages
-                    .get(index.saturating_sub(1))
-                    .ok_or_else(|| format!("there is no tab {index}"))?;
-                equal("stub", Window::is_stub(page), boolean(arg(1))?)
-            }),
-            "assert-backed-up" => boolean(arg(0)).and_then(|wanted| {
-                equal(
-                    "every backup current",
-                    self.window.backups_current(),
-                    wanted,
-                )
-            }),
-            "assert-waiting" => number(arg(0))
-                .and_then(|wanted| equal("--wait command lines", self.window.waiting(), wanted)),
-            "assert-backups" => number(arg(1)).and_then(|wanted| {
-                equal(
-                    "backups",
-                    count_files(&Path::new(arg(0)).join("backup"))?,
-                    wanted,
-                )
-            }),
-            "assert-orphans" => number(arg(1)).and_then(|wanted| {
-                equal(
-                    "orphans",
-                    count_files(&Path::new(arg(0)).join("backup/orphaned"))?,
-                    wanted,
-                )
-            }),
-            "assert-session-tabs" => number(arg(1)).and_then(|wanted| {
-                equal(
-                    "tabs in session.json",
-                    read_session(Path::new(arg(0)))?.tabs.len(),
-                    wanted,
-                )
-            }),
-            "assert-session-contains" | "assert-session-lacks" => {
-                let text = fs::read_to_string(Path::new(arg(0)).join("session.json"))
-                    .map_err(|error| error.to_string());
-                text.and_then(|text| {
-                    let contains = text.contains(arg(1));
-                    let wanted = assertion == "assert-session-contains";
-                    if contains == wanted {
-                        Ok(())
-                    } else if wanted {
-                        Err(format!("session.json lacks {:?}:\n{text}", arg(1)))
-                    } else {
-                        Err(format!("session.json has {:?}:\n{text}", arg(1)))
-                    }
-                })
-            }
-            "assert-exists" => {
-                if Path::new(arg(0)).exists() {
-                    Ok(())
-                } else {
-                    Err(format!("{} does not exist", arg(0)))
-                }
-            }
-            "assert-window-size" => number(arg(0)).and_then(|width| {
-                let height = number(arg(1))?;
-                equal(
-                    "window size",
-                    self.window.window().default_size(),
-                    (to_i32(width), to_i32(height)),
-                )
-            }),
-            "assert-file-contains" => match fs::read_to_string(arg(0)) {
-                Ok(text) if text.contains(arg(1)) => Ok(()),
-                Ok(text) => Err(format!("{} lacks {:?}:\n{text}", arg(0), arg(1))),
-                Err(error) => Err(format!("{}: {error}", arg(0))),
-            },
-            "assert-running" => boolean(arg(1)).and_then(|wanted| {
-                let mut processes = self.processes.borrow_mut();
-                let child = processes
-                    .get_mut(arg(0))
-                    .ok_or_else(|| format!("no process {}", arg(0)))?;
-                let running = child
-                    .try_wait()
-                    .map_err(|error| error.to_string())?
-                    .is_none();
-                equal(&format!("{} running", arg(0)), running, wanted)
-            }),
-            _ => return None,
-        })
+    /// `session-commit`: runs the 7 s backup commit now.
+    fn session_commit(&self, _: &[String]) {
+        self.window.commit_session(false);
     }
 
-    /// Waits for the next backup commit after this step began that leaves every document's
-    /// current text backed up and on disk, without forcing one; fails if that took longer than
-    /// `limit_ms`.
-    async fn wait_backed_up(&self, limit_ms: usize) -> StepResult {
+    /// `session-flush`: waits until the store has written every commit.
+    async fn session_flush(&self, _: &[String]) -> StepResult {
+        self.window.flush_session().await
+    }
+
+    /// `tabs-digest <path>`: writes every tab's digest (see `digest`) for
+    /// `assert-tabs-digest`.
+    async fn tabs_digest(&self, args: &[String]) -> StepResult {
+        let digest = self.digest().await?;
+        write_file(Path::new(&args[0]), digest.as_bytes())
+    }
+
+    /// `assert-tabs-digest <path>`: every tab's digest is the one `tabs-digest` wrote there.
+    async fn assert_tabs_digest(&self, args: &[String]) -> StepResult {
+        let wanted = fs::read_to_string(&args[0]).map_err(|error| error.to_string())?;
+        let digest = self.digest().await?;
+        if digest == wanted {
+            println!("  # {}", digest.lines().next().unwrap_or_default());
+            Ok(())
+        } else {
+            Err(format!(
+                "the tabs differ from {}:\n--- then\n{wanted}--- now\n{digest}",
+                args[0]
+            ))
+        }
+    }
+
+    /// `drop-backup <state folder> <tab>`: deletes the backup of tab n (1-based) in the
+    /// session in that folder, as a disk problem could.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn drop_backup(&self, args: &[String]) -> StepResult {
+        let state = Path::new(&args[0]);
+        let tab = number(&args[1])?;
+        let session = read_session(state)?;
+        let record = session
+            .tabs
+            .get(tab.saturating_sub(1))
+            .ok_or_else(|| format!("the session has no tab {tab}"))?;
+        let id = record
+            .backup
+            .as_deref()
+            .ok_or_else(|| format!("tab {tab} has no backup"))?;
+        fs::remove_file(state.join("backup").join(format!("{id}.txt")))
+            .map_err(|error| error.to_string())
+    }
+
+    /// `spawn-bg <name> <arguments…>`: starts a `stet` in the background with the harness's
+    /// id (for `--wait`), its output in `$TMP/<name>.out` and `.err`.
+    fn spawn_bg(&self, args: &[String]) -> StepResult {
+        self.spawn_background(&args[0], &args[1..], false)
+    }
+
+    /// `test-bus-spawn <name> <arguments…>`: as `spawn-bg`, on the test bus with the activated
+    /// id.
+    fn test_bus_spawn(&self, args: &[String]) -> StepResult {
+        self.spawn_background(&args[0], &args[1..], true)
+    }
+
+    /// `spawn-wait <name> <status>`: waits up to a minute for a background `stet` to end with
+    /// the status (see `wait_process`).
+    async fn spawn_wait(&self, args: &[String]) -> StepResult {
+        self.wait_process(&args[0], &args[1], SPAWN_TIMEOUT).await
+    }
+
+    /// `child-start <name> <folder> <script>`: starts a child self-test of the script in that
+    /// scratch folder.
+    fn child_start(&self, args: &[String]) -> StepResult {
+        self.start_child(&args[0], Path::new(&args[1]), Path::new(&args[2]))
+    }
+
+    /// `child-run <folder> <script> <status>`: runs a child self-test and waits for it to end
+    /// with the status.
+    async fn child_run(&self, args: &[String]) -> StepResult {
+        let name = format!("child{}", self.children.get() + 1);
+        self.start_child(&name, Path::new(&args[0]), Path::new(&args[1]))?;
+        self.wait_process(&name, &args[2], PROCESS_TIMEOUT).await
+    }
+
+    /// `child-signal <name> KILL|TERM|HUP|INT`: sends a background process the signal.
+    fn child_signal(&self, args: &[String]) -> StepResult {
+        self.signal_process(&args[0], &args[1])
+    }
+
+    /// `child-wait <name> <status>`: waits for a child self-test to end with the status.
+    async fn child_wait(&self, args: &[String]) -> StepResult {
+        self.wait_process(&args[0], &args[1], PROCESS_TIMEOUT).await
+    }
+
+    /// `test-bus-start service|none` or `test-bus-start selftest <script>`: starts the private
+    /// D-Bus bus (see `start_test_bus`).
+    async fn test_bus_start(&self, args: &[String]) -> StepResult {
+        self.start_test_bus(&args[0], args.get(1).map(String::as_str))
+            .await
+    }
+
+    /// `bus-action app.<name> [<parameter>]`: activates an application action of the Stet the
+    /// test bus started (see `activate_on_bus`).
+    async fn bus_action(&self, args: &[String]) -> StepResult {
+        self.activate_on_bus(&args[0], args.get(1).map(String::as_str))
+            .await
+    }
+
+    /// `test-bus-stop`: stops the test bus; a Stet it started that still runs is stopped
+    /// first, and fails the step.
+    async fn test_bus_stop(&self, _: &[String]) -> StepResult {
+        self.stop_test_bus().await
+    }
+
+    /// `report-restore`: prints the restore's timings from the process start (session read,
+    /// tabs in the strip, first frame), once the first frame is painted.
+    async fn report_restore(&self, _: &[String]) -> StepResult {
+        self.wait_first_frame().await?;
+        self.print_restore()
+    }
+
+    /// `assert-restore-time <release ms> [<debug ms>]`: from the process start to the first
+    /// frame, which shows the restored window with its active tab's text, within the limit; a
+    /// debug build takes the second limit, when given.
+    async fn assert_restore_time(&self, args: &[String]) -> StepResult {
+        self.wait_first_frame().await?;
+        self.check_restore_time(args)
+    }
+
+    /// `set-window-size <width> <height>`: the size the window keeps in the session, as a
+    /// resize by the user sets it (its default size).
+    fn set_window_size(&self, args: &[String]) -> StepResult {
+        let (width, height) = (number(&args[0])?, number(&args[1])?);
+        self.window
+            .window()
+            .set_default_size(to_i32(width), to_i32(height));
+        Ok(())
+    }
+
+    /// `wait-exists <path>`: waits until the path exists; a child self-test leaves a file when
+    /// it is ready, and may take a while to start.
+    async fn wait_exists(&self, args: &[String]) -> StepResult {
+        let started = Instant::now();
+        while !Path::new(&args[0]).exists() {
+            if started.elapsed() > PROCESS_TIMEOUT {
+                return Err(format!("{} never appeared", args[0]));
+            }
+            glib::timeout_future(Duration::from_millis(20)).await;
+        }
+        Ok(())
+    }
+
+    /// `assert-session on|off|pending`: the session's phase.
+    fn assert_session(&self, args: &[String]) -> StepResult {
+        let phase = match self.window.session_phase() {
+            SessionPhase::On => "on",
+            SessionPhase::Off => "off",
+            SessionPhase::Pending => "pending",
+        };
+        equal("session", phase.to_owned(), args[0].clone())
+    }
+
+    /// `assert-stub <n> true|false`: whether tab n is a restored stub, its text not loaded.
+    fn assert_stub(&self, args: &[String]) -> StepResult {
+        let index = number(&args[0])?;
+        let pages = self.window.pages();
+        let page = pages
+            .get(index.saturating_sub(1))
+            .ok_or_else(|| format!("there is no tab {index}"))?;
+        equal("stub", Window::is_stub(page), boolean(&args[1])?)
+    }
+
+    /// `assert-backed-up true|false`: whether every document's current text is backed up.
+    fn assert_backed_up(&self, args: &[String]) -> StepResult {
+        let wanted = boolean(&args[0])?;
+        equal(
+            "every backup current",
+            self.window.backups_current(),
+            wanted,
+        )
+    }
+
+    /// `assert-waiting <n>`: how many `--wait` command lines wait.
+    fn assert_waiting(&self, args: &[String]) -> StepResult {
+        let wanted = number(&args[0])?;
+        equal("--wait command lines", self.window.waiting(), wanted)
+    }
+
+    /// `assert-backups <state folder> <n>`: how many backups the folder holds.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn assert_backups(&self, args: &[String]) -> StepResult {
+        let wanted = number(&args[1])?;
+        equal(
+            "backups",
+            count_files(&Path::new(&args[0]).join("backup"))?,
+            wanted,
+        )
+    }
+
+    /// `assert-orphans <state folder> <n>`: how many orphaned backups the folder holds.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn assert_orphans(&self, args: &[String]) -> StepResult {
+        let wanted = number(&args[1])?;
+        equal(
+            "orphans",
+            count_files(&Path::new(&args[0]).join("backup/orphaned"))?,
+            wanted,
+        )
+    }
+
+    /// `assert-session-tabs <state folder> <n>`: how many tabs that folder's `session.json`
+    /// lists.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn assert_session_tabs(&self, args: &[String]) -> StepResult {
+        let wanted = number(&args[1])?;
+        equal(
+            "tabs in session.json",
+            read_session(Path::new(&args[0]))?.tabs.len(),
+            wanted,
+        )
+    }
+
+    /// `assert-session-contains <state folder> <text>`: that folder's `session.json` has the
+    /// text.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn assert_session_contains(&self, args: &[String]) -> StepResult {
+        session_has(&args[0], &args[1], true)
+    }
+
+    /// `assert-session-lacks <state folder> <text>`: that folder's `session.json` lacks the
+    /// text.
+    #[expect(
+        clippy::unused_self,
+        reason = "the registry calls every handler as a method"
+    )]
+    fn assert_session_lacks(&self, args: &[String]) -> StepResult {
+        session_has(&args[0], &args[1], false)
+    }
+
+    /// `assert-running <name> true|false`: whether a background process still runs.
+    fn assert_running(&self, args: &[String]) -> StepResult {
+        let wanted = boolean(&args[1])?;
+        let mut processes = self.processes.borrow_mut();
+        let child = processes
+            .get_mut(args[0].as_str())
+            .ok_or_else(|| format!("no process {}", args[0]))?;
+        let running = child
+            .try_wait()
+            .map_err(|error| error.to_string())?
+            .is_none();
+        equal(&format!("{} running", args[0]), running, wanted)
+    }
+
+    /// `assert-bus-owner true|false`: whether the activated id has an owner on the test bus,
+    /// asked on a worker.
+    async fn assert_bus_owner(&self, args: &[String]) -> StepResult {
+        match (boolean(&args[0]), self.bus_owned().await) {
+            (Ok(wanted), Ok(owned)) => equal("activated Stet on the bus", owned, wanted),
+            (Err(error), _) | (_, Err(error)) => Err(error),
+        }
+    }
+
+    /// `assert-window-size <width> <height>`: the size the window keeps in the session.
+    fn assert_window_size(&self, args: &[String]) -> StepResult {
+        let width = number(&args[0])?;
+        let height = number(&args[1])?;
+        equal(
+            "window size",
+            self.window.window().default_size(),
+            (to_i32(width), to_i32(height)),
+        )
+    }
+
+    /// `wait-backed-up <limit ms>`: waits for the next backup commit after this step began
+    /// that leaves every document's current text backed up and on disk, without forcing one;
+    /// fails if that took longer than the limit.
+    async fn wait_backed_up(&self, args: &[String]) -> StepResult {
+        let limit_ms = number(&args[0])?;
         let started = Instant::now();
         let before = self.window.session_stats().commits;
         let limit = Duration::from_millis(limit_ms as u64);
@@ -371,9 +489,12 @@ impl Harness {
         Ok(out)
     }
 
-    /// Opens `files` generated files and edits each, and opens `untitled` untitled documents
-    /// with text, some with a selection made backwards.
-    async fn generate_tabs(&self, dir: &Path, files: usize, untitled: usize) -> StepResult {
+    /// `generate-tabs <folder> <files> <untitled>`: opens that many generated files and edits
+    /// each, and opens that many untitled documents with text, some with a selection made
+    /// backwards.
+    async fn generate_tabs(&self, args: &[String]) -> StepResult {
+        let dir = Path::new(&args[0]);
+        let (files, untitled) = (number(&args[1])?, number(&args[2])?);
         fs::create_dir_all(dir).map_err(|error| error.to_string())?;
         let mut locations = Vec::with_capacity(files);
         for index in 0..files {
@@ -417,13 +538,13 @@ impl Harness {
 
     /// A `stet` in the background, with the harness's id (or on the test bus with the
     /// activated id), its output in `$TMP/<name>.out` and `.err`.
-    fn spawn_bg(&self, name: &str, args: &[String], on_test_bus: bool) -> StepResult {
+    fn spawn_background(&self, name: &str, args: &[String], on_test_bus: bool) -> StepResult {
         let exe = std::env::current_exe().map_err(|error| error.to_string())?;
         let output = |extension: &str| {
             File::create(self.root.join(format!("{name}.{extension}")))
                 .map_err(|error| error.to_string())
         };
-        let mut command = Command::new(exe);
+        let mut command = Process::new(exe);
         command
             .args(args)
             .current_dir(&self.root)
@@ -453,7 +574,7 @@ impl Harness {
             File::create(self.root.join(format!("{name}.{extension}")))
                 .map_err(|error| error.to_string())
         };
-        let child = Command::new(exe)
+        let child = Process::new(exe)
             .arg("--self-test")
             .arg(script)
             .env(ROOT_ENV, root)
@@ -535,7 +656,7 @@ impl Harness {
             return child.kill().map_err(|error| error.to_string());
         }
         signal_number(signal)?;
-        let status = Command::new("kill")
+        let status = Process::new("kill")
             .arg(format!("-{signal}"))
             .arg(child.id().to_string())
             .status()
@@ -616,7 +737,7 @@ impl Harness {
         let log = File::create(dir.join("daemon.log")).map_err(|error| error.to_string())?;
         // An activated service inherits the daemon's output.
         let out = File::create(dir.join("activated.out")).map_err(|error| error.to_string())?;
-        let daemon = Command::new("dbus-daemon")
+        let daemon = Process::new("dbus-daemon")
             .arg(format!("--config-file={}", config.display()))
             .arg("--nofork")
             .arg("--nopidfile")
@@ -646,7 +767,7 @@ impl Harness {
     /// Activates the application action `action` (`app.<name>`) on the Stet that the test
     /// bus started, through `org.gtk.Actions`, as another program could. (GTK exports window
     /// actions too, but only on Wayland and X11, not under Broadway.)
-    async fn bus_action(&self, action: &str, parameter: Option<&str>) -> StepResult {
+    async fn activate_on_bus(&self, action: &str, parameter: Option<&str>) -> StepResult {
         let name = action
             .strip_prefix("app.")
             .ok_or_else(|| format!("{action}: use app.<name>"))?
@@ -721,7 +842,7 @@ impl Harness {
         .flatten();
         if let Some(pid) = leftover {
             println!("  # stopping the activated Stet (process {pid}) that still runs");
-            let _ = Command::new("kill").arg(pid.to_string()).status();
+            let _ = Process::new("kill").arg(pid.to_string()).status();
         }
         drop(bus);
         match leftover {
@@ -746,7 +867,9 @@ impl Harness {
         let _ = self.stop_test_bus().await;
     }
 
-    fn report_session(&self) -> StepResult {
+    /// `report-session`: prints the last commit's texts, bytes and GTK-thread time and the
+    /// store's write times.
+    fn report_session(&self, _: &[String]) -> StepResult {
         let stats = self.window.session_stats();
         let ms = |duration: Duration| duration.as_secs_f64() * 1e3;
         println!(
@@ -792,7 +915,7 @@ impl Harness {
         Ok(())
     }
 
-    fn report_restore(&self) -> StepResult {
+    fn print_restore(&self) -> StepResult {
         let stats = self
             .window
             .restore_stats()
@@ -813,8 +936,7 @@ impl Harness {
         Ok(())
     }
 
-    /// `assert-restore-time <release ms> [<debug ms>]`: from the process start to the first
-    /// frame, which shows the restored window with its active tab's text.
+    /// From the process start to the first frame, within the limit in `args` for this build.
     fn check_restore_time(&self, args: &[String]) -> StepResult {
         let first = self
             .state
@@ -827,11 +949,7 @@ impl Harness {
             "  # restored window's first frame {:.1} ms after the process started ({} build, \
              limit {limit:?})",
             elapsed.as_secs_f64() * 1e3,
-            if cfg!(debug_assertions) {
-                "debug"
-            } else {
-                "release"
-            }
+            build()
         );
         if self
             .window
@@ -845,19 +963,6 @@ impl Harness {
         } else {
             Err(format!("the first frame took {elapsed:?}, over {limit:?}"))
         }
-    }
-}
-
-/// `assert-bus-owner`, which asks the test bus on a worker.
-impl Harness {
-    pub(super) async fn bus_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
-        if assertion != "assert-bus-owner" {
-            return None;
-        }
-        Some(match (boolean(&args[0]), self.bus_owned().await) {
-            (Ok(wanted), Ok(owned)) => equal("activated Stet on the bus", owned, wanted),
-            (Err(error), _) | (_, Err(error)) => Err(error),
-        })
     }
 }
 
@@ -938,18 +1043,15 @@ fn read_session(state: &Path) -> Result<Session, String> {
     serde_json::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-/// Deletes the backup of tab `tab` (1-based) in the session in `state`, as a disk problem
-/// could.
-fn drop_backup(state: &Path, tab: usize) -> StepResult {
-    let session = read_session(state)?;
-    let record = session
-        .tabs
-        .get(tab.saturating_sub(1))
-        .ok_or_else(|| format!("the session has no tab {tab}"))?;
-    let id = record
-        .backup
-        .as_deref()
-        .ok_or_else(|| format!("tab {tab} has no backup"))?;
-    fs::remove_file(state.join("backup").join(format!("{id}.txt")))
-        .map_err(|error| error.to_string())
+/// Whether the `session.json` in `state` has `text`, as `wanted`.
+fn session_has(state: &str, text: &str, wanted: bool) -> StepResult {
+    let session = fs::read_to_string(Path::new(state).join("session.json"))
+        .map_err(|error| error.to_string())?;
+    if session.contains(text) == wanted {
+        Ok(())
+    } else if wanted {
+        Err(format!("session.json lacks {text:?}:\n{session}"))
+    } else {
+        Err(format!("session.json has {text:?}:\n{session}"))
+    }
 }

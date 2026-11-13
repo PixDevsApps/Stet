@@ -3,7 +3,7 @@
 
 use super::css::adwaita_css;
 use std::fmt::Write as _;
-use stet_domain::theme::{EditorTheme, Rgb, readable_on};
+use stet_domain::theme::{EditorTheme, Palette, Rgb, readable_on};
 use stet_infrastructure::style_cache::SCHEME_PREFIX;
 
 /// Scheme style for words matching the selection (smart highlighting).
@@ -119,6 +119,14 @@ impl SchemeStyle {
 
 /// Every style the generated scheme defines, in output order.
 fn scheme_styles(theme: &EditorTheme) -> Vec<SchemeStyle> {
+    let mut styles = view_styles(theme);
+    styles.extend(stet_styles(theme));
+    styles.extend(syntax_styles(&theme.palette));
+    styles
+}
+
+/// GtkSourceView's own styles: the text, the selection, the caret, the gutter and so on.
+fn view_styles(theme: &EditorTheme) -> Vec<SchemeStyle> {
     let p = &theme.palette;
     let style = SchemeStyle::new;
     vec![
@@ -148,6 +156,14 @@ fn scheme_styles(theme: &EditorTheme) -> Vec<SchemeStyle> {
         style("search-match").bg(theme.search_match),
         style("snippet-focus").bg(theme.snippet_focus),
         style("map-overlay").bg(p.muted),
+    ]
+}
+
+/// The styles of Stet's own tags: matches, marks, bookmarks and comparisons.
+fn stet_styles(theme: &EditorTheme) -> Vec<SchemeStyle> {
+    let p = &theme.palette;
+    let style = SchemeStyle::new;
+    vec![
         style(SEARCH_CURRENT_STYLE)
             .fg(theme.search_current_text)
             .bg(p.yellow),
@@ -165,6 +181,13 @@ fn scheme_styles(theme: &EditorTheme) -> Vec<SchemeStyle> {
         style(COMPARE_MOVED_STYLE).bg(theme.compare_moved),
         style(COMPARE_INLINE_STYLE).bg(theme.compare_inline),
         style(COMPARE_PAD_STYLE).bg(theme.compare_pad),
+    ]
+}
+
+/// The language definitions' `def:` styles.
+fn syntax_styles(p: &Palette) -> Vec<SchemeStyle> {
+    let style = SchemeStyle::new;
+    vec![
         style("def:comment").fg(p.muted).italic(),
         style("def:doc-comment").fg(p.muted).italic(),
         style("def:shebang").fg(p.muted).bold(),

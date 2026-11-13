@@ -88,6 +88,10 @@ fn ids(session: &Session) -> Vec<&str> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "an inline snapshot of a whole session.json"
+)]
 fn json_format() {
     insta::assert_snapshot!(serde_json::to_string_pretty(&sample()).unwrap(), @r#"
     {

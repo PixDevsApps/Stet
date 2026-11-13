@@ -106,6 +106,10 @@ const JAPANESE: &str =
     "日本語のテキストです。ひらがな、カタカナ、漢字が含まれています。\r\n二行目もあります。\r\n";
 const SIMPLIFIED: &str = "这是一段用简体中文写成的文字，用来测试编码检测。\r\n第二行也在这里。\r\n";
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the fixture corpus, one entry per file, reads best as one table"
+)]
 pub(crate) fn fixtures() -> Vec<Fixture> {
     let wide = "Wide text with a NUL \0, a surrogate pair 🎉 and ü.\r\nNext line.\r\n";
     let no_bom = "UTF-16 without a byte order mark, a NUL \0 and 🎉.\nSecond line.\n";

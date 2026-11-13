@@ -1,8 +1,8 @@
 //! Self-test commands for the keyboard focus: which widget of the window has it, and the
 //! popovers whose closing must give it back to the editor.
 
-use super::script::Step;
-use super::{Harness, StepResult, WAIT_TIMEOUT, equal};
+use super::registry::{Command, commands};
+use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
@@ -10,58 +10,70 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+pub(super) const COMMANDS: &[Command] = commands![
+    "assert-focus" (1, 1) => async assert_focus,
+    "click-tab" (1, 1) => click_tab,
+    "choose-file" (1, 1) => async choose_file,
+    "assert-chooser-name" (1, 1) => async assert_chooser_name,
+    "popup" (1, 1) => popup,
+    "popdown" (1, 1) => popdown,
+];
+
 impl Harness {
-    /// Runs a focus command; `None` when `step` is not one.
-    pub(super) async fn focus_step(&self, step: &Step) -> Option<StepResult> {
-        let arg = |index: usize| step.args[index].as_str();
-        Some(match step.command.as_str() {
-            // GTK moves a focus whose widget was hidden or removed only after the next painted
-            // frame, so the check waits for two frames, and then for idle work, first.
-            "assert-focus" => match self.wait_frames(2).await {
-                Ok(()) => {
-                    self.wait_until_settled().await;
-                    self.check_focus(arg(0))
-                }
-                Err(error) => Err(error),
-            },
-            // What libadwaita's tab strip does for a click on a tab that is not selected:
-            // select its page, then give the page's child the focus.
-            "click-tab" => match super::number(arg(0)) {
-                Ok(index) => match self.window.tab_at(index) {
-                    Some((tabs, tab)) => {
-                        tabs.set_selected_page(&tab);
-                        tab.child().grab_focus();
-                        Ok(())
-                    }
-                    None => Err(format!("there is no tab {index}")),
-                },
-                Err(error) => Err(error),
-            },
-            "choose-file" => self.choose_file(Path::new(arg(0))).await,
-            "assert-chooser-name" => self.chooser_name(arg(0)).await,
-            "popup" => match arg(0) {
-                "palette" => {
-                    self.window.open_palette("");
-                    Ok(())
-                }
-                name => self.menu_button(name).map(|button| button.popup()),
-            },
-            "popdown" => match arg(0) {
-                "palette" => {
-                    self.window.close_palette();
-                    Ok(())
-                }
-                name => self.menu_button(name).map(|button| button.popdown()),
-            },
-            _ => return None,
-        })
+    /// `assert-focus <target>`: the window's focus widget is the target (`editor`, `find`,
+    /// `replace`, `results`, `palette`, `quick-open`, `language`, `encoding`, `indentation` or
+    /// `dialog`), or inside it, and on screen. GTK moves a focus whose widget was hidden or
+    /// removed only after the next painted frame, so the check waits for two frames, and then
+    /// for idle work, first.
+    async fn assert_focus(&self, args: &[String]) -> StepResult {
+        self.wait_frames(2).await?;
+        self.wait_until_settled().await;
+        self.check_focus(&args[0])
     }
 
-    /// Picks `path` in the file chooser that Open or Save As shows and accepts it. Without a
-    /// portal (headless) GTK shows its own chooser dialog in this process; it is driven through
-    /// the deprecated chooser interface, which that dialog still implements.
+    /// `click-tab <n>`: what libadwaita's tab strip does for a click on a tab that is not
+    /// selected: selects its page, then gives the page's child the focus.
+    fn click_tab(&self, args: &[String]) -> StepResult {
+        let index = number(&args[0])?;
+        let (tabs, tab) = self
+            .window
+            .tab_at(index)
+            .ok_or_else(|| format!("there is no tab {index}"))?;
+        tabs.set_selected_page(&tab);
+        tab.child().grab_focus();
+        Ok(())
+    }
+
+    /// `popup palette|language|eol|encoding|indentation|menu`: opens the palette, a status-bar
+    /// button's popover, or the hamburger menu.
+    fn popup(&self, args: &[String]) -> StepResult {
+        match args[0].as_str() {
+            "palette" => {
+                self.window.open_palette("");
+                Ok(())
+            }
+            name => self.menu_button(name).map(|button| button.popup()),
+        }
+    }
+
+    /// `popdown palette|language|eol|encoding|indentation|menu`: closes what `popup` opens.
+    fn popdown(&self, args: &[String]) -> StepResult {
+        match args[0].as_str() {
+            "palette" => {
+                self.window.close_palette();
+                Ok(())
+            }
+            name => self.menu_button(name).map(|button| button.popdown()),
+        }
+    }
+
+    /// `choose-file <path>`: picks the file in the file chooser that Open or Save As shows and
+    /// accepts it. Without a portal (headless) GTK shows its own chooser dialog in this
+    /// process; it is driven through the deprecated chooser interface, which that dialog still
+    /// implements.
     #[allow(deprecated)]
-    async fn choose_file(&self, path: &Path) -> StepResult {
+    async fn choose_file(&self, args: &[String]) -> StepResult {
+        let path = Path::new(&args[0]);
         let started = Instant::now();
         let chooser = open_chooser().await?;
         let refused =
@@ -97,12 +109,12 @@ impl Harness {
         Ok(())
     }
 
-    /// The name the open Save As chooser proposes.
+    /// `assert-chooser-name <name>`: the name the open Save As chooser proposes.
     #[allow(deprecated)]
-    async fn chooser_name(&self, wanted: &str) -> StepResult {
+    async fn assert_chooser_name(&self, args: &[String]) -> StepResult {
         let chooser = open_chooser().await?;
         let proposed = chooser.current_name().map(String::from).unwrap_or_default();
-        equal("the proposed name", proposed, wanted.to_owned())
+        equal("the proposed name", proposed, args[0].clone())
     }
 
     fn menu_button(&self, name: &str) -> Result<gtk::MenuButton, String> {
@@ -117,7 +129,7 @@ impl Harness {
     }
 
     /// Whether the window's focus widget is `target`, or inside it, and on screen.
-    pub(super) fn check_focus(&self, target: &str) -> StepResult {
+    fn check_focus(&self, target: &str) -> StepResult {
         let focus = RootExt::focus(self.window.window());
         let within = |widget: &gtk::Widget| {
             focus

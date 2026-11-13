@@ -228,28 +228,36 @@ impl Window {
         self.run_on_target(
             page,
             Target::Selection(selected),
-            Box::new(move |text, target| {
-                let index = LineIndex::new(text);
-                let Target::Selection(range) = target else {
-                    return Ok(Change::default());
-                };
-                let (offset, line) = (range.start, index.line_of_char(range.start));
-                let column = offset - index.line_chars(line).start;
-                let target = if range.is_empty() {
-                    Target::Lines(line..index.line_count())
-                } else {
-                    Target::Selection(range)
-                };
-                prefix::insert_numbers(text, &target, column, &numbering).map_err(
-                    |overflow: NumberOverflow| SyntaxError {
-                        message: overflow.to_string(),
-                        line: line + 1,
-                        column: column + 1,
-                        offset,
-                    },
-                )
-            }),
+            Box::new(move |text, target| insert_numbers(text, target, &numbering)),
             "Insert Numbers",
         );
     }
+}
+
+/// Insert Numbers on `text` for `target`, a selection: at its start's column, on the lines from
+/// there to the end when it is empty, else on its lines.
+fn insert_numbers(
+    text: &str,
+    target: Target,
+    numbering: &NumberSequence,
+) -> Result<Change, SyntaxError> {
+    let index = LineIndex::new(text);
+    let Target::Selection(range) = target else {
+        return Ok(Change::default());
+    };
+    let (offset, line) = (range.start, index.line_of_char(range.start));
+    let column = offset - index.line_chars(line).start;
+    let target = if range.is_empty() {
+        Target::Lines(line..index.line_count())
+    } else {
+        Target::Selection(range)
+    };
+    prefix::insert_numbers(text, &target, column, numbering).map_err(|overflow: NumberOverflow| {
+        SyntaxError {
+            message: overflow.to_string(),
+            line: line + 1,
+            column: column + 1,
+            offset,
+        }
+    })
 }
