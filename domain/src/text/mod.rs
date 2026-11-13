@@ -1,6 +1,6 @@
 //! Text without a toolkit: character and byte offsets, edits in character offsets (ADR-003),
-//! line endings (ADR-008), lines, selections and word counts. Every item is used from here, as
-//! `text::Item`; the submodules only group the code.
+//! line endings (ADR-008), lines, selections, word counts and how counts are shown. Every item
+//! is used from here, as `text::Item`; the submodules only group the code.
 
 mod chars;
 mod edit;
@@ -9,6 +9,7 @@ mod index;
 mod lines;
 mod offset;
 mod selection;
+mod wording;
 mod words;
 
 pub use chars::{NUL_PLACEHOLDER, fold_char, is_word_char};
@@ -22,4 +23,5 @@ pub use lines::{
 };
 pub use offset::{ByteCursor, CharCursor, LineCursor, char_to_byte, count_chars, next_boundary};
 pub use selection::Selection;
+pub use wording::{counted, grouped, plural};
 pub use words::count_words;

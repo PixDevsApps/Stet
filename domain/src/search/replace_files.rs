@@ -10,7 +10,7 @@
 //!
 //! The words the results panel uses for a run and for the files it leaves alone are here too.
 
-use crate::search::report::counted;
+use crate::text::counted;
 use crate::text::{Eol, EolStats};
 use std::fmt::{self, Write as _};
 use std::ops::Range;

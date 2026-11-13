@@ -19,4 +19,4 @@ pub use meta::{FileMeta, file_meta, fingerprint, fingerprint_of};
 pub use read::{DocInfo, ReadFile, read_file};
 pub use rename::rename_no_replace;
 pub use save::{SaveError, SaveMethod, SaveOptions, SaveOutcome, remove_stale_temps, safe_save};
-pub use size::{MIB, SizeClass, SizePolicy};
+pub use size::{SizeClass, SizePolicy};

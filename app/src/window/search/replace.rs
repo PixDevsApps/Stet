@@ -4,7 +4,7 @@
 
 use super::bar::{BarMode, Field, Tone};
 use super::results::{FileNode, FileTarget};
-use crate::editor::{EditorPage, read_only_message};
+use crate::editor::EditorPage;
 use crate::edits;
 use crate::page_search::Compiled;
 use crate::runtime::worker;
@@ -25,8 +25,9 @@ use stet_domain::document::tilde;
 use stet_domain::search::SearchOptions;
 use stet_domain::search::report::ScopeKind;
 use stet_domain::search::report::{
-    count_message, counted, replace_in_documents_message, replace_message, results_heading,
+    count_message, replace_in_documents_message, replace_message, results_heading,
 };
+use stet_domain::text::counted;
 use stet_infrastructure::files::find::DEFAULT_MAX_HITS;
 use stet_infrastructure::search::{Match, SearchError, document_hits};
 
@@ -89,9 +90,7 @@ impl Window {
             return false;
         }
         if let Some(reason) = page.read_only() {
-            self.inner
-                .find
-                .set_message(read_only_message(reason), Tone::Error);
+            self.inner.find.set_message(reason.message(), Tone::Error);
             return false;
         }
         true

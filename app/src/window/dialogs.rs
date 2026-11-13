@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 use stet_domain::ops::pretty::FormatKind;
-use stet_domain::search::report::plural;
-use stet_domain::text::{LONG_LINE_CHARS, LongestLine};
+use stet_domain::text::plural;
+use stet_domain::text::{LONG_LINE_CHARS, LongestLine, grouped};
 use stet_infrastructure::encoding::{Unmappable, status_label};
 
 /// What About › Details says about Stet, as Pango markup.
@@ -371,19 +371,6 @@ impl Window {
         #[cfg(feature = "selftest")]
         self.inner.last_toast.replace(message.to_owned());
     }
-}
-
-/// `12345678` as `12,345,678`.
-pub fn grouped(number: usize) -> String {
-    let digits = number.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
 }
 
 /// Clicks the dialog's button for `response`, as a user would.

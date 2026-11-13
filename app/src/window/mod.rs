@@ -39,7 +39,7 @@ mod view;
 
 use crate::actions;
 use crate::config::AppConfig;
-use crate::editor::{DocState, EditorPage, ReadOnly, ViewSettings};
+use crate::editor::{DocState, EditorPage, ViewSettings};
 use crate::preferences::Preferences;
 use crate::runtime::worker;
 use crate::theme::Appearance;
@@ -58,7 +58,7 @@ use std::rc::Rc;
 use std::time::Instant;
 use stet_domain::actions::{Accelerator, ActionId, ActionKind};
 use stet_domain::document::location::{self, LineCol};
-use stet_domain::document::{next_untitled_number, tab_title, window_title};
+use stet_domain::document::{ReadOnly, next_untitled_number, tab_title, window_title};
 use stet_domain::nav::RecentFiles;
 use stet_domain::text::Position;
 
@@ -954,10 +954,7 @@ impl Window {
             .into_iter()
             .filter_map(|page| page.state().untitled);
         let number = next_untitled_number(used);
-        let page = self.add_page(DocState {
-            untitled: Some(number),
-            ..DocState::default()
-        });
+        let page = self.add_page(DocState::untitled(number));
         page.view().grab_focus();
         page
     }
@@ -1102,12 +1099,15 @@ impl Window {
             |language| language.name().to_string(),
         ));
         let state = page.state();
-        let (encoding, eol) = encoding::format_labels(&state.format, state.mixed_eol);
+        let (encoding, eol) = encoding::format_labels(&state.save.format, state.eol.mixed);
         status.set_eol(eol);
         status.set_encoding(&encoding);
         status.set_overwrite(view.overwrites());
         self.inner.encodings.prepare(
-            stet_infrastructure::encoding::entry_for(state.format.encoding, state.format.bom),
+            stet_infrastructure::encoding::entry_for(
+                state.save.format.encoding,
+                state.save.format.bom,
+            ),
             state.path.is_some(),
         );
     }
@@ -1331,7 +1331,7 @@ impl Window {
                 name,
             } => {
                 let page = self.new_untitled();
-                page.update_state(|state| state.custom_name = name);
+                page.set_custom_name(name);
                 let buffer = page.buffer();
                 buffer.begin_irreversible_action();
                 buffer.set_text(&text);

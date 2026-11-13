@@ -251,26 +251,54 @@ impl Window {
 /// lines by LF; the tab shows a decoding error as U+FFFD.
 fn searched_from_memory(state: &DocState, dirty: bool) -> bool {
     dirty
-        || !find_in_files::reads_as_text(state.format.encoding, state.format.bom)
+        || !find_in_files::reads_as_text(state.save.format.encoding, state.save.format.bom)
         || state.lossy()
-        || state.nul_count > 0
-        || state.eol_stats.cr > 0
+        || state.nul_count() > 0
+        || state.eol_stats().cr > 0
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use stet_infrastructure::encoding::Encoding;
+    use stet_domain::document::Loss;
+    use stet_domain::text::EolStats;
+    use stet_infrastructure::encoding::{Detection, DetectionSource, Encoding};
+    use stet_infrastructure::fs::DecodeReport;
+
+    /// A document read from a UTF-8 file of which decoding reported `change`.
+    fn decoded(change: fn(&mut DecodeReport)) -> DocState {
+        let encoding = Encoding::for_label(b"utf-8").unwrap();
+        let mut report = DecodeReport {
+            encoding,
+            bom: false,
+            eol_stats: EolStats::default(),
+            detection: Detection {
+                encoding,
+                bom: false,
+                source: DetectionSource::ValidUtf8,
+                binary: false,
+            },
+            had_errors: false,
+            lossy_roundtrip: false,
+            nul_count: 0,
+            placeholder_conflict: false,
+        };
+        change(&mut report);
+        let mut state = DocState::default();
+        state.decode = Some(report);
+        state
+    }
 
     #[test]
     fn documents_that_the_file_search_would_read_differently_come_from_memory() {
         let clean = DocState::default();
         assert!(!searched_from_memory(&clean, false));
         assert!(searched_from_memory(&clean, true));
+        assert!(!searched_from_memory(&decoded(|_| {}), false));
         let with = |label: &str, bom: bool| {
             let mut state = DocState::default();
-            state.format.encoding = Encoding::for_label(label.as_bytes()).unwrap();
-            state.format.bom = bom;
+            state.save.format.encoding = Encoding::for_label(label.as_bytes()).unwrap();
+            state.save.format.bom = bom;
             searched_from_memory(&state, false)
         };
         assert!(!with("utf-8", true));
@@ -278,13 +306,13 @@ mod tests {
         assert!(with("utf-16le", false));
         assert!(with("windows-1252", false));
         assert!(with("shift_jis", false));
-        for change in [
-            |state: &mut DocState| state.nul_count = 1,
-            |state: &mut DocState| state.eol_stats.cr = 1,
-            |state: &mut DocState| state.had_errors = true,
+        let mut lossy = DocState::default();
+        lossy.loss = Some(Loss::Malformed);
+        for state in [
+            decoded(|report| report.nul_count = 1),
+            decoded(|report| report.eol_stats.cr = 1),
+            lossy,
         ] {
-            let mut state = DocState::default();
-            change(&mut state);
             assert!(searched_from_memory(&state, false), "{state:?}");
         }
     }

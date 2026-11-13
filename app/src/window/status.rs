@@ -13,8 +13,8 @@ use gtk4::prelude::*;
 use gtk4::{gio, glib};
 use std::cell::RefCell;
 use std::time::Duration;
-use stet_domain::search::report::plural;
-use stet_domain::text::count_words;
+use stet_domain::text::plural;
+use stet_domain::text::{count_words, grouped};
 
 /// How long the text must rest before its words are counted again.
 const WORD_COUNT_DELAY: Duration = Duration::from_millis(250);
@@ -287,9 +287,4 @@ impl Window {
             });
         });
     }
-}
-
-/// `12345` as `12,345`.
-fn grouped(number: usize) -> String {
-    super::dialogs::grouped(number)
 }

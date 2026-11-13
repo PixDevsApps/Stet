@@ -6,8 +6,9 @@
 use super::dialogs::{Purpose, UnmappableChoice};
 use super::snapshot::PageSnapshot;
 use super::{PickerMode, Window};
-use crate::editor::{EditorPage, ReadOnly};
+use crate::editor::EditorPage;
 use crate::runtime::worker;
+use stet_domain::document::ReadOnly;
 use stet_domain::text::Eol;
 use stet_infrastructure::encoding::{
     ENCODINGS, EncodingEntry, check_encodable, entry_for_id, status_label,
@@ -130,7 +131,7 @@ impl Window {
         if page.is_loading() || page.read_only() == Some(ReadOnly::DisplayBreaks) {
             return;
         }
-        let format = page.state().format;
+        let format = page.state().save.format;
         let label = entry.short_label();
         if format.encoding == entry.encoding && format.bom == entry.bom {
             self.toast(&format!("“{}” is already {label}", page.name()));
@@ -165,13 +166,7 @@ impl Window {
     }
 
     fn set_encoding(&self, page: &EditorPage, entry: &EncodingEntry) {
-        let changed =
-            page.state().format.encoding != entry.encoding || page.state().format.bom != entry.bom;
-        page.update_state(|state| {
-            state.format.encoding = entry.encoding;
-            state.format.bom = entry.bom;
-            state.format_changed |= changed;
-        });
+        page.convert_encoding(entry.encoding, entry.bom);
         self.refresh_banners(page);
         self.refresh_page(page);
         self.toast(&format!(
@@ -186,14 +181,7 @@ impl Window {
         if page.is_loading() || page.read_only() == Some(ReadOnly::DisplayBreaks) {
             return;
         }
-        let state = page.state();
-        let changed = state.format.eol != eol || state.mixed_eol;
-        page.update_state(|state| {
-            state.format.eol = eol;
-            state.mixed_eol = false;
-            state.mixed_kept = false;
-            state.format_changed |= changed;
-        });
+        page.convert_eol(eol);
         self.refresh_banners(page);
         self.refresh_page(page);
     }

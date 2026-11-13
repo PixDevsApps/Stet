@@ -1,6 +1,6 @@
 use std::fmt;
 
-pub const MIB: u64 = 1024 * 1024;
+use stet_domain::document::MIB;
 
 /// When a file opens in large-file mode and when it is refused (PRD; technical critique #15).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

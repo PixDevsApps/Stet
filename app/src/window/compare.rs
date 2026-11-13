@@ -15,7 +15,7 @@
 //! the two sides' lines stay level.
 
 use super::Window;
-use crate::editor::{DocState, EditorPage, LOAD_WAIT, ReadOnly};
+use crate::editor::{DocState, EditorPage, LOAD_WAIT};
 use crate::runtime::{Debounce, Latest, Ticket, connect_once, worker};
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
@@ -314,15 +314,7 @@ impl Window {
     /// language; it stays out of the session and closes with the comparison.
     fn open_temporary(&self, beside: &EditorPage, label: String, text: &str) -> EditorPage {
         let view = 1 - self.view_of(beside).unwrap_or(0);
-        let page = self.add_page_in(
-            view,
-            DocState {
-                temporary: Some(label),
-                read_only: Some(ReadOnly::Comparison),
-                ..DocState::default()
-            },
-            false,
-        );
+        let page = self.add_page_in(view, DocState::comparison(label), false);
         let buffer = page.buffer();
         buffer.begin_irreversible_action();
         buffer.set_text(text);
@@ -330,7 +322,6 @@ impl Window {
         buffer.set_modified(false);
         buffer.place_cursor(&buffer.start_iter());
         page.set_language(beside.language().as_ref());
-        page.set_read_only(Some(ReadOnly::Comparison));
         if let Some((index, tab_page)) = self.locate(&page) {
             self.inner.views[index].tabs.set_selected_page(&tab_page);
         }

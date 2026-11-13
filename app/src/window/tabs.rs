@@ -459,7 +459,7 @@ impl Window {
             Some(typed.to_owned())
         };
         if custom != given {
-            page.update_state(|state| state.custom_name = custom);
+            page.set_custom_name(custom);
             self.refresh_page(page);
         }
     }
@@ -500,10 +500,7 @@ impl Window {
         .await;
         match renamed {
             Some(Ok(canonical)) => {
-                page.update_state(|state| {
-                    state.path = Some(target.clone());
-                    state.canonical = Some(canonical);
-                });
+                page.moved_to(target.clone(), canonical);
                 self.watch_file(page);
                 self.inner.shared.remove_recent(&path);
                 self.inner.shared.add_recent(target);

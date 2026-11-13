@@ -358,9 +358,9 @@ impl Harness {
                 page.is_dirty(),
                 hasher.finish(),
                 text.chars().count(),
-                state.format.encoding.name(),
-                if state.format.bom { "+bom" } else { "" },
-                state.format.eol.label(),
+                state.save.format.encoding.name(),
+                if state.save.format.bom { "+bom" } else { "" },
+                state.save.format.eol.label(),
                 state.chosen.map_or_else(
                     || "-".to_owned(),
                     |choice| choice.encoding.name().to_owned()

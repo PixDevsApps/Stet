@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 use std::time::Duration;
 
 use super::{SearchOptions, TemplateWarning};
+use crate::text::counted;
 
 /// The part of the document that Count and Replace All covered: the rows of
 /// [`SearchOptions::scope`].
@@ -36,16 +37,6 @@ impl SearchOptions {
             () => ScopeKind::FromCaret,
         }
     }
-}
-
-/// `one` for a count of 1, `many` for any other.
-pub fn plural<'a>(count: usize, one: &'a str, many: &'a str) -> &'a str {
-    if count == 1 { one } else { many }
-}
-
-/// `1 match`, `3 matches`.
-pub fn counted(count: usize, one: &str, many: &str) -> String {
-    format!("{count} {}", plural(count, one, many))
 }
 
 /// The find bar's report after Count.
@@ -250,15 +241,6 @@ mod tests {
             results_heading("x", 1, 1, None),
             "Search “x” (1 hit in 1 file)"
         );
-    }
-
-    #[test]
-    fn plurals() {
-        assert_eq!(plural(1, "line", "lines"), "line");
-        assert_eq!(plural(0, "line", "lines"), "lines");
-        assert_eq!(plural(2, "line", "lines"), "lines");
-        assert_eq!(counted(1, "hit", "hits"), "1 hit");
-        assert_eq!(counted(0, "hit", "hits"), "0 hits");
     }
 
     #[test]

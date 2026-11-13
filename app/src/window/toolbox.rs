@@ -7,7 +7,7 @@
 
 use super::Window;
 use super::snapshot::{PageSnapshot, Stale, is_small, run_sized};
-use crate::editor::{EditorPage, read_only_message};
+use crate::editor::EditorPage;
 use crate::edits;
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -15,6 +15,7 @@ use sourceview5::prelude::*;
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
+use stet_domain::document::ReadOnly;
 use stet_domain::document::indent::Indentation;
 use stet_domain::marks::Footprint;
 use stet_domain::ops::case::{self, Case};
@@ -363,7 +364,7 @@ impl Window {
         } else if page.is_busy() {
             Some("The previous text tool is still running")
         } else {
-            page.read_only().map(read_only_message)
+            page.read_only().map(ReadOnly::message)
         };
         match reason {
             Some(reason) => {

@@ -9,24 +9,6 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-/// What a banner is about. Banners stack in this order, the most urgent on top.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum BannerKind {
-    Loading,
-    Disk,
-    /// What restoring the session found: a file changed since its backup, or unsaved
-    /// changes that could not be restored.
-    Restore,
-    ReadOnly,
-    Binary,
-    Lossy,
-    Placeholder,
-    MixedEol,
-    LongLines,
-    LargeFile,
-    Highlighting,
-}
-
 /// A banner's button: its label and what it does.
 pub struct BannerButton {
     pub label: String,
@@ -127,14 +109,17 @@ impl Banner {
         self.root.set_visible(false);
     }
 
+    #[cfg(feature = "selftest")]
     pub fn is_shown(&self) -> bool {
         self.root.is_visible()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn title(&self) -> String {
         self.label.label().to_string()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn button_labels(&self) -> Vec<String> {
         self.buttons
             .borrow()
@@ -145,6 +130,7 @@ impl Banner {
 
     /// Presses the button labelled `label` the way the keyboard does, with the focus on it
     /// (for the self-test).
+    #[cfg(feature = "selftest")]
     pub fn click(&self, label: &str) -> bool {
         let button = self
             .buttons

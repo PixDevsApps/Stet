@@ -5,18 +5,16 @@
 
 use super::dialogs::{LongLineChoice, Purpose, UnmappableChoice};
 use super::{Location, Window};
-use crate::editor::{
-    DiskState, DocState, EditorPage, ReadOnly, TextOrigin, Unwritable, read_only_message,
-};
+use crate::editor::{DocState, EditorPage};
 use crate::loader;
 use crate::runtime::worker;
 use gtk4::gio;
 use sourceview5::prelude::*;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use stet_domain::document::indent;
 use stet_domain::document::language as hints;
 use stet_domain::document::language::HEAD_BYTES;
+use stet_domain::document::{MIB, ReadOnly, TextOrigin, Unwritable, indent};
 use stet_domain::ops::pretty::{self, FormatKind};
 use stet_domain::text::{
     DISPLAY_BREAK_CHARS, LONG_LINE_CHARS, LongestLine, Position, break_long_lines, line_count,
@@ -24,8 +22,8 @@ use stet_domain::text::{
 };
 use stet_infrastructure::encoding::status_label;
 use stet_infrastructure::fs::{
-    DocInfo, DocumentFormat, LoadError, MIB, ReadFile, SaveError, SaveOptions, SaveOutcome,
-    read_file, remove_stale_temps, save_document,
+    DocumentFormat, LoadError, ReadFile, SaveError, SaveOptions, SaveOutcome, read_file,
+    remove_stale_temps, save_document,
 };
 
 /// Temporary files that interrupted saves left next to a file are removed after it is saved
@@ -138,10 +136,7 @@ impl Window {
                 opened.push(page);
                 continue;
             }
-            let page = self.add_page(DocState {
-                path: Some(location.path.clone()),
-                ..DocState::default()
-            });
+            let page = self.add_page(DocState::file(location.path.clone()));
             page.set_loading(true);
             page.update_load_stats(|stats| stats.started = Some(Instant::now()));
             self.refresh_page(&page);
@@ -263,7 +258,7 @@ impl Window {
             .flatten();
         let started = page.load_stats().started.unwrap_or_else(Instant::now);
         page.begin_load(started);
-        page.update_state(|state| apply_info(state, &info, origin));
+        page.set_file_info(&info, origin);
         // Now the document knows whether it is in large-file mode: an open find bar must not
         // highlight every match while the text streams in.
         if self.current_page().as_ref() == Some(page) {
@@ -279,11 +274,8 @@ impl Window {
             }
             _ => previous.or_else(|| Self::guess_language(page, &head)),
         };
-        let large = page.large_file_mode();
-        let limited = !self.settings().highlight_by_default(total, lines);
-        page.update_state(|state| state.highlight_limited = limited && !large);
         page.set_language(language.as_ref());
-        page.set_highlighting(!large && !limited);
+        page.limit_highlighting(!self.settings().highlight_by_default(total, lines));
         page.apply_settings(self.inner.settings.get());
         self.indentation_after_load(page, detected);
         page.end_load();
@@ -461,7 +453,7 @@ impl Window {
         }
         match page.read_only() {
             Some(reason @ (ReadOnly::Binary | ReadOnly::DisplayBreaks)) => {
-                self.toast(read_only_message(reason));
+                self.toast(reason.message());
                 false
             }
             _ => true,
@@ -488,18 +480,18 @@ impl Window {
         loop {
             let text = page.text();
             let revision = page.revision();
-            let format = page.state().format;
+            let format = page.state().save.format;
             let options =
                 SaveOptions::new(self.inner.shared.config.dirs.state.join(SAVE_BACKUPS_DIR));
             let target = path.clone();
-            page.update_state(|state| state.saving = true);
+            page.begin_save();
             let result = worker::run(move || {
                 let outcome = save_document(&target, &text, &format, &options)?;
                 remove_stale_temps(&outcome.target, STALE_TEMP_AGE);
                 Ok::<_, SaveError>(outcome)
             })
             .await;
-            page.update_state(|state| state.saving = false);
+            page.end_save();
             let name = page.name();
             match result {
                 Some(Ok(outcome)) => {
@@ -512,11 +504,7 @@ impl Window {
                         .await
                     {
                         UnmappableChoice::UseUtf8 => {
-                            page.update_state(|state| {
-                                state.format.encoding = DocumentFormat::default().encoding;
-                                state.format.bom = false;
-                                state.format_changed = true;
-                            });
+                            page.convert_encoding(DocumentFormat::default().encoding, false);
                             self.refresh_page(page);
                         }
                         UnmappableChoice::GoTo(offset) => {
@@ -527,15 +515,13 @@ impl Window {
                     }
                 }
                 Some(Err(SaveError::PermissionDenied { .. })) => {
-                    page.update_state(|state| state.unwritable = Some(Unwritable::Permission));
+                    page.set_unwritable(Unwritable::Permission);
                     self.refresh_banners(page);
                     self.toast(&format!("You may not write “{name}”"));
                     return false;
                 }
                 Some(Err(SaveError::ReadOnlyFilesystem { .. })) => {
-                    page.update_state(|state| {
-                        state.unwritable = Some(Unwritable::ReadOnlyFilesystem);
-                    });
+                    page.set_unwritable(Unwritable::ReadOnlyFilesystem);
                     self.refresh_banners(page);
                     self.toast(&format!("“{name}” is on a read-only file system"));
                     return false;
@@ -570,7 +556,7 @@ impl Window {
         let state = page.state();
         let name = page.name();
         if let TextOrigin::Formatted(kind) = state.origin
-            && !state.save_confirmed
+            && !state.save.confirmed
         {
             let confirmed = self
                 .confirm(
@@ -586,10 +572,10 @@ impl Window {
             if !confirmed {
                 return false;
             }
-            page.update_state(|state| state.save_confirmed = true);
+            page.confirm_save();
         }
-        if state.lossy() && !state.save_confirmed {
-            let encoding = status_label(state.format.encoding, state.format.bom);
+        if state.lossy() && !state.save.confirmed {
+            let encoding = status_label(state.save.format.encoding, state.save.format.bom);
             let confirmed = self
                 .confirm(
                     &format!("Save “{name}” anyway?"),
@@ -605,10 +591,10 @@ impl Window {
             if !confirmed {
                 return false;
             }
-            page.update_state(|state| state.save_confirmed = true);
+            page.confirm_save();
         }
-        if state.mixed_eol {
-            let eol = state.format.eol.label();
+        if state.eol.mixed {
+            let eol = state.save.format.eol.label();
             return self
                 .confirm(
                     &format!("Save “{name}” with {eol} line endings?"),
@@ -636,27 +622,7 @@ impl Window {
         announce: bool,
     ) {
         let renamed = page.path().as_deref() != Some(path.as_path());
-        page.update_state(|state| {
-            state.path = Some(path.clone());
-            state.canonical = Some(outcome.target.clone());
-            state.untitled = None;
-            state.baseline = Some(outcome.fingerprint);
-            state.disk = DiskState::Same;
-            state.had_errors = false;
-            state.lossy_roundtrip = false;
-            state.mixed_eol = false;
-            state.mixed_kept = false;
-            state.origin = TextOrigin::File;
-            state.unwritable = None;
-            state.save_confirmed = false;
-            if state.read_only == Some(ReadOnly::NotWritable) {
-                state.read_only = None;
-            }
-            if state.format == written {
-                state.format_changed = false;
-            }
-        });
-        page.set_read_only(page.read_only());
+        page.saved_to(path.clone(), outcome, written);
         if page.revision() == revision {
             page.buffer().set_modified(false);
         }
@@ -675,38 +641,6 @@ impl Window {
             self.toast(&format!("Saved “{}”", page.name()));
         }
     }
-}
-
-/// Copies what decoding found into the document model.
-pub(super) fn apply_info(state: &mut DocState, info: &DocInfo, origin: TextOrigin) {
-    let report = &info.report;
-    state.canonical = Some(info.meta.canonical.clone());
-    state.format = report.format();
-    state.detection = Some(report.detection.source);
-    state.eol_stats = report.eol_stats;
-    state.mixed_eol = report.mixed_eol() && origin == TextOrigin::File;
-    state.mixed_kept = false;
-    state.had_errors = report.had_errors;
-    state.lossy_roundtrip = report.lossy_roundtrip;
-    state.binary = report.binary();
-    state.nul_count = report.nul_count;
-    state.placeholder_conflict = report.placeholder_conflict;
-    state.class = info.class;
-    state.origin = origin;
-    state.baseline = Some(info.meta.fingerprint());
-    state.disk = DiskState::Same;
-    state.format_changed = false;
-    state.save_confirmed = false;
-    state.unwritable = (!info.meta.writable).then_some(Unwritable::Permission);
-    state.read_only = if origin == TextOrigin::DisplayBreaks {
-        Some(ReadOnly::DisplayBreaks)
-    } else if report.binary() {
-        Some(ReadOnly::Binary)
-    } else if !info.meta.writable {
-        Some(ReadOnly::NotWritable)
-    } else {
-        None
-    };
 }
 
 /// Why a file didn't open, for a toast.

@@ -12,7 +12,7 @@ use super::super::bar::{Field, FilesRequest, Tone};
 use super::super::replace::apply_tracked;
 use super::super::results::{FileNode, FileTarget};
 use super::{Feed, FilesSearch, RunSlot, StreamingRun};
-use crate::editor::{EditorPage, LOAD_WAIT, TextOrigin};
+use crate::editor::{EditorPage, LOAD_WAIT};
 use crate::page_search::Compiled;
 use crate::runtime::{Ticket, worker};
 use crate::window::Window;
@@ -25,10 +25,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use stet_domain::document::tilde;
+use stet_domain::document::{TextOrigin, tilde};
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{DocumentOutcome, Skip, file_summary, heading};
-use stet_domain::search::report::{counted, replace_in_files_progress, replace_in_files_status};
+use stet_domain::search::report::{replace_in_files_progress, replace_in_files_status};
+use stet_domain::text::counted;
 use stet_infrastructure::files::find::DEFAULT_MAX_HITS;
 use stet_infrastructure::files::replace::{
     self as rif, FILE_HIT_LIMIT, RifCounters, RifEvent, RifRequest, RifSummary, replaced_hits,
@@ -623,10 +624,10 @@ impl Window {
     async fn saves_exactly(&self, page: &EditorPage) -> bool {
         let state = page.state();
         if state.lossy()
-            || state.mixed_eol
+            || state.eol.mixed
             || state.origin != TextOrigin::File
-            || state.read_only.is_some()
-            || state.format_changed
+            || state.read_only().is_some()
+            || state.save.format_changed
         {
             return false;
         }

@@ -8,8 +8,7 @@
 use super::Window;
 use super::files::Caret;
 use super::snapshot::{PageSnapshot, Stale};
-use crate::banner::BannerKind;
-use crate::editor::{DiskState, EditorPage, TextOrigin};
+use crate::editor::EditorPage;
 use crate::loader::CHUNK_BYTES;
 use crate::monitor::FileWatch;
 use crate::runtime::worker;
@@ -17,6 +16,8 @@ use gtk4::prelude::*;
 use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use stet_domain::document::banners::BannerKind;
+use stet_domain::document::{DiskState, TextOrigin};
 use stet_domain::marks::Footprint;
 use stet_domain::session::Fingerprint;
 use stet_domain::text::{LONG_LINE_CHARS, LineIndex, TextEdit, minimal_edit};
@@ -83,8 +84,10 @@ impl Window {
             .filter_map(|page| {
                 let state = page.state();
                 let baseline = state.baseline?;
-                let path = state.path?;
-                (!state.loading && !state.saving).then_some((page, path, baseline))
+                if state.is_busy_with_file() {
+                    return None;
+                }
+                Some((page, state.path?, baseline))
             })
             .collect();
         if checked.is_empty() {
@@ -103,7 +106,7 @@ impl Window {
         };
         for ((page, path, baseline), result) in checked.into_iter().zip(results) {
             let state = page.state();
-            if state.loading || state.saving || state.baseline != Some(baseline) {
+            if state.is_busy_with_file() || state.baseline != Some(baseline) {
                 continue;
             }
             if state.path.as_deref() != Some(path.as_path()) || self.tab_page(&page).is_none() {
@@ -139,7 +142,7 @@ impl Window {
             return;
         }
         if state.disk != DiskState::Changed {
-            page.update_state(|state| state.disk = DiskState::Changed);
+            page.disk_changed();
             self.refresh_banners(page);
         }
         tracing::debug!(
@@ -154,10 +157,7 @@ impl Window {
             page.state().disk,
             DiskState::Deleted { clean_revision } if clean_revision == Some(page.revision())
         );
-        page.update_state(|state| {
-            state.disk = DiskState::Same;
-            state.baseline = Some(now);
-        });
+        page.disk_settled(now);
         if clean {
             page.buffer().set_modified(false);
         }
@@ -170,7 +170,7 @@ impl Window {
             return;
         }
         let clean_revision = (!page.is_dirty()).then(|| page.revision());
-        page.update_state(|state| state.disk = DiskState::Deleted { clean_revision });
+        page.disk_deleted(clean_revision);
         page.buffer().set_modified(true);
         self.refresh_banners(page);
         self.refresh_page(page);
@@ -221,10 +221,7 @@ impl Window {
         self.spawn(async move {
             let now = worker::run(move || fingerprint(&path)).await;
             if let Some(Ok(now)) = now {
-                page.update_state(|state| {
-                    state.baseline = Some(now);
-                    state.disk = DiskState::Same;
-                });
+                page.disk_settled(now);
             }
             window.refresh_banners(&page);
         });
@@ -269,7 +266,7 @@ impl Window {
             Err(Stale::Closed) => return false,
             Err(_) => {
                 if quiet {
-                    page.update_state(|state| state.disk = DiskState::Changed);
+                    page.disk_changed();
                     self.refresh_banners(page);
                 }
                 return false;
@@ -341,8 +338,7 @@ impl Window {
             page.place_cursor(caret);
             page.set_scroll_position(scroll);
         }
-        page.update_state(|state| super::files::apply_info(state, &info, TextOrigin::File));
-        page.set_read_only(page.read_only());
+        page.set_file_info(&info, TextOrigin::File);
         buffer.set_modified(false);
         page.hide_banner(BannerKind::Disk);
         self.refresh_banners(page);
@@ -375,7 +371,7 @@ impl Window {
         match result {
             Some(Ok(read)) => {
                 if self.fill(page, read, origin, caret).await {
-                    page.update_state(|state| state.chosen = choice);
+                    page.set_encoding_choice(choice);
                     true
                 } else {
                     page.set_loading(false);

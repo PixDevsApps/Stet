@@ -1,17 +1,24 @@
-//! Documents: their names and titles, how paths are shown, and what is detected from their
-//! text (indentation, language) or named on the command line (a line and column).
+//! Documents: their names and titles, how paths are shown, what is detected from their text
+//! (indentation, language) or named on the command line (a line and column), what their state
+//! says about their file, and the banners that state calls for.
 
+pub mod banners;
 pub mod indent;
 pub mod language;
 pub mod location;
+mod state;
 mod untitled;
 
 use std::path::{Path, PathBuf};
 
+pub use state::{DiskState, Loss, ReadOnly, TextOrigin, Unwritable};
 pub use untitled::{
     FIRST_LINE_CHARS, FIRST_LINE_READ, FIRST_LINE_SCAN, extension_from_globs, first_line_name,
     next_untitled_number, save_file_name, untitled_name,
 };
+
+/// A mebibyte: file sizes are limited and shown in it.
+pub const MIB: u64 = 1024 * 1024;
 
 /// The application's name, as window titles show it.
 pub const APP_NAME: &str = "Stet";

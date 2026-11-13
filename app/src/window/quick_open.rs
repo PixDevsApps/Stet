@@ -27,6 +27,7 @@ use stet_domain::document::tilde;
 use stet_domain::nav::quick_open::{
     PROJECT_FILE_CAP, Request, Row, SHOWN_LIMIT, Source, rank_groups, runs,
 };
+use stet_domain::text::grouped;
 use stet_infrastructure::files::CancelToken;
 use stet_infrastructure::files::project::{WalkSummary, project_root, walk_project};
 
@@ -386,7 +387,7 @@ impl QuickOpen {
         };
         let home = std::env::home_dir();
         let root = tilde(root, home.as_deref());
-        let files = super::dialogs::grouped(state.stats.files);
+        let files = grouped(state.stats.files);
         let label = match state.stats.walk {
             None => format!("Listing the files in {root}… {files} so far"),
             Some(summary) if summary.truncated => {

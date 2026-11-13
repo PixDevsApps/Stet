@@ -22,8 +22,8 @@
 use super::Window;
 use super::dialogs::SaveChoice;
 use super::files::Caret;
-use crate::banner::{BannerButton, BannerKind};
-use crate::editor::{DiskState, DocState, EditorPage, LoadStats, ReadOnly, TextOrigin, Unwritable};
+use crate::banner::BannerButton;
+use crate::editor::{DocState, EditorPage, LoadStats};
 use crate::loader;
 use crate::runtime::{Notify, connect_once, wait_until, worker};
 use crate::session::{FLUSH_TIMEOUT, LOCK_RETRY, unavailable_message};
@@ -36,8 +36,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use stet_domain::document::banners::BannerKind;
 use stet_domain::document::language::HEAD_BYTES;
-use stet_domain::document::next_untitled_number;
+use stet_domain::document::{DiskState, Loss, TextOrigin, next_untitled_number};
 use stet_domain::nav::RecentFiles;
 use stet_domain::search::{HISTORY_LIMIT, History, SearchHistory};
 use stet_domain::session::{
@@ -329,29 +330,22 @@ impl Window {
 
     /// A tab for `record`, in its view, that loads its text when first shown.
     fn add_stub(&self, record: &TabRecord, backup_missing: bool) -> EditorPage {
-        let untitled = record.path.is_none().then(|| {
-            record.untitled_number.unwrap_or_else(|| {
-                next_untitled_number(
-                    self.pages()
-                        .into_iter()
-                        .filter_map(|page| page.state().untitled),
-                )
-            })
-        });
-        let page = self.add_page_in(
-            record.view.index(),
-            DocState {
-                path: record.path.clone(),
-                untitled,
-                custom_name: record
-                    .path
-                    .is_none()
-                    .then(|| record.custom_name.clone())
-                    .flatten(),
-                ..DocState::default()
-            },
-            false,
-        );
+        let state = match &record.path {
+            Some(path) => DocState::file(path.clone()),
+            None => {
+                let number = record.untitled_number.unwrap_or_else(|| {
+                    next_untitled_number(
+                        self.pages()
+                            .into_iter()
+                            .filter_map(|page| page.state().untitled),
+                    )
+                });
+                let mut state = DocState::untitled(number);
+                state.custom_name.clone_from(&record.custom_name);
+                state
+            }
+        };
+        let page = self.add_page_in(record.view.index(), state, false);
         let lost = backup_missing || (record.dirty && record.backup.is_none());
         page.update_session(|session| {
             session.id = record.id.clone();
@@ -401,13 +395,7 @@ impl Window {
                 .into_iter()
                 .filter_map(|page| page.state().untitled),
         );
-        let page = self.add_page_with(
-            DocState {
-                untitled: Some(number),
-                ..DocState::default()
-            },
-            false,
-        );
+        let page = self.add_page_with(DocState::untitled(number), false);
         page.update_session(|session| session.orphan = Some(orphan.path));
         page.set_loading(true);
         let window = self.clone();
@@ -565,7 +553,7 @@ impl Window {
         let mut conflict = false;
         page.update_state(|state| {
             let default = DocumentFormat::default();
-            state.format = DocumentFormat {
+            state.save.format = DocumentFormat {
                 encoding: record
                     .encoding
                     .as_deref()
@@ -581,7 +569,7 @@ impl Window {
                 .and_then(entry_for_id)
                 .map(EncodingChoice::from);
             // Saving still can't write the file's bytes back; the save asks first.
-            state.lossy_roundtrip = record.lossy;
+            state.loss = record.lossy.then_some(Loss::NotRoundTrip);
             state.class = if text.len() as u64 >= SizePolicy::default().large_from {
                 SizeClass::Large
             } else {
@@ -607,8 +595,7 @@ impl Window {
                         DiskState::Same
                     };
                     if !meta.writable {
-                        state.unwritable = Some(Unwritable::Permission);
-                        state.read_only = Some(ReadOnly::NotWritable);
+                        state.deny_writes();
                     }
                 }
                 Some(Err(error)) if error.kind() == io::ErrorKind::NotFound => {
@@ -656,11 +643,8 @@ impl Window {
             return;
         }
         let language = language.or_else(|| Self::guess_language(page, &head));
-        let large = page.large_file_mode();
-        let limited = !self.settings().highlight_by_default(total, lines);
-        page.update_state(|state| state.highlight_limited = limited && !large);
         page.set_language(language.as_ref());
-        page.set_highlighting(!large && !limited);
+        page.limit_highlighting(!self.settings().highlight_by_default(total, lines));
         page.apply_settings(self.inner.settings.get());
         page.end_load();
         page.buffer().set_modified(true);
@@ -691,7 +675,7 @@ impl Window {
                     }
                     return false;
                 }
-                page.update_state(|state| state.chosen = choice);
+                page.set_encoding_choice(choice);
                 if let Some(language) = record
                     .language
                     .as_deref()
@@ -1088,10 +1072,10 @@ impl Window {
                 page.is_dirty() && !session.discarded
             },
             backup: session.backup.then(|| session.id.clone()),
-            read_only: state.read_only.is_some(),
-            encoding: Some(state.format.encoding.name().to_owned()),
-            bom: Some(state.format.bom),
-            eol: Some(state.format.eol),
+            read_only: state.read_only().is_some(),
+            encoding: Some(state.save.format.encoding.name().to_owned()),
+            bom: Some(state.save.format.bom),
+            eol: Some(state.save.format.eol),
             language: page.language().map(|language| language.id().to_string()),
             caret,
             selection,

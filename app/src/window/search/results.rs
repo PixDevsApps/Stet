@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use stet_domain::actions::ActionId;
 use stet_domain::document::location::LineCol;
-use stet_domain::search::report::counted;
+use stet_domain::text::counted;
 use stet_infrastructure::search::Hit;
 
 /// Searches kept in the panel; older ones are dropped.
