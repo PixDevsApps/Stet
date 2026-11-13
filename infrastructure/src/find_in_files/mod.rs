@@ -36,10 +36,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::Sender;
 use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE};
 use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
+use std::sync::mpsc::Sender;
 use stet_domain::search::Query;
 
 use crate::search::{Hit, Matcher, PatternError, SearchError, document_hits};
@@ -289,7 +289,7 @@ fn run<S>(
 where
     S: FnMut(FileHits) + Send + 'static,
 {
-    let (sender, receiver) = crossbeam_channel::unbounded::<FileHits>();
+    let (sender, receiver) = std::sync::mpsc::channel::<FileHits>();
     let dispatch_cancelled = Arc::clone(cancelled);
     let dispatcher = thread::Builder::new()
         .name("stet-find-in-files-sink".to_owned())

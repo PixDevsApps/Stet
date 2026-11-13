@@ -9,6 +9,7 @@ mod config;
 mod editor;
 mod edits;
 mod loader;
+mod logging;
 #[expect(unsafe_code, reason = "a GtkSourceView call the bindings lack")]
 mod marks;
 mod monitor;
@@ -28,7 +29,7 @@ use std::time::Instant;
 
 fn main() -> ExitCode {
     let started = Instant::now();
-    if let Err(error) = stet_infrastructure::logging::init() {
+    if let Err(error) = logging::init() {
         eprintln!("Could not initialize logging: {error}");
         return ExitCode::FAILURE;
     }

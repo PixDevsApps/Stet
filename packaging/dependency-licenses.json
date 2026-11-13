@@ -140,17 +140,6 @@
     ]
   },
   {
-    "name": "crossbeam-channel",
-    "version": "0.5.17",
-    "license": "MIT OR Apache-2.0",
-    "repository": "https://github.com/crossbeam-rs/crossbeam",
-    "license_files": [
-      "packaging/licenses/crossbeam-channel-0.5.17/LICENSE-APACHE",
-      "packaging/licenses/crossbeam-channel-0.5.17/LICENSE-MIT",
-      "packaging/licenses/crossbeam-channel-0.5.17/LICENSE-THIRD-PARTY"
-    ]
-  },
-  {
     "name": "crossbeam-deque",
     "version": "0.8.8",
     "license": "MIT OR Apache-2.0",

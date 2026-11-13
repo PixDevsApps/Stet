@@ -45,7 +45,6 @@ grep-regex = "0.1.14"
 grep-pcre2 = "0.1.10"
 grep-matcher = "0.1.9"
 ignore = "0.4.33"
-crossbeam-channel = "0.5.17"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

@@ -32,8 +32,8 @@ use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::Sender;
 use ignore::{DirEntry, WalkBuilder, WalkState};
+use std::sync::mpsc::Sender;
 use stet_domain::replace_files::Skip;
 use stet_domain::search::{Query, Template};
 
@@ -318,7 +318,7 @@ where
     S: FnMut(RifEvent) + Send + 'static,
 {
     let _ = shared.open.set(OpenFiles::new(&request.open_documents));
-    let (sender, receiver) = crossbeam_channel::unbounded::<RifEvent>();
+    let (sender, receiver) = std::sync::mpsc::channel::<RifEvent>();
     let dispatcher = thread::Builder::new()
         .name("stet-replace-in-files-sink".to_owned())
         .spawn(move || {

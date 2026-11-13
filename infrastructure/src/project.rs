@@ -75,7 +75,7 @@ pub fn walk_project(
     let started = Instant::now();
     let found = AtomicUsize::new(0);
     let truncated = AtomicBool::new(false);
-    let (sender, receiver) = crossbeam_channel::unbounded::<ProjectFile>();
+    let (sender, receiver) = std::sync::mpsc::channel::<ProjectFile>();
     let mut summary = WalkSummary::default();
     std::thread::scope(|scope| {
         let walk = scope.spawn(|| {
@@ -125,7 +125,7 @@ pub fn walk_project(
             let received = receiver.recv_timeout(BATCH_INTERVAL);
             let disconnected = matches!(
                 received,
-                Err(crossbeam_channel::RecvTimeoutError::Disconnected)
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
             );
             if let Ok(file) = received {
                 batch.push(file);

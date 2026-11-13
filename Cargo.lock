@@ -188,15 +188,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
 
 [[package]]
-name = "crossbeam-channel"
-version = "0.5.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98b0cc327b5bc766e7fda9c9260cc0fa81b43a8e240440422dff70788e3f9ef1"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-deque"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1368,6 +1359,7 @@ dependencies = [
  "stet-domain",
  "stet-infrastructure",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1391,7 +1383,6 @@ name = "stet-infrastructure"
 version = "1.6.0"
 dependencies = [
  "chardetng",
- "crossbeam-channel",
  "encoding_rs",
  "fs4",
  "grep-matcher",
@@ -1409,7 +1400,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 

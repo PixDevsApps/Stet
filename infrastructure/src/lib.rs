@@ -4,7 +4,6 @@ pub mod desktop;
 pub mod encoding;
 pub mod find_in_files;
 pub mod fs;
-pub mod logging;
 pub mod omarchy;
 pub mod project;
 pub mod recent;

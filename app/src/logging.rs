@@ -1,3 +1,5 @@
+//! Diagnostics on stderr. Never log document contents.
+
 use std::io::IsTerminal;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
