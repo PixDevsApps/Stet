@@ -6,6 +6,7 @@ pub mod case;
 pub mod comment;
 pub mod json;
 pub mod lines;
+pub mod numbers;
 pub mod prefix;
 pub mod pretty;
 pub mod xml;

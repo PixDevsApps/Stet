@@ -1,8 +1,9 @@
 //! The Column Editor (Alt+C): text or a number sequence on every line of the rectangle.
 
-use super::editing::{ColumnEdit, ColumnError, edit_lines, push_spaces, single_line, splice};
+use super::editing::{ColumnEdit, ColumnError, edit_lines, single_line, splice};
 use super::rect::{Rect, clamp_lines};
 use super::visual::text_width;
+use crate::ops::numbers::{NumberSequence, Padding};
 use crate::text::LineIndex;
 
 /// What the Column Editor writes.
@@ -12,125 +13,6 @@ pub enum ColumnEditor {
     Text(String),
     /// One number per line, from the top.
     Numbers(NumberSequence),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Base {
-    #[default]
-    Decimal,
-    Hex,
-    Octal,
-    Binary,
-}
-
-/// How a number narrower than the sequence's width is padded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Leading {
-    /// Left-aligned, followed by spaces where the line goes on, so its text stays aligned.
-    #[default]
-    None,
-    /// Right-aligned, with zeros after the sign.
-    Zeros,
-    /// Right-aligned, with spaces.
-    Spaces,
-}
-
-/// Numbers from `start`, adding `step` every `repeat` lines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NumberSequence {
-    pub start: i64,
-    pub step: i64,
-    /// How many lines get each number; 0 counts as 1.
-    pub repeat: usize,
-    pub base: Base,
-    pub leading: Leading,
-    /// The minimum width in cells, sign included. Every number is as wide as the sequence's
-    /// widest one, and at least this wide.
-    pub width: usize,
-    /// Hexadecimal digits A–F rather than a–f.
-    pub uppercase: bool,
-}
-
-impl Default for NumberSequence {
-    fn default() -> Self {
-        Self {
-            start: 1,
-            step: 1,
-            repeat: 1,
-            base: Base::Decimal,
-            leading: Leading::None,
-            width: 0,
-            uppercase: true,
-        }
-    }
-}
-
-impl NumberSequence {
-    /// The numbers of the first `count` lines.
-    pub fn numbers(&self, count: usize) -> Result<Vec<i64>, ColumnError> {
-        let repeat = self.repeat.max(1);
-        (0..count)
-            .map(|line| {
-                i64::try_from(line / repeat)
-                    .ok()
-                    .and_then(|steps| self.step.checked_mul(steps))
-                    .and_then(|offset| self.start.checked_add(offset))
-                    .ok_or(ColumnError::Overflow)
-            })
-            .collect()
-    }
-
-    /// The numbers of the first `count` lines as text, all equally wide, trailing spaces
-    /// included for [`Leading::None`].
-    pub fn rows(&self, count: usize) -> Result<Vec<String>, ColumnError> {
-        let numbers: Vec<(&str, String)> = self
-            .numbers(count)?
-            .into_iter()
-            .map(|number| {
-                let sign = if number < 0 { "-" } else { "" };
-                (sign, self.digits(number.unsigned_abs()))
-            })
-            .collect();
-        let width = numbers
-            .iter()
-            .map(|(sign, digits)| sign.len() + digits.len())
-            .fold(self.width, usize::max);
-        Ok(numbers
-            .into_iter()
-            .map(|(sign, digits)| {
-                let pad = width - sign.len() - digits.len();
-                let mut row = String::with_capacity(width);
-                match self.leading {
-                    Leading::None => {
-                        row.push_str(sign);
-                        row.push_str(&digits);
-                        push_spaces(&mut row, pad);
-                    }
-                    Leading::Zeros => {
-                        row.push_str(sign);
-                        row.extend(std::iter::repeat_n('0', pad));
-                        row.push_str(&digits);
-                    }
-                    Leading::Spaces => {
-                        push_spaces(&mut row, pad);
-                        row.push_str(sign);
-                        row.push_str(&digits);
-                    }
-                }
-                row
-            })
-            .collect())
-    }
-
-    fn digits(&self, magnitude: u64) -> String {
-        match self.base {
-            Base::Decimal => magnitude.to_string(),
-            Base::Hex if self.uppercase => format!("{magnitude:X}"),
-            Base::Hex => format!("{magnitude:x}"),
-            Base::Octal => format!("{magnitude:o}"),
-            Base::Binary => format!("{magnitude:b}"),
-        }
-    }
 }
 
 impl ColumnEditor {
@@ -159,8 +41,8 @@ impl ColumnEditor {
                 let width = rows.first().map_or(0, String::len);
                 let edits = edit_lines(text, index, lines.clone(), |line, line_text| {
                     let row = rows[line - lines.start].as_str();
-                    match sequence.leading {
-                        Leading::None => splice(
+                    match sequence.padding {
+                        Padding::None => splice(
                             line_text,
                             left,
                             right,
@@ -168,7 +50,7 @@ impl ColumnEditor {
                             width,
                             tab_width,
                         ),
-                        Leading::Zeros | Leading::Spaces => {
+                        Padding::Zeros | Padding::Spaces => {
                             splice(line_text, left, right, row, 0, tab_width)
                         }
                     }
@@ -184,6 +66,7 @@ impl ColumnEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::numbers::{Base, NumberOverflow};
     use crate::text::apply;
     use proptest::prelude::*;
 
@@ -203,7 +86,7 @@ mod tests {
     fn pads_to_a_width_with_zeros() {
         let zeros = NumberSequence {
             width: 3,
-            leading: Leading::Zeros,
+            padding: Padding::Zeros,
             ..sequence(1, 2)
         };
         assert_eq!(rows(zeros, 3), ["001", "003", "005"]);
@@ -213,12 +96,12 @@ mod tests {
     fn every_number_is_as_wide_as_the_widest() {
         assert_eq!(rows(sequence(8, 1), 3), ["8 ", "9 ", "10"]);
         let spaces = NumberSequence {
-            leading: Leading::Spaces,
+            padding: Padding::Spaces,
             ..sequence(8, 1)
         };
         assert_eq!(rows(spaces, 3), [" 8", " 9", "10"]);
         let down = NumberSequence {
-            leading: Leading::Zeros,
+            padding: Padding::Zeros,
             ..sequence(1, -1)
         };
         assert_eq!(rows(down, 3), ["01", "00", "-1"]);
@@ -228,12 +111,13 @@ mod tests {
     fn formats_hex_octal_and_binary() {
         let hex = NumberSequence {
             base: Base::Hex,
+            uppercase: true,
             ..sequence(0xfe, 1)
         };
         assert_eq!(rows(hex, 3), ["FE ", "FF ", "100"]);
         let lower = NumberSequence {
             uppercase: false,
-            leading: Leading::Zeros,
+            padding: Padding::Zeros,
             ..hex
         };
         assert_eq!(rows(lower, 2), ["fe", "ff"]);
@@ -244,7 +128,7 @@ mod tests {
         assert_eq!(rows(octal, 2), ["7 ", "10"]);
         let binary = NumberSequence {
             base: Base::Binary,
-            leading: Leading::Zeros,
+            padding: Padding::Zeros,
             width: 4,
             ..sequence(1, 1)
         };
@@ -267,7 +151,7 @@ mod tests {
 
     #[test]
     fn reports_overflow() {
-        assert_eq!(sequence(i64::MAX, 1).rows(2), Err(ColumnError::Overflow));
+        assert_eq!(sequence(i64::MAX, 1).rows(2), Err(NumberOverflow));
         assert_eq!(rows(sequence(i64::MIN, 0), 1), [i64::MIN.to_string()]);
     }
 
@@ -275,6 +159,28 @@ mod tests {
         let index = LineIndex::new(text);
         let edit = editor.apply(text, &index, rect, 4).unwrap();
         (apply(text, edit.edits).unwrap(), edit.rect)
+    }
+
+    #[test]
+    fn a_sequence_past_64_bits_writes_nothing() {
+        let text = "a\nb\nc";
+        let index = LineIndex::new(text);
+        let apply = |sequence, rect| ColumnEditor::Numbers(sequence).apply(text, &index, rect, 4);
+        let rising = sequence(i64::MAX - 1, 1);
+        assert!(apply(rising, Rect::new((0, 1), (1, 1))).is_ok());
+        assert_eq!(
+            apply(rising, Rect::new((0, 1), (2, 1))),
+            Err(ColumnError::Overflow)
+        );
+        let falling = NumberSequence {
+            repeat: 2,
+            ..sequence(i64::MIN, -1)
+        };
+        assert!(apply(falling, Rect::new((0, 0), (1, 0))).is_ok());
+        assert_eq!(
+            apply(falling, Rect::new((2, 0), (0, 0))),
+            Err(ColumnError::Overflow)
+        );
     }
 
     #[test]
@@ -307,11 +213,11 @@ mod tests {
             repeat in 0usize..4,
             width in 0usize..8,
             base in prop::sample::select(vec![Base::Decimal, Base::Hex, Base::Octal, Base::Binary]),
-            leading in prop::sample::select(vec![Leading::None, Leading::Zeros, Leading::Spaces]),
+            padding in prop::sample::select(vec![Padding::None, Padding::Zeros, Padding::Spaces]),
             uppercase: bool,
             count in 0usize..40,
         ) {
-            let sequence = NumberSequence { start, step, repeat, base, leading, width, uppercase };
+            let sequence = NumberSequence { start, step, repeat, base, uppercase, padding, width };
             let rows = sequence.rows(count).unwrap();
             let radix = match base { Base::Decimal => 10, Base::Hex => 16, Base::Octal => 8, Base::Binary => 2 };
             for (line, row) in rows.iter().enumerate() {

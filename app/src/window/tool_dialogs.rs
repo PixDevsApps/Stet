@@ -5,13 +5,15 @@
 use super::Window;
 use super::dialogs::click_response;
 use super::toolbox::Reach;
+use crate::column::dialog::NUMBERS_OVERFLOW;
 use crate::editor::EditorPage;
 use crate::edits;
 use gtk4 as gtk;
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use stet_domain::ops::prefix::{self, Base, Numbering, Padding};
-use stet_domain::ops::{Change, Target};
+use std::ops::Range;
+use stet_domain::ops::numbers::{Base, NumberOverflow, NumberSequence, Padding};
+use stet_domain::ops::{Change, SyntaxError, Target, prefix};
 use stet_domain::text::LineIndex;
 
 /// The response that applies a tool dialog.
@@ -81,6 +83,23 @@ fn number(row: &adw::EntryRow, min: i64, max: i64) -> Result<i64, String> {
     }
 }
 
+/// How many lines Insert Numbers numbers: from the caret's line to the end, or every line the
+/// selection touches except a last one it reaches only at column 0 (as `Target::Selection`).
+fn numbered_lines(buffer: &sourceview5::Buffer, selected: &Range<usize>) -> usize {
+    let first = buffer.iter_at_offset(selected.start as i32);
+    let last = if selected.is_empty() {
+        buffer.line_count() - 1
+    } else {
+        let end = buffer.iter_at_offset(selected.end as i32);
+        if end.line() > first.line() && end.starts_line() {
+            end.line() - 1
+        } else {
+            end.line()
+        }
+    };
+    (last - first.line() + 1) as usize
+}
+
 fn combo_row(title: &str, choices: &[&str], selected: usize) -> adw::ComboRow {
     let row = adw::ComboRow::builder()
         .title(title)
@@ -131,7 +150,7 @@ impl Window {
             return;
         }
         let tools = &self.inner.tools;
-        let last = tools.numbering.borrow().clone();
+        let last = *tools.numbering.borrow();
         let start = entry_row("Start", &last.start.to_string());
         let step = entry_row("Step", &last.step.to_string());
         let repeat = entry_row("Repeat each number", &last.repeat.max(1).to_string());
@@ -174,8 +193,8 @@ impl Window {
         if self.ask(&dialog).await != APPLY {
             return;
         }
-        let read = || -> Result<Numbering, String> {
-            Ok(Numbering {
+        let read = || -> Result<NumberSequence, String> {
+            Ok(NumberSequence {
                 start: number(&start, -(1 << 53), 1 << 53)?,
                 step: number(&step, -(1 << 40), 1 << 40)?,
                 repeat: number(&repeat, 1, 1 << 30)? as usize,
@@ -192,8 +211,14 @@ impl Window {
                 return;
             }
         };
-        tools.numbering.replace(numbering.clone());
-        let (selected, _) = edits::selection(&page.buffer());
+        tools.numbering.replace(numbering);
+        let buffer = page.buffer();
+        let (selected, _) = edits::selection(&buffer);
+        if numbering.check(numbered_lines(&buffer, &selected)).is_err() {
+            self.show_error("Can't insert numbers", NUMBERS_OVERFLOW)
+                .await;
+            return;
+        }
         self.run_on_target(
             page,
             Target::Selection(selected),
@@ -202,14 +227,21 @@ impl Window {
                 let Target::Selection(range) = target else {
                     return Ok(Change::default());
                 };
-                let line = index.line_of_char(range.start);
-                let column = range.start - index.line_chars(line).start;
+                let (offset, line) = (range.start, index.line_of_char(range.start));
+                let column = offset - index.line_chars(line).start;
                 let target = if range.is_empty() {
                     Target::Lines(line..index.line_count())
                 } else {
                     Target::Selection(range)
                 };
-                Ok(prefix::insert_numbers(text, &target, column, &numbering))
+                prefix::insert_numbers(text, &target, column, &numbering).map_err(
+                    |overflow: NumberOverflow| SyntaxError {
+                        message: overflow.to_string(),
+                        line: line + 1,
+                        column: column + 1,
+                        offset,
+                    },
+                )
             }),
             "Insert Numbers",
         );

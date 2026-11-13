@@ -65,6 +65,6 @@ mod tests;
 
 pub use block::{Block, MIME_TYPE, copy, paste};
 pub use editing::{ColumnEdit, ColumnError, backspace, delete_block, delete_forward, type_text};
-pub use editor::{Base, ColumnEditor, Leading, NumberSequence};
+pub use editor::ColumnEditor;
 pub use rect::{LineSpan, Rect, VisualPos};
 pub use visual::{home_column, locate, text_width, visual_column};

@@ -13,7 +13,11 @@ use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-use stet_domain::column::{Base, ColumnEditor, ColumnError, Leading, NumberSequence};
+use stet_domain::column::{ColumnEditor, ColumnError};
+use stet_domain::ops::numbers::{Base, NumberSequence, Padding};
+
+/// What the Column Editor and Insert Numbers say when a number of the sequence does not fit.
+pub const NUMBERS_OVERFLOW: &str = "The numbers do not fit in 64 bits.";
 
 /// The dialog's values, kept between uses.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,7 +27,7 @@ struct Choice {
     initial: String,
     step: String,
     repeat: String,
-    leading: Leading,
+    leading: Padding,
     base: Base,
     uppercase: bool,
 }
@@ -36,7 +40,7 @@ impl Default for Choice {
             initial: "1".to_owned(),
             step: "1".to_owned(),
             repeat: "1".to_owned(),
-            leading: Leading::None,
+            leading: Padding::None,
             base: Base::Decimal,
             uppercase: true,
         }
@@ -48,10 +52,10 @@ thread_local! {
     static LAST: RefCell<Option<Choice>> = const { RefCell::new(None) };
 }
 
-const LEADING: [(Leading, &str); 3] = [
-    (Leading::None, "None"),
-    (Leading::Zeros, "Zeros"),
-    (Leading::Spaces, "Spaces"),
+const LEADING: [(Padding, &str); 3] = [
+    (Padding::None, "None"),
+    (Padding::Zeros, "Zeros"),
+    (Padding::Spaces, "Spaces"),
 ];
 
 const BASES: [(Base, &str, u32); 4] = [
@@ -351,7 +355,7 @@ impl EditorDialog {
             repeat: self.repeat.text().to_string(),
             leading: LEADING
                 .get(self.leading.selected() as usize)
-                .map_or(Leading::None, |(leading, _)| *leading),
+                .map_or(Padding::None, |(leading, _)| *leading),
             base: self.base(),
             uppercase: self.uppercase.is_active(),
         }
@@ -389,7 +393,7 @@ impl EditorDialog {
             step,
             repeat,
             base: choice.base,
-            leading: choice.leading,
+            padding: choice.leading,
             width: 0,
             uppercase: choice.uppercase,
         }))
@@ -424,9 +428,7 @@ impl EditorDialog {
                 self.dialog.close();
             }
             Err(ColumnError::LineBreak) => self.show_error("The text must fit on one line."),
-            Err(ColumnError::Overflow) => {
-                self.show_error("The numbers do not fit in 64 bits.");
-            }
+            Err(ColumnError::Overflow) => self.show_error(NUMBERS_OVERFLOW),
         }
     }
 

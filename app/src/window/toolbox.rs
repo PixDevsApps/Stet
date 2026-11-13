@@ -22,7 +22,7 @@ use stet_domain::ops::comment::{self, CommentTokens};
 use stet_domain::ops::lines::{
     self, Duplicates, EmptyLines, Order, Scope as Columns, SortKey, Trim,
 };
-use stet_domain::ops::prefix::Numbering;
+use stet_domain::ops::numbers::NumberSequence;
 use stet_domain::ops::{Change, Indent, SyntaxError, Target, json, xml};
 use stet_domain::search::SearchMode;
 use stet_domain::text::{LineIndex, TextEdit};
@@ -56,7 +56,7 @@ pub struct ToolStats {
 pub struct ToolState {
     pub prefix: RefCell<String>,
     pub suffix: RefCell<String>,
-    pub numbering: RefCell<Numbering>,
+    pub numbering: RefCell<NumberSequence>,
     pub stats: RefCell<Option<ToolStats>>,
     /// The status bar's word count: the document and revision it was counted for.
     pub words: RefCell<Option<(glib::WeakRef<EditorPage>, u64, usize)>>,

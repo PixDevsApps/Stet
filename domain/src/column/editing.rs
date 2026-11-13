@@ -2,6 +2,7 @@
 
 use super::rect::{Rect, clamp_lines};
 use super::visual::{locate, next_column, text_width};
+use crate::ops::numbers::NumberOverflow;
 use crate::text::{LineIndex, TextEdit};
 use std::fmt;
 use std::ops::Range;
@@ -24,11 +25,17 @@ pub enum ColumnError {
     Overflow,
 }
 
+impl From<NumberOverflow> for ColumnError {
+    fn from(NumberOverflow: NumberOverflow) -> Self {
+        Self::Overflow
+    }
+}
+
 impl fmt::Display for ColumnError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::LineBreak => write!(f, "column text must not contain a line break"),
-            Self::Overflow => write!(f, "the number sequence does not fit in 64 bits"),
+            Self::Overflow => NumberOverflow.fmt(f),
         }
     }
 }
