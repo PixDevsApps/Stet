@@ -67,10 +67,12 @@ editor/          one tab and its document: page.rs (EditorPage), document.rs, st
 window/          mod.rs (Window, layout, lifecycle), dispatch.rs (every action to its feature), probe.rs
                  (the self-test's view), snapshot.rs (jobs on a text snapshot), dialogs.rs, focus.rs
   documents/     files.rs (open, save), disk.rs (outside changes), encoding.rs, banners.rs, session/
+                 (restore.rs, stubs.rs, backup.rs, quit.rs, wait.rs)
   workspace/     tabs.rs (the tab menu's commands), pins.rs, split.rs, view.rs (the View menu), nav.rs
                  (Ctrl+Tab, back and forward), quick_open.rs
   text/          editing.rs (undo, clipboard, column commands), toolbox.rs, tool_dialogs.rs
-  search/        bar/, find.rs, replace.rs, results/, files/ (Find and Replace in Files),
+  search/        bar/ (the bar, build.rs its widgets, history.rs), find.rs, replace.rs, results/
+                 (the panel, commands.rs the window's side), files/ (Find and Replace in Files),
                  marking.rs (bookmarks, Mark, style tokens), smart.rs (smart highlighting)
   tools/         compare.rs, settings.rs (what config.toml and keys.toml do), updates.rs, default_editor.rs
   chrome/        status.rs, language.rs, encoding_picker.rs, indentation.rs, palette.rs, a11y.rs
