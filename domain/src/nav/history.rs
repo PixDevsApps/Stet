@@ -64,17 +64,13 @@ impl<D: PartialEq + Clone> History<D> {
         self.entries.get(self.current)
     }
 
+    #[cfg(test)]
     pub fn can_go_back(&self) -> bool {
         self.current > 0
     }
 
     pub fn can_go_forward(&self) -> bool {
         self.current + 1 < self.entries.len()
-    }
-
-    pub fn clear(&mut self) {
-        self.entries.clear();
-        self.current = 0;
     }
 
     /// Records a jump source or target. A location near the current entry replaces it; any

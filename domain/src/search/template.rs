@@ -197,11 +197,6 @@ impl Template {
     }
 }
 
-/// Expands `template` for one match.
-pub fn expand(template: &Template, captures: &dyn Captures) -> String {
-    template.expand(captures)
-}
-
 enum Stop {
     End,
     Close,

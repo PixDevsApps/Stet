@@ -178,6 +178,7 @@ impl Keys {
         self.app.iter().chain(self.widget).copied()
     }
 
+    #[cfg(test)]
     pub fn is_empty(self) -> bool {
         self.app.is_empty() && self.widget.is_empty()
     }
@@ -2350,44 +2351,44 @@ pub fn is_key_name(key: &str) -> bool {
     }
 }
 
-/// How a punctuation key is typed on a layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Level {
-    Base,
-    Shift,
-    AltGr,
-}
-
-/// The punctuation keys the keymap audit covers, on the US and the Norwegian (`no`) layout
-/// (from xkeyboard-config's `us` and `no(basic)`). Letters, digits, the keypad, arrows and
-/// F-keys are the same on both.
-pub const PUNCTUATION_LEVELS: &[(&str, Level, Level)] = &[
-    ("plus", Level::Shift, Level::Base),
-    ("equal", Level::Base, Level::Shift),
-    ("minus", Level::Base, Level::Base),
-    ("period", Level::Base, Level::Base),
-    ("comma", Level::Base, Level::Base),
-    ("slash", Level::Base, Level::Shift),
-    ("backslash", Level::Base, Level::Base),
-    ("semicolon", Level::Base, Level::Shift),
-    ("apostrophe", Level::Base, Level::Base),
-    ("grave", Level::Base, Level::Shift),
-    ("bracketleft", Level::Base, Level::AltGr),
-    ("bracketright", Level::Base, Level::AltGr),
-];
-
-/// The US and Norwegian levels of `key`, or `None` when the key is layout-independent here.
-pub fn punctuation_levels(key: &str) -> Option<(Level, Level)> {
-    PUNCTUATION_LEVELS
-        .iter()
-        .find(|(name, _, _)| *name == key)
-        .map(|&(_, us, no)| (us, no))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::{HashMap, HashSet};
+
+    /// How a punctuation key is typed on a layout.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Level {
+        Base,
+        Shift,
+        AltGr,
+    }
+
+    /// The punctuation keys the keymap audit covers, on the US and the Norwegian (`no`) layout
+    /// (from xkeyboard-config's `us` and `no(basic)`). Letters, digits, the keypad, arrows and
+    /// F-keys are the same on both.
+    const PUNCTUATION_LEVELS: &[(&str, Level, Level)] = &[
+        ("plus", Level::Shift, Level::Base),
+        ("equal", Level::Base, Level::Shift),
+        ("minus", Level::Base, Level::Base),
+        ("period", Level::Base, Level::Base),
+        ("comma", Level::Base, Level::Base),
+        ("slash", Level::Base, Level::Shift),
+        ("backslash", Level::Base, Level::Base),
+        ("semicolon", Level::Base, Level::Shift),
+        ("apostrophe", Level::Base, Level::Base),
+        ("grave", Level::Base, Level::Shift),
+        ("bracketleft", Level::Base, Level::AltGr),
+        ("bracketright", Level::Base, Level::AltGr),
+    ];
+
+    /// The US and Norwegian levels of `key`, or `None` when the key is layout-independent here.
+    fn punctuation_levels(key: &str) -> Option<(Level, Level)> {
+        PUNCTUATION_LEVELS
+            .iter()
+            .find(|(name, _, _)| *name == key)
+            .map(|&(_, us, no)| (us, no))
+    }
 
     fn every_key() -> impl Iterator<Item = (ActionId, &'static str)> {
         ActionId::ALL

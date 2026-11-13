@@ -10,7 +10,9 @@ use rustix::fs::{Access, XattrFlags};
 use rustix::io::Errno;
 use tempfile::Builder;
 
-use super::meta::{Fingerprint, fingerprint_of};
+use stet_domain::session::Fingerprint;
+
+use super::meta::fingerprint_of;
 use crate::encoding::Unmappable;
 
 /// How many symbolic links [`safe_save`] follows by hand to a file that doesn't exist yet.

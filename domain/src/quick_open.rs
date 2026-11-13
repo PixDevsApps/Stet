@@ -1,11 +1,9 @@
 //! Quick open (Ctrl+P, M8) without a toolkit: what a query asks for, how the open documents,
-//! the recent files and the project's files rank, and how a path is shown.
+//! the recent files and the project's files rank.
 
-use crate::document::tilde;
 use crate::fuzzy;
 use crate::location::{LineCol, parse_line_col, split_location};
 use std::ops::Range;
-use std::path::Path;
 
 /// How many rows the popup shows.
 pub const SHOWN_LIMIT: usize = 50;
@@ -105,16 +103,6 @@ fn rank_into<S: AsRef<str>>(
     );
 }
 
-/// `path` relative to `root` when it is inside it, else with `~` for the home folder.
-pub fn display_path(path: &Path, root: Option<&Path>, home: Option<&Path>) -> String {
-    if let Some(relative) = root.and_then(|root| path.strip_prefix(root).ok())
-        && !relative.as_os_str().is_empty()
-    {
-        return relative.to_string_lossy().into_owned();
-    }
-    tilde(path, home)
-}
-
 /// Sorted character indices grouped into runs of neighbours, for highlighting.
 pub fn runs(positions: &[usize]) -> Vec<Range<usize>> {
     let mut runs: Vec<Range<usize>> = Vec::new();
@@ -130,7 +118,6 @@ pub fn runs(positions: &[usize]) -> Vec<Range<usize>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn queries_name_a_file_and_maybe_a_position() {
@@ -208,21 +195,6 @@ mod tests {
         assert!(all.iter().all(|row| row.positions.is_empty()));
         assert_eq!(all[2].source, Source::Recent);
         assert!(rank_groups("zzz", &open, &recent, &project, 50).is_empty());
-    }
-
-    #[test]
-    fn paths_show_relative_to_the_project_or_with_a_tilde() {
-        let root = PathBuf::from("/home/u/proj");
-        let home = PathBuf::from("/home/u");
-        let show = |path: &str| display_path(Path::new(path), Some(&root), Some(&home));
-        assert_eq!(show("/home/u/proj/src/main.rs"), "src/main.rs");
-        assert_eq!(show("/home/u/other/a.txt"), "~/other/a.txt");
-        assert_eq!(show("/etc/hosts"), "/etc/hosts");
-        assert_eq!(show("/home/u/proj"), "~/proj");
-        assert_eq!(
-            display_path(Path::new("/home/u/a"), None, Some(&home)),
-            "~/a"
-        );
     }
 
     #[test]

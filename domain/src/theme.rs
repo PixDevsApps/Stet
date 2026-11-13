@@ -489,6 +489,7 @@ impl Palette {
     }
 
     /// Builds the palette from a raw `colors.toml` map by applying [`resolve_colors`] first.
+    #[cfg(test)]
     pub fn from_colors(raw: &BTreeMap<String, String>) -> Self {
         Self::from_resolved(&resolve_colors(raw))
     }
@@ -696,6 +697,7 @@ impl EditorTheme {
         }
     }
 
+    #[cfg(test)]
     pub fn is_dark(&self) -> bool {
         self.palette.mode == Mode::Dark
     }

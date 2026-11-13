@@ -72,7 +72,7 @@ pub struct DecodedDocument {
     pub binary: bool,
 }
 
-/// [`DecodedDocument`] plus the file's metadata and size class.
+/// A decoded document plus the file's metadata and size class.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenedDocument {
     /// LF-normalized, with NUL mapped to the placeholder: ready to insert.
@@ -103,6 +103,7 @@ macro_rules! document_format {
     ($document:ty) => {
         impl $document {
             /// The format that writes this document back as it was read.
+            #[cfg(test)]
             pub fn format(&self) -> DocumentFormat {
                 DocumentFormat {
                     encoding: self.encoding,
@@ -114,6 +115,7 @@ macro_rules! document_format {
 
             /// Saving without edits reproduces the file byte for byte: nothing was lost in
             /// decoding and the line endings weren't mixed.
+            #[cfg(test)]
             pub fn round_trips(&self) -> bool {
                 !self.lossy_roundtrip && !self.mixed_eol
             }

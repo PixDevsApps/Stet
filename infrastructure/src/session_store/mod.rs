@@ -82,7 +82,7 @@ use layout::Layout;
 use std::fmt;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime};
@@ -251,11 +251,6 @@ impl SessionStore {
         })
     }
 
-    /// The state directory this store manages.
-    pub fn state_dir(&self) -> &Path {
-        self.layout.root()
-    }
-
     /// Reads the session and repairs what a crash left behind (see the module docs). Call it
     /// once at startup, before the first commit. Blocks until the writer has done it.
     pub fn load(&self) -> Result<Restored, StoreError> {
@@ -363,7 +358,3 @@ impl Drop for SessionStore {
 pub fn new_id() -> String {
     uuid::Uuid::now_v7().to_string()
 }
-
-/// A file's fingerprint, from `fs::metadata(path)` or from the handle a load read: the one
-/// [`crate::fs`] records at load and save.
-pub use crate::fs::fingerprint_of as fingerprint;

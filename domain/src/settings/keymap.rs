@@ -56,11 +56,13 @@ impl Keymap {
     }
 
     /// Whether `keys.toml` changed the keys of `id`.
+    #[cfg(test)]
     pub fn is_changed(&self, id: ActionId) -> bool {
         self.overrides.contains_key(&id)
     }
 
     /// How many actions `keys.toml` changed.
+    #[cfg(test)]
     pub fn changed_count(&self) -> usize {
         self.overrides.len()
     }
@@ -287,63 +289,63 @@ pub fn default_keys_file() -> String {
     out
 }
 
-/// Where the user guide's keymap table starts and ends; the table between them is
-/// [`markdown_table`]'s, which a test keeps in step with the registry.
-pub const TABLE_START: &str = "<!-- keymap table: generated from the registry -->";
-pub const TABLE_END: &str = "<!-- end of the keymap table -->";
-
-/// The default keymap as a Markdown table for the user guide: every command the palette
-/// lists, in menu order, with its keys, where they work and its name in `keys.toml`.
-pub fn markdown_table() -> String {
-    let mut out = String::from(
-        "| Menu | Command | Keys | Keys work | `keys.toml` name |\n| --- | --- | --- | --- | --- |\n",
-    );
-    let mut ids: Vec<ActionId> = Vec::new();
-    for menu in Menu::PLACES {
-        for id in ActionId::ALL {
-            if id.spec().menu.is_some_and(|place| place.menu == menu)
-                && id.kind() != ActionKind::WithString
-            {
-                ids.push(id);
-            }
-        }
-    }
-    ids.extend(
-        ActionId::ALL
-            .into_iter()
-            .filter(|id| id.spec().menu.is_none() && id.spec().palette),
-    );
-    for id in ids {
-        let keys: Vec<String> = id.keys().all().map(display).collect();
-        let keys = if keys.is_empty() {
-            "—".to_owned()
-        } else {
-            keys.join(", ").replace('|', "\\|")
-        };
-        let place = id.menu_path().unwrap_or_else(|| "Palette".to_owned());
-        let scope = match (id.has_widget_keys(), id.key_scope(), keys.as_str()) {
-            (_, _, "—") => "",
-            (true, _, _) => "Text fields",
-            (false, KeyScope::Editor, _) => "Editor",
-            (false, KeyScope::Window, _) => "Window",
-        };
-        let name = if is_rebindable(id) {
-            format!("`{}`", id.name())
-        } else {
-            "—".to_owned()
-        };
-        let _ = writeln!(
-            out,
-            "| {place} | {} | {keys} | {scope} | {name} |",
-            id.label()
-        );
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Where the user guide's keymap table starts and ends; the table between them is
+    /// [`markdown_table`]'s, which a test keeps in step with the registry.
+    const TABLE_START: &str = "<!-- keymap table: generated from the registry -->";
+    const TABLE_END: &str = "<!-- end of the keymap table -->";
+
+    /// The default keymap as a Markdown table for the user guide: every command the palette
+    /// lists, in menu order, with its keys, where they work and its name in `keys.toml`.
+    fn markdown_table() -> String {
+        let mut out = String::from(
+            "| Menu | Command | Keys | Keys work | `keys.toml` name |\n| --- | --- | --- | --- | --- |\n",
+        );
+        let mut ids: Vec<ActionId> = Vec::new();
+        for menu in Menu::PLACES {
+            for id in ActionId::ALL {
+                if id.spec().menu.is_some_and(|place| place.menu == menu)
+                    && id.kind() != ActionKind::WithString
+                {
+                    ids.push(id);
+                }
+            }
+        }
+        ids.extend(
+            ActionId::ALL
+                .into_iter()
+                .filter(|id| id.spec().menu.is_none() && id.spec().palette),
+        );
+        for id in ids {
+            let keys: Vec<String> = id.keys().all().map(display).collect();
+            let keys = if keys.is_empty() {
+                "—".to_owned()
+            } else {
+                keys.join(", ").replace('|', "\\|")
+            };
+            let place = id.menu_path().unwrap_or_else(|| "Palette".to_owned());
+            let scope = match (id.has_widget_keys(), id.key_scope(), keys.as_str()) {
+                (_, _, "—") => "",
+                (true, _, _) => "Text fields",
+                (false, KeyScope::Editor, _) => "Editor",
+                (false, KeyScope::Window, _) => "Window",
+            };
+            let name = if is_rebindable(id) {
+                format!("`{}`", id.name())
+            } else {
+                "—".to_owned()
+            };
+            let _ = writeln!(
+                out,
+                "| {place} | {} | {keys} | {scope} | {name} |",
+                id.label()
+            );
+        }
+        out
+    }
 
     fn canonical(key: &str) -> Option<String> {
         Accelerator::parse(key).map(|accel| accel.canonical())

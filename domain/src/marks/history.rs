@@ -148,10 +148,6 @@ pub struct BookmarkHistory {
 }
 
 impl BookmarkHistory {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn len(&self) -> usize {
         self.steps.len()
     }
@@ -161,6 +157,7 @@ impl BookmarkHistory {
     }
 
     /// Steps that can be undone.
+    #[cfg(test)]
     pub fn undoable(&self) -> usize {
         self.applied
     }
@@ -281,7 +278,7 @@ mod tests {
         let applied = edit.edits.clone();
         let step = Step::new(&edit.edits, &applied, &index, &marked, &edit.bookmarks).unwrap();
         assert_eq!(step.len_after, after_text.chars().count());
-        let mut history = BookmarkHistory::new();
+        let mut history = BookmarkHistory::default();
         history.record(step.clone());
 
         // GTK put the deleted lines back and the bookmarks slid onto the wrong ones.
@@ -309,7 +306,7 @@ mod tests {
         let index = LineIndex::new(&text);
         let edits = [TextEdit::new(0..6, "LINE 0")];
         let step = Step::new(&edits, &edits, &index, &bookmarks(&[1]), &bookmarks(&[1])).unwrap();
-        let mut history = BookmarkHistory::new();
+        let mut history = BookmarkHistory::default();
         history.record(step.clone());
         let len = text.chars().count();
         // Same length, another place: a typed word undone, say.
@@ -352,7 +349,7 @@ mod tests {
         assert_eq!(step.lines_after, 2..3);
         assert_eq!(step.before.lines(), &[3]);
         assert_eq!(step.after.lines(), &[2]);
-        let mut history = BookmarkHistory::new();
+        let mut history = BookmarkHistory::default();
         history.record(step.clone());
         let current = bookmarks(&[2, 6, 7]);
         let restored = history
@@ -371,7 +368,7 @@ mod tests {
         let index = LineIndex::new(&text);
         let edits = [TextEdit::insert(0, "x\n")];
         let step = Step::new(&edits, &edits, &index, &bookmarks(&[1]), &bookmarks(&[2])).unwrap();
-        let mut history = BookmarkHistory::new();
+        let mut history = BookmarkHistory::default();
         history.record(step.clone());
         history.record(step.clone());
         assert_eq!(history.len(), 2);
@@ -474,7 +471,7 @@ mod tests {
             );
             prop_assert_eq!(&old[step.lines_before.end..], &new[step.lines_after.end..]);
 
-            let mut history = BookmarkHistory::new();
+            let mut history = BookmarkHistory::default();
             history.record(step.clone());
             let undone = replay(&mut buffer, &changes, true);
             prop_assert_eq!(buffer.iter().collect::<String>(), text.clone());
@@ -502,7 +499,7 @@ mod tests {
             marks: Some(Box::new((before.clone(), after.clone()))),
             ..Step::new(&edits, &edits, &index, &Bookmarks::new(), &Bookmarks::new()).unwrap()
         };
-        let mut history = BookmarkHistory::new();
+        let mut history = BookmarkHistory::default();
         history.record(step.clone());
         assert!(
             history

@@ -1,4 +1,4 @@
-use super::plan::{Stage, replace_file_with_hook};
+use super::plan::{Plan, PlanError, Stage, plan, replace_file_with_hook};
 use super::*;
 use crate::encoding::fixtures::{fixtures, legacy, utf16};
 use crate::encoding::{PLACEHOLDER, bom_bytes, decode, detect};

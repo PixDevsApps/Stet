@@ -8,13 +8,12 @@ mod encode;
 pub(crate) mod fixtures;
 mod table;
 
-pub use decode::{Decoded, decode, decode_to_lf};
+pub use decode::{decode, decode_to_lf};
 pub use detect::{Detection, DetectionSource, detect};
-pub use encode::{MAX_LISTED_UNMAPPABLE, Unmappable, check_encodable, encode, encode_with_eol};
+pub use encode::{Unmappable, check_encodable, encode, encode_with_eol};
 pub use encoding_rs::Encoding;
 pub use table::{
-    ENCODINGS, EncodingEntry, EncodingGroup, encoding_for_name, entry_for, entry_for_id,
-    status_label,
+    ENCODINGS, EncodingEntry, encoding_for_name, entry_for, entry_for_id, status_label,
 };
 
 use encoding_rs::{UTF_8, UTF_16BE, UTF_16LE};

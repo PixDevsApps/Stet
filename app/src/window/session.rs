@@ -1,10 +1,10 @@
 //! The session in the window (ADR-006, M2).
 //!
-//! - **Backups:** every [`BACKUP_INTERVAL`](stet_domain::session::BACKUP_INTERVAL) the tabs, the window and the histories are
-//!   committed to the store, with the text of every dirty or untitled document that changed
-//!   since its last backup ([`BackupState::action`] has the large-document rules). Taking
-//!   those texts is the only part that runs on the GTK thread; the store writes on its own
-//!   thread.
+//! - **Backups:** every `backup_interval` seconds of config.toml (7 by default) the tabs, the
+//!   window and the histories are committed to the store, with the text of every dirty or
+//!   untitled document that changed since its last backup ([`BackupState::action`] has the
+//!   large-document rules). Taking those texts is the only part that runs on the GTK thread;
+//!   the store writes on its own thread.
 //! - **Restore:** at startup the session comes back. The active tab loads at once; every other
 //!   tab is a stub (its title, dirty marker and path) that loads when it is first shown, or
 //!   when an operation needs its text: from its backup when it had unsaved changes, else from
@@ -793,7 +793,7 @@ impl Window {
     // ----- backups ---------------------------------------------------------------------------
 
     /// Starts, or restarts, the backup timer: every `backup_interval` seconds of config.toml
-    /// ([`BACKUP_INTERVAL`](stet_domain::session::BACKUP_INTERVAL) by default), none with `backups = false`.
+    /// (7 by default), none with `backups = false`.
     fn start_backups(&self) {
         if let Some(old) = self.inner.session.tick.take() {
             old.remove();

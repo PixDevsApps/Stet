@@ -124,7 +124,7 @@ fn compared_pieces<'a>(line: &'a str, options: CompareOptions, pieces: &mut Vec<
     split_pieces(line, by_char, pieces);
     match options.ignore_whitespace {
         IgnoreWhitespace::None => {}
-        IgnoreWhitespace::Trailing | IgnoreWhitespace::Changes => {
+        IgnoreWhitespace::Changes => {
             if pieces.last().is_some_and(|piece| piece.kind == Kind::Space) {
                 pieces.pop();
             }

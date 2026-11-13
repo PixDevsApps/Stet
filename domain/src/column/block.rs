@@ -38,6 +38,7 @@ impl Block {
     }
 
     /// The cells of the widest row when the rows start at visual column `column`.
+    #[cfg(test)]
     pub fn width(&self, column: usize, tab_width: usize) -> usize {
         self.rows
             .iter()

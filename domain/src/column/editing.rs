@@ -37,6 +37,7 @@ impl std::error::Error for ColumnError {}
 
 /// Inserts `inserted` at the rectangle's left column on each of its lines, padding short lines
 /// with spaces. The block's cells are kept, and the rectangle moves right with them.
+#[cfg(test)]
 pub fn insert(
     text: &str,
     index: &LineIndex,

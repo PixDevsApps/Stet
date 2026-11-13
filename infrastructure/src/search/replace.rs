@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use stet_domain::search::{Query, Template};
+use stet_domain::search::Template;
 use stet_domain::text::TextEdit;
 
 use super::matcher::{Match, MatchCaptures, Matcher, Matches, Scope, SearchError};
@@ -172,25 +172,4 @@ impl Matcher {
         };
         Ok(TextEdit::new(found.start..found.end, insert))
     }
-}
-
-/// [`Matcher::replace_all`] for a query that is compiled here.
-pub fn replace_all(
-    text: &str,
-    query: &Query,
-    template: &Template,
-    range: Option<Range<usize>>,
-    cancel: &AtomicBool,
-) -> Result<ReplaceAll, SearchError> {
-    Matcher::new(query)?.replace_all(text, template, range, cancel)
-}
-
-/// [`Matcher::replace_one`] for a query that is compiled here.
-pub fn replace_one(
-    text: &str,
-    found: &Match,
-    query: &Query,
-    template: &Template,
-) -> Result<TextEdit, SearchError> {
-    Matcher::new(query)?.replace_one(text, found, template)
 }

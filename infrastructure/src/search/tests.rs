@@ -221,12 +221,9 @@ fn replace_one_rechecks_the_match() {
         Ok(TextEdit::new(0..1, "x"))
     );
     assert_eq!(
-        replace_one(
-            text,
-            &found,
-            &Query::regex(r"user=(\w+)"),
-            &Template::parse("$1")
-        ),
+        Matcher::new(&Query::regex(r"user=(\w+)"))
+            .unwrap()
+            .replace_one(text, &found, &Template::parse("$1")),
         Ok(TextEdit::new(0..10, "alice"))
     );
 }
@@ -432,7 +429,7 @@ proptest! {
     ) {
         let options = SearchOptions::new(SearchMode::Normal).with_match_case(true);
         let query = Query::new(needle.clone(), options);
-        let result = replace_all(&text, &query, &Template::literal(&replacement), None, &AtomicBool::new(false)).unwrap();
+        let result = matcher(&query).replace_all(&text, &Template::literal(&replacement), None, &AtomicBool::new(false)).unwrap();
         let expected = text.replace(&needle, &replacement);
         prop_assert_eq!(apply(&text, result.edits.clone()).unwrap(), expected.as_str());
         prop_assert_eq!(result.apply(&text), expected);

@@ -26,7 +26,7 @@ use std::ops::Range;
 
 use imara_diff::{Algorithm, Diff, IndentHeuristic, IndentLevel, Interner, Token};
 
-pub use align::{AlignedChunk, Alignment, Pad, RowSlot};
+pub use align::{Alignment, RowSlot};
 
 use align::AlignBuilder;
 use inline::InlineDiffer;
@@ -42,8 +42,6 @@ pub enum IgnoreWhitespace {
     /// Every whitespace character counts.
     #[default]
     None,
-    /// Whitespace at the end of a line is ignored.
-    Trailing,
     /// Trailing whitespace is ignored, and any run of whitespace equals any other.
     Changes,
     /// All whitespace is ignored.
@@ -179,15 +177,6 @@ pub struct Move {
     pub right: Range<usize>,
 }
 
-impl Move {
-    pub fn lines(&self, side: Side) -> &Range<usize> {
-        match side {
-            Side::Left => &self.left,
-            Side::Right => &self.right,
-        }
-    }
-}
-
 /// Line counts for the comparison summary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct CompareStats {
@@ -244,6 +233,7 @@ pub struct Comparison {
 }
 
 impl Comparison {
+    #[cfg(test)]
     pub fn is_identical(&self) -> bool {
         self.hunks.is_empty()
     }
@@ -253,6 +243,7 @@ impl Comparison {
         &self.runs[side.index()]
     }
 
+    #[cfg(test)]
     pub fn line_kind(&self, side: Side, line: usize) -> Option<LineKind> {
         let runs = self.line_runs(side);
         let index = runs.partition_point(|run| run.lines.end <= line);
@@ -261,6 +252,7 @@ impl Comparison {
             .map(|run| run.kind)
     }
 
+    #[cfg(test)]
     pub fn inline_at(&self, side: Side, line: usize) -> Option<&InlineDiff> {
         let index = self.inline.partition_point(|diff| diff.line(side) < line);
         self.inline
@@ -269,11 +261,13 @@ impl Comparison {
     }
 
     /// The rows of the [`Alignment`] that hunk `index` covers.
+    #[cfg(test)]
     pub fn hunk_rows(&self, index: usize) -> Range<usize> {
         self.hunk_rows[index].clone()
     }
 
     /// The hunk whose lines on `side` include `line`.
+    #[cfg(test)]
     pub fn hunk_at(&self, side: Side, line: usize) -> Option<usize> {
         let index = self
             .hunks

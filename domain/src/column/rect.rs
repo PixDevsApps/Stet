@@ -133,21 +133,6 @@ impl LineSpan {
     }
 }
 
-/// The spans of `rect` on the lines of `text` it covers.
-pub fn spans(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) -> Vec<LineSpan> {
-    clamp_lines(index, rect.lines())
-        .map(|line| {
-            LineSpan::new(
-                line,
-                &text[index.line_bytes(line)],
-                index.line_chars(line).start,
-                rect,
-                tab_width,
-            )
-        })
-        .collect()
-}
-
 /// The part of `lines` that the indexed text has.
 pub(super) fn clamp_lines(index: &LineIndex, lines: Range<usize>) -> Range<usize> {
     let count = index.line_count();
@@ -159,6 +144,21 @@ mod tests {
     use super::*;
     use crate::column::visual::visual_column;
     use proptest::prelude::*;
+
+    /// The spans of `rect` on the lines of `text` it covers.
+    fn spans(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) -> Vec<LineSpan> {
+        clamp_lines(index, rect.lines())
+            .map(|line| {
+                LineSpan::new(
+                    line,
+                    &text[index.line_bytes(line)],
+                    index.line_chars(line).start,
+                    rect,
+                    tab_width,
+                )
+            })
+            .collect()
+    }
 
     #[test]
     fn normalizes_anchor_and_cursor() {

@@ -9,6 +9,7 @@ use super::*;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::panic;
+use std::path::Path;
 use std::sync::Mutex;
 use stet_domain::session::TabRecord;
 

@@ -25,23 +25,12 @@ impl<T: PartialEq> Mru<T> {
         Self::default()
     }
 
-    pub fn len(&self) -> usize {
-        self.order.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.order.is_empty()
-    }
-
-    pub fn contains(&self, item: &T) -> bool {
-        self.order.contains(item)
-    }
-
     /// Most recent first.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.order.iter()
     }
 
+    #[cfg(test)]
     pub fn current(&self) -> Option<&T> {
         self.order.first()
     }

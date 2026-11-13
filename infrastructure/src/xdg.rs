@@ -70,14 +70,6 @@ impl StetDirs {
     pub fn styles_dir(&self) -> PathBuf {
         self.cache.join("styles")
     }
-
-    pub fn config_file(&self) -> PathBuf {
-        self.config.join(stet_domain::settings::CONFIG_FILE)
-    }
-
-    pub fn keys_file(&self) -> PathBuf {
-        self.config.join(stet_domain::settings::KEYS_FILE)
-    }
 }
 
 /// Creates `dir` (and missing parents) and makes `dir` itself mode 0700, also when it existed
@@ -118,11 +110,6 @@ mod tests {
             Path::new("/tmp/x/state/stet/recent.json")
         );
         assert_eq!(dirs.styles_dir(), Path::new("/tmp/x/cache/stet/styles"));
-        assert_eq!(
-            dirs.config_file(),
-            Path::new("/tmp/x/config/stet/config.toml")
-        );
-        assert_eq!(dirs.keys_file(), Path::new("/tmp/x/config/stet/keys.toml"));
         assert!(StetDirs::from_env().state.ends_with("stet"));
     }
 

@@ -106,6 +106,7 @@ pub fn normalize_to_lf(text: &str) -> Cow<'_, str> {
 }
 
 /// Replaces every LF of LF-normalized text with `eol`.
+#[cfg(test)]
 pub fn convert_from_lf(text: &str, eol: Eol) -> Cow<'_, str> {
     if eol == Eol::Lf || memchr::memchr(b'\n', text.as_bytes()).is_none() {
         Cow::Borrowed(text)

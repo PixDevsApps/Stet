@@ -45,8 +45,8 @@
 //! clipboard under [`MIME_TYPE`] and as `text/plain`. [`paste`] writes row *i* on line top + *i*
 //! at the rectangle's left column.
 //!
-//! A [`ColumnEdit`] of more than [`BULK_THRESHOLD`] edits goes to the buffer as one
-//! [`BulkEdit`] (ADR-003 amendment).
+//! A [`ColumnEdit`] of more than `BULK_THRESHOLD` edits goes to the buffer as one bulk edit,
+//! [`ColumnEdit::to_bulk`] (ADR-003 amendment).
 //!
 //! An operation reads only the lines it edits (for [`paste`], the lines its rows land on, and
 //! whether the text ends there), so a caller can pass a snapshot of just those lines: move the
@@ -64,10 +64,7 @@ mod visual;
 mod tests;
 
 pub use block::{Block, MIME_TYPE, copy, paste};
-pub use bulk::{BULK_THRESHOLD, BulkEdit};
-pub use editing::{
-    ColumnEdit, ColumnError, backspace, delete_block, delete_forward, insert, type_text,
-};
+pub use editing::{ColumnEdit, ColumnError, backspace, delete_block, delete_forward, type_text};
 pub use editor::{Base, ColumnEditor, Leading, NumberSequence};
-pub use rect::{LineSpan, Rect, VisualPos, spans};
-pub use visual::{Located, TabCut, home_column, locate, next_column, text_width, visual_column};
+pub use rect::{LineSpan, Rect, VisualPos};
+pub use visual::{home_column, locate, text_width, visual_column};

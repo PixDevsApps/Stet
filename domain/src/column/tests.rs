@@ -1,6 +1,7 @@
 //! The column operations against a naive model: every line rendered to a grid of cells, edited
 //! cell by cell and turned back into text. Also the S5 prototype's checks and a timing report.
 
+use super::editing::insert;
 use super::*;
 use crate::text::{LineIndex, TextEdit, apply, normalize};
 use proptest::prelude::*;

@@ -16,7 +16,7 @@ const CHECK_BUFFER_LEN: usize = 64 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unmappable {
     pub encoding: &'static Encoding,
-    /// The first [`MAX_LISTED_UNMAPPABLE`] of them, with their character offsets in the text.
+    /// The first `MAX_LISTED_UNMAPPABLE` of them, with their character offsets in the text.
     pub chars: Vec<(usize, char)>,
     /// How many characters cannot be represented, listed or not.
     pub count: usize,

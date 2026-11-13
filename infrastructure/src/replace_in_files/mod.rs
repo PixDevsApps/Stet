@@ -9,7 +9,7 @@
 //! - Each file is matched as the editor would open it: decoded, normalized to LF, NUL as
 //!   U+2400, so the query means what it means in an open document, Extended `\r\n` included.
 //!   Only the replacements are encoded; every other byte is copied from the file
-//!   ([`plan::plan`]).
+//!   (`plan::plan`).
 //! - Files left alone, with the reason ([`stet_domain::replace_files::Skip`]): binary, lossy
 //!   or malformed decodes, replacements the encoding can't represent, read-only files, files
 //!   over the size limit, files that changed between reading and writing, and the rare edits
@@ -22,7 +22,7 @@ mod plan;
 #[cfg(test)]
 mod tests;
 
-pub use plan::{FileOptions, FileOutcome, Plan, PlanError, plan, replace_file, replaced_hits};
+pub use plan::{FileOptions, FileOutcome, replace_file, replaced_hits};
 
 use std::collections::HashSet;
 use std::ffi::OsString;

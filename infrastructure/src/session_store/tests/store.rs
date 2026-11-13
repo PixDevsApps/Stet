@@ -1,4 +1,5 @@
 use super::*;
+use crate::fs::fingerprint_of;
 use std::collections::BTreeMap;
 use std::fs::Permissions;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -798,7 +799,7 @@ fn new_ids_are_valid_unique_and_ordered() {
 fn fingerprints_follow_file_changes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("file.txt");
-    let now = |path: &Path| fingerprint(&fs::metadata(path).unwrap());
+    let now = |path: &Path| fingerprint_of(&fs::metadata(path).unwrap());
     fs::write(&path, "one").unwrap();
     let saved = now(&path);
     assert_eq!(saved.size, 3);

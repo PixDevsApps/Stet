@@ -17,11 +17,6 @@ pub fn omarchy_dir_in(state_home: &Path) -> PathBuf {
     state_home.join("omarchy")
 }
 
-/// Omarchy's `current/` directory, which holds `theme/`, `theme.name` and `background`.
-pub fn current_dir_in(state_home: &Path) -> PathBuf {
-    omarchy_dir_in(state_home).join("current")
-}
-
 /// The resolver script, when installed under `root` (`/` outside tests).
 pub fn theme_color_script_in(root: &Path) -> Option<PathBuf> {
     let script = root.join(THEME_COLOR_SCRIPT);
@@ -34,14 +29,6 @@ pub fn omarchy_dir() -> PathBuf {
         Some(dir) if dir.is_absolute() => dir,
         _ => omarchy_dir_in(&state_home(&std::env::home_dir().unwrap_or_default())),
     }
-}
-
-pub fn current_dir() -> PathBuf {
-    omarchy_dir().join("current")
-}
-
-pub fn current_theme_dir() -> PathBuf {
-    current_dir().join("theme")
 }
 
 pub fn theme_color_script() -> Option<PathBuf> {
@@ -64,14 +51,6 @@ mod tests {
     }
 
     #[test]
-    fn current_dir_is_under_omarchy() {
-        assert_eq!(
-            current_dir_in(Path::new("/home/user/.local/state")),
-            Path::new("/home/user/.local/state/omarchy/current")
-        );
-    }
-
-    #[test]
     fn theme_color_script_requires_the_file() {
         let root = tempfile::tempdir().unwrap();
         assert_eq!(theme_color_script_in(root.path()), None);
@@ -87,11 +66,5 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         fs::create_dir_all(root.path().join(THEME_COLOR_SCRIPT)).unwrap();
         assert_eq!(theme_color_script_in(root.path()), None);
-    }
-
-    #[test]
-    fn wrappers_end_in_the_expected_components() {
-        assert!(current_dir().ends_with("current"));
-        assert!(current_theme_dir().ends_with("current/theme"));
     }
 }

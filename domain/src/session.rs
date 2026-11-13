@@ -25,9 +25,6 @@ pub const SCHEMA_VERSION: u32 = 1;
 /// The longest tab or backup id, in bytes.
 pub const MAX_ID_LEN: usize = 64;
 
-/// How often the unsaved text of dirty and untitled documents is backed up (ADR-006).
-pub const BACKUP_INTERVAL: Duration = Duration::from_secs(7);
-
 /// Documents with more characters than this back off: at most one backup per
 /// [`LARGE_BACKUP_INTERVAL`], and only once the text has been left alone for
 /// [`LARGE_BACKUP_IDLE`]. A character takes at least a byte, so this is over 16 MiB.
@@ -94,17 +91,6 @@ impl Session {
     /// The backup ids the tabs reference.
     pub fn backup_ids(&self) -> impl Iterator<Item = &str> {
         self.tabs.iter().filter_map(|tab| tab.backup.as_deref())
-    }
-
-    /// The N for the next untitled tab's "Untitled N": the lowest number no untitled tab uses,
-    /// so freed numbers are reused.
-    pub fn next_untitled_number(&self) -> u32 {
-        next_untitled_number(
-            self.tabs
-                .iter()
-                .filter(|tab| tab.path.is_none())
-                .filter_map(|tab| tab.untitled_number),
-        )
     }
 
     /// Gives tabs with an invalid or duplicate id a fresh one from `new_id`, and clears an
@@ -179,7 +165,8 @@ pub struct TabRecord {
         skip_serializing_if = "Option::is_none"
     )]
     pub custom_name: Option<String>,
-    /// The N of an untitled tab's "new N"; see [`Session::next_untitled_number`].
+    /// The N of an untitled tab's "Untitled N"; see
+    /// [`next_untitled_number`](crate::document::next_untitled_number).
     #[serde(deserialize_with = "codec::lenient")]
     pub untitled_number: Option<u32>,
     /// The buffer has unsaved changes.
@@ -358,14 +345,6 @@ pub fn is_valid_id(id: &str) -> bool {
         && id
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-}
-
-/// The lowest number from 1 up that isn't in `used`.
-pub fn next_untitled_number(used: impl IntoIterator<Item = u32>) -> u32 {
-    let used: BTreeSet<u32> = used.into_iter().collect();
-    (1..=u32::MAX)
-        .find(|number| !used.contains(number))
-        .unwrap_or(u32::MAX)
 }
 
 /// Serde helpers for the lenient, forward-compatible format.
@@ -874,28 +853,6 @@ mod tests {
         for id in ["", ".", "..", "a/b", "../x", "a.txt", "a b", "é", &too_long] {
             assert!(!is_valid_id(id), "{id}");
         }
-    }
-
-    #[test]
-    fn untitled_numbers_reuse_the_lowest_free_one() {
-        assert_eq!(next_untitled_number([]), 1);
-        assert_eq!(next_untitled_number([1, 2, 3]), 4);
-        assert_eq!(next_untitled_number([2, 3]), 1);
-        assert_eq!(next_untitled_number([0, 1, 3, 3]), 2);
-
-        let untitled = |number| TabRecord {
-            untitled_number: Some(number),
-            ..TabRecord::default()
-        };
-        let saved = TabRecord {
-            path: Some("/saved".into()),
-            ..untitled(3)
-        };
-        let session = Session {
-            tabs: vec![untitled(1), untitled(2), saved],
-            ..Session::default()
-        };
-        assert_eq!(session.next_untitled_number(), 3);
     }
 
     #[test]

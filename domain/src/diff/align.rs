@@ -72,6 +72,7 @@ impl Alignment {
         self.lines[side.index()]
     }
 
+    #[cfg(test)]
     pub fn chunks(&self) -> &[AlignedChunk] {
         &self.chunks
     }
@@ -109,20 +110,11 @@ impl Alignment {
     }
 
     /// The line of the other side in the same row as `line`, if that row is not padding.
+    #[cfg(test)]
     pub fn counterpart(&self, side: Side, line: usize) -> Option<usize> {
         match self.slot(side.other(), self.row_of(side, line)) {
             RowSlot::Line(other) => Some(other),
             RowSlot::Pad { .. } => None,
-        }
-    }
-
-    /// The line of the other side to scroll level with `line`: its counterpart, or the line
-    /// after the padding in that row. This drives synchronized scrolling of unpadded views.
-    pub fn scroll_line(&self, side: Side, line: usize) -> usize {
-        let other = side.other();
-        match self.slot(other, self.row_of(side, line)) {
-            RowSlot::Line(line) => line,
-            RowSlot::Pad { before } => before.min(self.line_count(other).saturating_sub(1)),
         }
     }
 
@@ -258,7 +250,6 @@ mod tests {
         assert_eq!(alignment.pads(Side::Left), vec![Pad { before: 2, rows: 1 }]);
         assert!(alignment.pads(Side::Right).is_empty());
         assert_eq!(alignment.counterpart(Side::Right, 2), None);
-        assert_eq!(alignment.scroll_line(Side::Right, 2), 2);
     }
 
     #[test]

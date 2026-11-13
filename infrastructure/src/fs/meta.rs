@@ -4,14 +4,14 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use rustix::fs::Access;
-
-/// What Stet compares to notice that a file changed on disk: the session store's type, so a
-/// baseline taken at load or save is the one a session keeps (ADR-006). Recorded right after
-/// Stet's own saves so that they don't count as outside changes; compare with
-/// [`Fingerprint::matches`], which ignores the device number.
-pub use stet_domain::session::Fingerprint;
+use stet_domain::session::Fingerprint;
 
 /// The fingerprint of `metadata`, from `fs::metadata` or from the handle a load read.
+///
+/// A [`Fingerprint`] is what Stet compares to notice that a file changed on disk: the session
+/// store's type, so a baseline taken at load or save is the one a session keeps (ADR-006).
+/// Recorded right after Stet's own saves so that they don't count as outside changes; compare
+/// with [`Fingerprint::matches`], which ignores the device number.
 pub fn fingerprint_of(metadata: &Metadata) -> Fingerprint {
     Fingerprint {
         dev: metadata.dev(),

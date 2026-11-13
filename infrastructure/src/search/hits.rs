@@ -15,7 +15,7 @@ pub struct Hit {
     /// One-based.
     pub line_number: u64,
     /// The line without its line break, decoded as UTF-8 with U+FFFD for invalid bytes. A line
-    /// longer than [`MAX_LINE_CHARS`] is cut to a window that starts a little before its first
+    /// longer than `MAX_LINE_CHARS` is cut to a window that starts a little before its first
     /// match.
     pub line_text: String,
     /// Characters of the line before `line_text`: 0 unless the line was cut.
@@ -27,6 +27,7 @@ pub struct Hit {
 
 impl Hit {
     /// The character column (in the whole line) where the first match starts.
+    #[cfg(test)]
     pub fn column(&self) -> usize {
         let start = self.match_ranges.first().map_or(0, |range| range.start);
         self.line_offset + count_chars(&self.line_text.as_bytes()[..start])

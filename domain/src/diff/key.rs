@@ -7,7 +7,6 @@ use super::{CompareOptions, IgnoreWhitespace};
 pub(super) fn line_key<'a>(line: &'a str, options: CompareOptions) -> Cow<'a, str> {
     let key = match options.ignore_whitespace {
         IgnoreWhitespace::None => Cow::Borrowed(line),
-        IgnoreWhitespace::Trailing => Cow::Borrowed(line.trim_end()),
         IgnoreWhitespace::Changes => collapse_whitespace(line.trim_end()),
         IgnoreWhitespace::All => strip_whitespace(line),
     };
@@ -88,7 +87,6 @@ mod tests {
     fn whitespace_modes_follow_git_semantics() {
         let line = "  a \t b  ";
         assert_eq!(key(line, IgnoreWhitespace::None, false), line);
-        assert_eq!(key(line, IgnoreWhitespace::Trailing, false), "  a \t b");
         assert_eq!(key(line, IgnoreWhitespace::Changes, false), " a b");
         assert_eq!(key(line, IgnoreWhitespace::All, false), "ab");
         assert_eq!(key("ab", IgnoreWhitespace::Changes, false), "ab");

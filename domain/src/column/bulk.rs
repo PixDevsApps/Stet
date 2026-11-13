@@ -75,7 +75,8 @@ impl ColumnEdit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::column::{Block, Rect, insert, paste};
+    use crate::column::editing::insert;
+    use crate::column::{Block, Rect, paste};
     use crate::text::apply;
 
     #[test]

@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use proptest::prelude::*;
 
+use super::align::Pad;
 use super::*;
 
 fn lines(text: &str) -> Vec<&str> {
@@ -86,7 +87,6 @@ fn an_added_line_pads_the_left_view() {
     assert_eq!(comparison.line_kind(Side::Right, 1), Some(LineKind::Added));
     assert_eq!(comparison.line_kind(Side::Right, 2), None);
     assert_eq!(comparison.alignment.counterpart(Side::Left, 1), Some(2));
-    assert_eq!(comparison.alignment.scroll_line(Side::Right, 1), 1);
     assert_eq!(comparison.stats.added, 1);
 }
 
@@ -240,12 +240,6 @@ fn whitespace_and_case_options_hide_differences() {
         options(IgnoreWhitespace::None, false)
     ));
     assert!(same(
-        "a  \nb",
-        "a\nb",
-        options(IgnoreWhitespace::Trailing, false)
-    ));
-    assert!(!same(" a", "a", options(IgnoreWhitespace::Trailing, false)));
-    assert!(same(
         "a  b\t",
         "a\tb",
         options(IgnoreWhitespace::Changes, false)
@@ -288,7 +282,7 @@ fn ignored_empty_lines_are_aligned_against_padding() {
     assert_eq!(comparison.alignment.counterpart(Side::Left, 2), Some(1));
 
     let whitespace_only = CompareOptions {
-        ignore_whitespace: IgnoreWhitespace::Trailing,
+        ignore_whitespace: IgnoreWhitespace::Changes,
         ..options
     };
     assert!(compare("a\n   \nb\n", "a\nb", &whitespace_only).is_identical());
@@ -426,7 +420,6 @@ fn any_options() -> impl Strategy<Value = CompareOptions> {
     (
         prop_oneof![
             Just(IgnoreWhitespace::None),
-            Just(IgnoreWhitespace::Trailing),
             Just(IgnoreWhitespace::Changes),
             Just(IgnoreWhitespace::All),
         ],

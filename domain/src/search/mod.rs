@@ -17,12 +17,12 @@ mod translate;
 use std::borrow::Cow;
 use std::ops::Range;
 
-pub use extended::{EscapeError, unescape};
+pub use extended::unescape;
 pub use history::{History, Recall, SearchHistory};
 pub use report::ScopeKind;
 pub use smart::SmartHighlight;
-pub use template::{Captures, Template, TemplateWarning, expand};
-pub use translate::{Note, Target, TranslateError, Translated, translate, translate_for};
+pub use template::{Captures, Template, TemplateWarning};
+pub use translate::{Target, TranslateError, Translated, translate, translate_for};
 
 /// What the buffer holds instead of U+0000 (ADR-007).
 pub const NUL_PLACEHOLDER: char = '\u{2400}';
