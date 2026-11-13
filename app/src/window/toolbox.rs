@@ -9,7 +9,6 @@ use super::Window;
 use super::snapshot::{PageSnapshot, Stale, is_small, run_sized};
 use crate::editor::{EditorPage, read_only_message};
 use crate::edits;
-use crate::runtime::Debounce;
 use gtk4::glib;
 use gtk4::prelude::*;
 use sourceview5::prelude::*;
@@ -56,9 +55,6 @@ pub struct ToolState {
     pub suffix: RefCell<String>,
     pub numbering: RefCell<NumberSequence>,
     pub stats: RefCell<Option<ToolStats>>,
-    /// The status bar's word count: the document and revision it was counted for.
-    pub words: RefCell<Option<(glib::WeakRef<EditorPage>, u64, usize)>>,
-    pub words_pending: Debounce,
 }
 
 /// What a tool works on when nothing is selected.
@@ -637,7 +633,7 @@ impl Window {
         }
         let find = &self.inner.find;
         find.set_search_mode(SearchMode::Normal);
-        find.entry.set_text(&query);
+        find.set_query_text(&query);
         find.compile();
         self.find_step(forward);
     }

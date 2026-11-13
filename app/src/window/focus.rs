@@ -88,8 +88,8 @@ impl Window {
         let within = |widget: &gtk::Widget| focus == *widget || focus.is_ancestor(widget);
         self.current_page()
             .is_some_and(|page| focus == *page.view().upcast_ref::<gtk::Widget>())
-            || within(inner.find.revealer.upcast_ref())
-            || within(inner.results.root.upcast_ref())
+            || within(inner.find.root().upcast_ref())
+            || within(inner.results.root().upcast_ref())
             || focus.ancestor(gtk::Popover::static_type()).is_some()
     }
 

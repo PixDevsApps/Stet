@@ -1,29 +1,26 @@
-//! Count, Replace, Replace All (in the current or every open document) and Find All, and the
-//! results panel's commands. Matching and template expansion run in our own engine on a
+//! Count, Replace, Replace All (in the current or every open document) and Find All. Matching and template expansion run in our own engine on a
 //! snapshot, on a worker; replacements are applied on the GTK thread in one user action per
 //! document, as one bulk edit above 2,000 edits (ADR-003 and ADR-005 amendments).
 
-use super::Window;
-use super::find::{BarMode, Field, Tone};
-use super::results::{FileNode, FileTarget, Jump};
-use super::snapshot::{PageSnapshot, Stale};
-use crate::editor::{EditorPage, JUMP_LOAD_WAIT, read_only_message};
+use super::bar::{BarMode, Field, Tone};
+use super::results::{FileNode, FileTarget};
+use crate::editor::{EditorPage, read_only_message};
 use crate::edits;
 use crate::page_search::Compiled;
 use crate::runtime::worker;
+use crate::window::Window;
+use crate::window::snapshot::{PageSnapshot, Stale};
 use gtk4::prelude::*;
-use gtk4::{gdk, glib};
 use libadwaita as adw;
 use libadwaita::prelude::*;
+#[cfg(feature = "selftest")]
+use std::cell::Cell;
 use std::fmt::Write as _;
 use std::ops::Range;
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
-use stet_domain::actions::ActionId;
-use stet_domain::document::location::LineCol;
 use stet_domain::document::tilde;
 use stet_domain::search::SearchOptions;
 use stet_domain::search::report::ScopeKind;
@@ -35,8 +32,6 @@ use stet_infrastructure::search::{Match, SearchError, document_hits};
 
 const SCOPE_START_MARK: &str = "stet-scope-start";
 const SCOPE_END_MARK: &str = "stet-scope-end";
-/// The results panel's height when it first opens.
-pub const RESULTS_HEIGHT: i32 = 220;
 
 /// What the last Replace All cost, for the self-test's performance report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,58 +49,25 @@ pub struct ReplaceStats {
     pub total: Duration,
 }
 
-impl Window {
-    /// The find bar's commands and the results panel's.
-    pub fn run_search_action(&self, id: ActionId) {
-        match id {
-            ActionId::Replace => self.show_find_mode(BarMode::Replace),
-            ActionId::FindInFiles => self.show_find_mode(BarMode::Files),
-            ActionId::ReplaceNext => self.replace_next(true),
-            ActionId::ReplaceAll => self.replace_all(),
-            ActionId::ReplaceAllInOpenDocuments => {
-                let window = self.clone();
-                self.spawn(async move { window.replace_all_in_open_documents().await });
-            }
-            ActionId::Count => self.count(),
-            ActionId::FindAllInDocument => self.find_all(false),
-            ActionId::FindAllInOpenDocuments => self.find_all(true),
-            ActionId::StopFindInFiles => {
-                self.stop_find_in_files();
-                self.stop_replace_in_files();
-            }
-            ActionId::ReplaceInFiles => self.replace_in_files(),
-            ActionId::SearchResults => self.toggle_results_focus(),
-            ActionId::NextSearchResult => self.step_result(true),
-            ActionId::PreviousSearchResult => self.step_result(false),
-            ActionId::CopySearchResults => self.copy_results(),
-            ActionId::ClearSearchResults => self.clear_results(),
-            ActionId::CloseSearchResults => self.hide_results(),
-            _ => {}
-        }
-    }
+/// What Replace All keeps for the self-test: the last one's cost.
+#[cfg(feature = "selftest")]
+#[derive(Debug, Default)]
+pub struct ReplaceState {
+    stats: Cell<Option<ReplaceStats>>,
+}
 
+impl Window {
     /// The query for a command, remembered in the history; `None` (with the bar showing why)
     /// when the find field is empty or invalid.
-    pub(super) fn query_for_command(&self) -> Option<Rc<Compiled>> {
+    pub(in crate::window) fn query_for_command(&self) -> Option<Rc<Compiled>> {
         let find = &self.inner.find;
-        if find.compiled().is_none() {
-            find.compile();
+        let compiled = find.query();
+        match &compiled {
+            Some(compiled) => find.remember(Field::Find, &compiled.query.pattern),
+            None if !find.is_open() => self.show_find(),
+            None => {}
         }
-        match find.compiled() {
-            Some(compiled) => {
-                find.remember(Field::Find, &compiled.query.pattern);
-                Some(compiled)
-            }
-            None => {
-                if !find.is_open() {
-                    self.show_find();
-                }
-                if find.pattern_error().is_none() {
-                    find.set_message("Type what to search for", Tone::Info);
-                }
-                None
-            }
-        }
+        compiled
     }
 
     /// Replacing needs the replace row on screen; otherwise the command opens it.
@@ -119,7 +81,7 @@ impl Window {
     }
 
     /// Whether `page` can be changed now; the bar says why not.
-    pub(super) fn editable_page(&self, page: &EditorPage) -> bool {
+    pub(in crate::window) fn editable_page(&self, page: &EditorPage) -> bool {
         if page.is_loading() || page.is_busy() {
             self.inner
                 .find
@@ -137,7 +99,7 @@ impl Window {
 
     /// Remembers a selection the bar opened with, so that In selection still has it after the
     /// incremental search moves the caret.
-    pub(super) fn remember_search_scope(page: &EditorPage) {
+    pub(in crate::window) fn remember_search_scope(page: &EditorPage) {
         let buffer = page.buffer();
         match buffer.selection_bounds() {
             Some((start, end)) => {
@@ -150,7 +112,7 @@ impl Window {
 
     /// Where Count and Replace All work (the scope table, [`SearchOptions::scope`]), and
     /// how to describe it. In selection uses the selection, or the one the bar opened with.
-    pub(super) fn command_scope(
+    pub(in crate::window) fn command_scope(
         page: &EditorPage,
         options: SearchOptions,
     ) -> (Range<usize>, ScopeKind) {
@@ -180,7 +142,7 @@ impl Window {
     }
 
     /// Count: the matches in the scope, reported in the bar.
-    fn count(&self) {
+    pub(super) fn count(&self) {
         let Some(compiled) = self.query_for_command() else {
             return;
         };
@@ -216,29 +178,29 @@ impl Window {
 
     /// Replace: if the current match (or the selection) is a match, replace it and find the
     /// next; otherwise just find the next.
-    pub(super) fn replace_next(&self, forward: bool) {
+    pub(in crate::window) fn replace_next(&self, forward: bool) {
         if !self.replace_row_shown() {
             return;
         }
         let Some(compiled) = self.query_for_command() else {
             return;
         };
-        let template = match self.template() {
+        let find = &self.inner.find;
+        let template = match find.replace_template() {
             Ok(template) => template,
             Err(message) => {
-                self.inner.find.set_message(&message, Tone::Error);
+                find.set_message(&message, Tone::Error);
                 return;
             }
         };
-        let find = &self.inner.find;
-        find.remember(Field::Replace, &find.replace_entry.text());
+        find.remember(Field::Replace, &find.replace_text());
         let Some(page) = self.current_page() else {
             return;
         };
         if !self.editable_page(&page) {
             return;
         }
-        let forward = forward != find.backward.is_active();
+        let forward = forward != find.options().backward;
         let has_match = page.current_match().is_some();
         let (start, end) = self.search_anchor(&page);
         if start == end && !has_match {
@@ -282,22 +244,22 @@ impl Window {
     }
 
     /// Replace All in the scope of the current document, as one undo step.
-    fn replace_all(&self) {
+    pub(super) fn replace_all(&self) {
         if !self.replace_row_shown() {
             return;
         }
         let Some(compiled) = self.query_for_command() else {
             return;
         };
-        let template = match self.template() {
+        let find = &self.inner.find;
+        let template = match find.replace_template() {
             Ok(template) => template,
             Err(message) => {
-                self.inner.find.set_message(&message, Tone::Error);
+                find.set_message(&message, Tone::Error);
                 return;
             }
         };
-        let find = &self.inner.find;
-        find.remember(Field::Replace, &find.replace_entry.text());
+        find.remember(Field::Replace, &find.replace_text());
         let Some(page) = self.current_page() else {
             return;
         };
@@ -311,7 +273,8 @@ impl Window {
         let snapshot = started.elapsed();
         let matcher = Arc::clone(&compiled.matcher);
         find.set_message("Replacing…", Tone::Info);
-        find.stats.replace(None);
+        #[cfg(feature = "selftest")]
+        self.inner.replace.stats.set(None);
         let window = self.clone();
         self.spawn(async move {
             let searching = Instant::now();
@@ -366,7 +329,8 @@ impl Window {
                         total_ms = stats.total.as_secs_f64() * 1e3,
                         "replace all"
                     );
-                    find.stats.replace(Some(stats));
+                    #[cfg(feature = "selftest")]
+                    window.inner.replace.stats.set(Some(stats));
                     find.set_message(&replace_message(result.count, scope), Tone::Info);
                 }
                 Err(error) => find.set_message(&error.to_string(), Tone::Error),
@@ -377,22 +341,22 @@ impl Window {
 
     /// Replace All in every open document that can be changed, after a confirmation; each
     /// document gets its own undo step.
-    async fn replace_all_in_open_documents(&self) {
+    pub(super) async fn replace_all_in_open_documents(&self) {
         if !self.replace_row_shown() {
             return;
         }
         let Some(compiled) = self.query_for_command() else {
             return;
         };
-        let template = match self.template() {
+        let find = &self.inner.find;
+        let template = match find.replace_template() {
             Ok(template) => template,
             Err(message) => {
-                self.inner.find.set_message(&message, Tone::Error);
+                find.set_message(&message, Tone::Error);
                 return;
             }
         };
-        let find = &self.inner.find;
-        find.remember(Field::Replace, &find.replace_entry.text());
+        find.remember(Field::Replace, &find.replace_text());
         // Restored tabs that were not shown yet load their text first.
         self.load_stubs().await;
         let pages: Vec<EditorPage> = self
@@ -486,7 +450,7 @@ impl Window {
 
     /// Find All in the current document or in every open document: the results panel lists
     /// the matching lines.
-    fn find_all(&self, all_documents: bool) {
+    pub(super) fn find_all(&self, all_documents: bool) {
         let Some(compiled) = self.query_for_command() else {
             return;
         };
@@ -580,253 +544,16 @@ impl Window {
             } else {
                 heading.clone()
             };
-            results.status.set_label(&status);
+            results.set_status_text(&status);
             find.set_message(&heading, Tone::Info);
             window.show_results(false);
         });
     }
-
-    // ----- the results panel -----------------------------------------------------------------
-
-    pub(super) fn connect_results_panel(&self) {
-        let results = &self.inner.results;
-        results.connect_jump(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |jump| Window { inner }.jump_to(jump)
-        ));
-        results.keys.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_, key, _, state| Window { inner }.on_results_key(key, state)
-        ));
-        for (button, id) in [
-            (&results.stop, ActionId::StopFindInFiles),
-            (&results.copy, ActionId::CopySearchResults),
-            (&results.clear, ActionId::ClearSearchResults),
-            (&results.close, ActionId::CloseSearchResults),
-        ] {
-            button.connect_clicked(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |_| Window { inner }.run_search_action(id)
-            ));
-        }
-        let appearance = &self.inner.shared.appearance;
-        appearance.connect_scheme_changed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |scheme| inner.results.set_match_color(search_match_color(scheme))
-        ));
-        if let Some(scheme) = appearance.scheme() {
-            results.set_match_color(search_match_color(&scheme));
-        }
-        if let Some(action) = self.action(ActionId::StopFindInFiles) {
-            action.set_enabled(false);
-        }
-    }
-
-    /// Shows the results panel at its last height, optionally with the focus in it.
-    pub fn show_results(&self, focus: bool) {
-        let results = &self.inner.results;
-        if !results.root.is_visible() {
-            results.root.set_visible(true);
-            let paned = self.inner.paned.clone();
-            let height = self.inner.results_height.get();
-            let place = move || {
-                let total = paned.height();
-                if total > height {
-                    paned.set_position(total - height);
-                }
-            };
-            if self.inner.paned.height() > 0 {
-                place();
-            } else {
-                glib::idle_add_local_once(place);
-            }
-        }
-        if focus {
-            let position = results.list.model().map_or(0, |model| model.n_items());
-            if position > 0 {
-                results.list.grab_focus();
-            } else {
-                results.close.grab_focus();
-            }
-        }
-    }
-
-    pub fn hide_results(&self) {
-        let results = &self.inner.results;
-        if results.root.is_visible() {
-            let paned = &self.inner.paned;
-            let height = paned.height() - paned.position();
-            if height > 40 {
-                self.inner.results_height.set(height);
-            }
-            results.root.set_visible(false);
-        }
-        if let Some(page) = self.current_page() {
-            page.view().grab_focus();
-        }
-    }
-
-    /// Whether the focus is inside the results panel.
-    pub fn results_focused(&self) -> bool {
-        RootExt::focus(&self.inner.window)
-            .is_some_and(|focus| focus.is_ancestor(&self.inner.results.root))
-    }
-
-    /// Search Results Window (F7, Ctrl+Alt+R): into the panel, or back to the editor.
-    fn toggle_results_focus(&self) {
-        if self.results_focused() {
-            if let Some(page) = self.current_page() {
-                page.view().grab_focus();
-            }
-        } else {
-            self.show_results(true);
-        }
-    }
-
-    /// Next or previous search result (F4, Shift+F4).
-    fn step_result(&self, forward: bool) {
-        match self.inner.results.step(forward) {
-            Some(jump) => {
-                self.show_results(false);
-                self.jump_to(jump);
-            }
-            None => self.toast("No search results"),
-        }
-    }
-
-    fn copy_results(&self) {
-        let text = self.inner.results.text();
-        if text.is_empty() {
-            self.toast("No search results to copy");
-            return;
-        }
-        self.inner.window.clipboard().set_text(&text);
-        self.toast("Copied the search results");
-    }
-
-    fn clear_results(&self) {
-        let results = &self.inner.results;
-        results.clear();
-        results.status.set_label("");
-    }
-
-    /// Goes to a result: selects its tab (opening the file if needed) and the match.
-    pub(super) fn jump_to(&self, jump: Jump) {
-        self.note_jump();
-        let open_page = match &jump.target {
-            FileTarget::Page { page, path } => page
-                .upgrade()
-                .filter(|page| self.tab_page(page).is_some())
-                .or_else(|| self.page_showing(path.as_ref()?)),
-            FileTarget::Path(path) => self.page_showing(path),
-        };
-        if let Some(page) = open_page {
-            self.select_result(&page, &jump);
-            return;
-        }
-        let path = match &jump.target {
-            FileTarget::Path(path)
-            | FileTarget::Page {
-                path: Some(path), ..
-            } => path.clone(),
-            FileTarget::Page { path: None, .. } => {
-                self.toast("That document is closed");
-                return;
-            }
-        };
-        let opened = self.open_locations(vec![super::Location {
-            path,
-            position: Some(LineCol::new(
-                u32::try_from(jump.line).unwrap_or(u32::MAX),
-                Some(jump.column as u32 + 1),
-            )),
-            create: false,
-        }]);
-        let Some(page) = opened.into_iter().next() else {
-            return;
-        };
-        let window = self.clone();
-        self.spawn(async move {
-            if page.loaded(JUMP_LOAD_WAIT).await && window.tab_page(&page).is_some() {
-                window.select_result(&page, &jump);
-            }
-        });
-    }
-
-    fn page_showing(&self, path: &Path) -> Option<EditorPage> {
-        self.documents()
-            .into_iter()
-            .find(|page| page.shows(path, None))
-    }
-
-    fn select_result(&self, page: &EditorPage, jump: &Jump) {
-        self.select(page);
-        let buffer = page.buffer();
-        let line = i32::try_from(jump.line.saturating_sub(1)).unwrap_or(i32::MAX);
-        let line = line.min((buffer.line_count() - 1).max(0));
-        let Some(mut start) = buffer.iter_at_line(line) else {
-            return;
-        };
-        for _ in 0..jump.column {
-            if start.ends_line() {
-                break;
-            }
-            start.forward_char();
-        }
-        let mut end = start;
-        for _ in 0..jump.length {
-            if end.ends_line() {
-                break;
-            }
-            end.forward_char();
-        }
-        page.clear_current_match();
-        buffer.select_range(&end, &start);
-        page.view()
-            .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);
-        page.view().grab_focus();
-        self.update_match_count();
-    }
-
-    /// Keys inside the results panel: Escape closes it, Ctrl+C copies the selected rows.
-    pub(super) fn on_results_key(
-        &self,
-        key: gdk::Key,
-        state: gdk::ModifierType,
-    ) -> glib::Propagation {
-        let control = state.contains(gdk::ModifierType::CONTROL_MASK);
-        match key {
-            gdk::Key::Escape => {
-                self.hide_results();
-                glib::Propagation::Stop
-            }
-            gdk::Key::c | gdk::Key::C | gdk::Key::Insert if control => {
-                if let Some(text) = self.inner.results.selected_text() {
-                    self.inner.window.clipboard().set_text(&text);
-                }
-                glib::Propagation::Stop
-            }
-            _ => glib::Propagation::Proceed,
-        }
-    }
 }
 
-/// The background of the scheme's `search-match` style, which emphasizes matches.
-fn search_match_color(scheme: &sourceview5::StyleScheme) -> Option<gdk::RGBA> {
-    let style = scheme.style("search-match")?;
-    gdk::RGBA::parse(style.background()?.as_str()).ok()
-}
-
-/// Drops the selection the bar opened with.
 /// Applies a Replace All computed on `text`, the document's text, through the document's
 /// bookmark and mark tracking, so bookmarks come back with Undo and Redo.
-pub(super) fn apply_tracked(
+pub(in crate::window) fn apply_tracked(
     page: &EditorPage,
     result: &stet_infrastructure::search::ReplaceAll,
     text: &str,
@@ -841,11 +568,26 @@ pub(super) fn apply_tracked(
     applied.expect("the edit ran")
 }
 
-pub(super) fn forget_search_scope(page: &EditorPage) {
+/// Drops the selection the bar opened with.
+pub(in crate::window) fn forget_search_scope(page: &EditorPage) {
     let buffer = page.buffer();
     for name in [SCOPE_START_MARK, SCOPE_END_MARK] {
         if let Some(mark) = buffer.mark(name) {
             buffer.delete_mark(&mark);
         }
+    }
+}
+
+/// What the self-test reads of Replace All.
+#[cfg(feature = "selftest")]
+impl Window {
+    /// What the last Replace All cost.
+    pub fn replace_stats(&self) -> Option<ReplaceStats> {
+        self.inner.replace.stats.get()
+    }
+
+    /// Forgets the last Replace All's cost.
+    pub fn reset_replace_stats(&self) {
+        self.inner.replace.stats.set(None);
     }
 }

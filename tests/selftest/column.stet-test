@@ -246,7 +246,7 @@ action replace
 find "a"
 replace-text "b"
 action replace-all
-assert-text "yxbb\nyxbb\n"
+wait-until assert-text "yxbb\nyxbb\n"
 key find Escape
 action undo
 action redo

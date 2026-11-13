@@ -20,9 +20,8 @@
 
 use super::Window;
 use super::quick_open::QuickOpen;
-use super::rif::{RifRun, RifStats};
 use crate::editor::{EditorPage, JUMP_LOAD_WAIT};
-use crate::runtime::{Debounce, Latest};
+use crate::runtime::Debounce;
 use gtk4 as gtk;
 use gtk4::{gdk, glib, pango};
 use libadwaita::prelude::*;
@@ -131,8 +130,8 @@ impl Switcher {
     }
 }
 
-/// The window's navigation state: the switcher, the back and forward history, quick open,
-/// the clicked tab of the tab menu, and Replace in Files.
+/// The window's navigation state: the switcher, the back and forward history, quick open
+/// and the clicked tab of the tab menu.
 pub struct Nav {
     mru: RefCell<Mru<EditorPage>>,
     history: RefCell<History<EditorPage>>,
@@ -149,9 +148,6 @@ pub struct Nav {
     pub back_button: gtk::GestureClick,
     pub forward_button: gtk::GestureClick,
     pub quick_open: Rc<QuickOpen>,
-    pub(super) rif: RefCell<Option<RifRun>>,
-    pub(super) rif_runs: Latest,
-    pub(super) rif_stats: RefCell<Option<RifStats>>,
 }
 
 impl Nav {
@@ -176,9 +172,6 @@ impl Nav {
             back_button: button(8),
             forward_button: button(9),
             quick_open: QuickOpen::new(),
-            rif: RefCell::new(None),
-            rif_runs: Latest::default(),
-            rif_stats: RefCell::new(None),
         }
     }
 }

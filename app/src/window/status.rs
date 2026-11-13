@@ -4,10 +4,20 @@
 //! encoding picker), the indentation (a button that opens its popover) and INS/OVR; while two
 //! documents are compared, the comparison's summary.
 
+use super::Window;
+use super::snapshot::{PageSnapshot, run_sized};
+use crate::editor::EditorPage;
+use crate::runtime::Debounce;
 use gtk4 as gtk;
-use gtk4::gio;
 use gtk4::prelude::*;
+use gtk4::{gio, glib};
+use std::cell::RefCell;
+use std::time::Duration;
 use stet_domain::search::report::plural;
+use stet_domain::text::count_words;
+
+/// How long the text must rest before its words are counted again.
+const WORD_COUNT_DELAY: Duration = Duration::from_millis(250);
 
 pub struct StatusBar {
     pub root: gtk::Box,
@@ -22,6 +32,10 @@ pub struct StatusBar {
     pub encoding: gtk::MenuButton,
     pub indentation: gtk::MenuButton,
     overwrite: gtk::Label,
+    /// The last word count: the document and revision it was counted for.
+    counted: RefCell<Option<(glib::WeakRef<EditorPage>, u64, usize)>>,
+    /// The next word count, once the text rests.
+    count_pending: Debounce,
 }
 
 impl StatusBar {
@@ -112,6 +126,8 @@ impl StatusBar {
             encoding,
             indentation,
             overwrite,
+            counted: RefCell::new(None),
+            count_pending: Debounce::default(),
         }
     }
 
@@ -222,6 +238,54 @@ impl StatusBar {
             self.overwrite.label().to_string(),
         ]);
         items.join(" | ")
+    }
+}
+
+impl Window {
+    /// The status bar's word count (config.toml's `word_count`): counted 250 ms after the
+    /// text last changed, on a worker for a large document; not in large-file mode.
+    pub(super) fn update_word_count(&self, page: &EditorPage) {
+        let status = &self.inner.status;
+        if page.large_file_mode() {
+            status.set_words(None);
+            return;
+        }
+        let revision = page.revision();
+        let cached = status
+            .counted
+            .borrow()
+            .as_ref()
+            .filter(|(counted, at, _)| counted.upgrade().as_ref() == Some(page) && *at == revision)
+            .map(|(_, _, words)| *words);
+        if let Some(words) = cached {
+            status.set_words(Some(words));
+            return;
+        }
+        status.set_words(None);
+        let window = self.clone();
+        let page = page.clone();
+        status.count_pending.schedule(WORD_COUNT_DELAY, move || {
+            if page.revision() != revision || window.tab_page(&page).is_none() {
+                return;
+            }
+            let (snapshot, text) = PageSnapshot::take(&page);
+            let inner = window.clone();
+            window.spawn(async move {
+                let words = run_sized(text, count_words).await;
+                if let Some(words) = words
+                    && !snapshot.edited()
+                {
+                    inner
+                        .inner
+                        .status
+                        .counted
+                        .replace(Some((page.downgrade(), revision, words)));
+                    if inner.current_page().as_ref() == Some(&page) {
+                        inner.inner.status.set_words(Some(words));
+                    }
+                }
+            });
+        });
     }
 }
 

@@ -11,9 +11,7 @@ pub mod dialogs;
 mod disk;
 mod encoding;
 mod encoding_picker;
-mod fif;
 mod files;
-mod find;
 mod focus;
 mod indentation;
 mod language;
@@ -24,9 +22,7 @@ mod pins;
 #[cfg(feature = "selftest")]
 mod probe;
 mod quick_open;
-mod replace;
-mod results;
-mod rif;
+mod search;
 mod session;
 mod settings;
 mod smart;
@@ -42,7 +38,7 @@ use crate::actions;
 use crate::config::AppConfig;
 use crate::editor::{DocState, EditorPage, ReadOnly, ViewSettings};
 use crate::preferences::Preferences;
-use crate::runtime::{Latest, worker};
+use crate::runtime::worker;
 use crate::theme::Appearance;
 use dialogs::SaveChoice;
 use gtk4 as gtk;
@@ -67,17 +63,14 @@ use stet_domain::text::Position;
 pub use compare::CompareRun;
 pub use encoding::grouped_entries;
 pub use encoding_picker::{EncodingPicker, PickerMode};
-pub use fif::FifStats;
-pub use find::FindBar;
-#[cfg(feature = "selftest")]
-pub use find::{BarMode, Field, Tone};
 #[cfg(feature = "selftest")]
 pub use indentation::IndentChoice;
 pub use indentation::IndentPicker;
 pub use language::LanguagePicker;
 pub use palette::{Command as PaletteCommand, Palette};
-pub use replace::ReplaceStats;
-pub use results::ResultsPanel;
+#[cfg(feature = "selftest")]
+pub use search::bar::{BarMode, Field};
+pub use search::{FindBar, ResultsPanel};
 
 pub use session::Phase as SessionPhase;
 pub use status::StatusBar;
@@ -304,14 +297,15 @@ pub struct Inner {
     toasts: adw::ToastOverlay,
     menu_button: gtk::MenuButton,
     pub status: StatusBar,
-    pub find: FindBar,
+    pub find: Rc<FindBar>,
     pub results: Rc<ResultsPanel>,
     /// The editor (and find bar) above, the results panel below.
     paned: gtk::Paned,
-    results_height: Cell<i32>,
-    fif: RefCell<Option<fif::FifRun>>,
-    fif_runs: Latest,
-    fif_stats: RefCell<Option<FifStats>>,
+    /// Find in Files and Replace in Files.
+    files: search::FilesSearch,
+    /// Replace All's last cost.
+    #[cfg(feature = "selftest")]
+    replace: search::ReplaceState,
     pub palette: Rc<Palette>,
     pub languages: Rc<LanguagePicker>,
     pub encodings: Rc<EncodingPicker>,
@@ -343,7 +337,7 @@ pub struct Inner {
     #[cfg(feature = "selftest")]
     last_toast: RefCell<String>,
     session: session::WindowSession,
-    /// Navigation, pinned tabs, quick open and Replace in Files.
+    /// Navigation, pinned tabs and quick open.
     pub(crate) nav: nav::Nav,
     /// Split view's synchronised scrolling.
     pub(crate) split: split::SplitState,
@@ -423,11 +417,11 @@ impl Window {
         // The find bar stays right below the editor; the results panel opens below both.
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.append(&views_paned);
-        content.append(&find.revealer);
+        content.append(find.root());
         let paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Vertical)
             .start_child(&content)
-            .end_child(&results.root)
+            .end_child(results.root())
             .resize_start_child(true)
             .resize_end_child(false)
             .shrink_start_child(false)
@@ -472,10 +466,9 @@ impl Window {
                 find,
                 results,
                 paned,
-                results_height: Cell::new(replace::RESULTS_HEIGHT),
-                fif: RefCell::new(None),
-                fif_runs: Latest::default(),
-                fif_stats: RefCell::new(None),
+                files: search::FilesSearch::default(),
+                #[cfg(feature = "selftest")]
+                replace: search::ReplaceState::default(),
                 palette,
                 languages,
                 encodings,

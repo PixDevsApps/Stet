@@ -8,14 +8,15 @@
 //! the other files and Undo still takes the change back; one with unsaved changes keeps it
 //! unsaved.
 
-use super::Window;
-use super::find::{BarMode, Field, Tone};
-use super::results::{FileNode, FileTarget, SearchNode};
-use super::snapshot::{PageSnapshot, Stale};
+use super::super::bar::{Field, FilesRequest, Tone};
+use super::super::replace::apply_tracked;
+use super::super::results::{FileNode, FileTarget};
+use super::{Feed, FilesSearch, RunSlot, StreamingRun};
 use crate::editor::{EditorPage, LOAD_WAIT, TextOrigin};
+use crate::page_search::Compiled;
 use crate::runtime::{Ticket, worker};
-use gtk4::glib;
-use gtk4::prelude::*;
+use crate::window::Window;
+use crate::window::snapshot::{PageSnapshot, Stale};
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::collections::VecDeque;
@@ -23,42 +24,35 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
-use stet_domain::actions::ActionId;
-use stet_domain::document::{expand_home, tilde};
+use std::time::Duration;
+use stet_domain::document::tilde;
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{DocumentOutcome, Skip, file_summary, heading};
 use stet_domain::search::report::{counted, replace_in_files_progress, replace_in_files_status};
 use stet_infrastructure::files::find::DEFAULT_MAX_HITS;
 use stet_infrastructure::files::replace::{
-    self as rif, FILE_HIT_LIMIT, RifEvent, RifHandle, RifRequest, RifSummary, replaced_hits,
+    self as rif, FILE_HIT_LIMIT, RifCounters, RifEvent, RifRequest, RifSummary, replaced_hits,
 };
 use stet_infrastructure::fs::fingerprint;
 use stet_infrastructure::search::{Matcher, SearchError};
 
-/// How often the run's files reach the panel.
-const DRAIN_INTERVAL: Duration = Duration::from_millis(33);
-/// About the most result lines added per drain.
-const LINES_PER_DRAIN: usize = 1_000;
 /// The most changed lines a run lists, as Find in Files lists at most this many hits; files
 /// past it are listed with their counts only.
 const LISTED_LINES: usize = DEFAULT_MAX_HITS;
 /// Where an in-place save keeps the previous content (the same folder the editor's saves use).
 const SAVE_BACKUPS_DIR: &str = "save-backups";
 
-/// A Replace in Files run in progress.
-pub struct RifRun {
-    handle: RifHandle,
-    receiver: async_channel::Receiver<RifEvent>,
-    search: Rc<SearchNode>,
+/// What Replace in Files adds to its run: what its heading names, the query and template the
+/// open documents are replaced with, and those documents still to do.
+pub(super) struct ReplaceFeed {
     pattern: String,
     replacement: String,
     folder: String,
-    started: Instant,
+    home: Option<PathBuf>,
     matcher: Arc<Matcher>,
     template: Template,
+    /// Stops the replace in an open document.
     cancel: Arc<AtomicBool>,
-    stop_requested: Option<Instant>,
     /// Open documents the walk reached, still to replace in.
     open_queue: VecDeque<PathBuf>,
     open_busy: bool,
@@ -92,77 +86,225 @@ pub struct RifStats {
     pub stopped_after: Option<Duration>,
 }
 
-impl Window {
-    /// Replace in Files: needs the files row; asks first, then runs.
-    pub(super) fn replace_in_files(&self) {
-        let find = &self.inner.find;
-        if !(find.is_open() && find.bar_mode() == BarMode::Files) {
-            self.show_find_mode(BarMode::Files);
+impl Feed for ReplaceFeed {
+    type Event = RifEvent;
+    type Summary = RifSummary;
+    type Progress = Arc<RifCounters>;
+    type Stats = RifStats;
+    const DROPS_AFTER_STOP: bool = false;
+
+    fn slot(files: &FilesSearch) -> &RunSlot<Self> {
+        &files.replace
+    }
+
+    fn absorb(&mut self, event: RifEvent, stopped: bool) -> Option<(FileNode, usize)> {
+        let label = |path: &Path| tilde(path, self.home.as_deref());
+        match event {
+            RifEvent::Replaced {
+                path,
+                replacements,
+                written,
+                hits,
+                ..
+            } => {
+                self.totals.replacements += replacements;
+                let mut summary = file_summary(replacements, None);
+                if written {
+                    self.totals.files += 1;
+                } else {
+                    summary.push_str(", already as replaced");
+                }
+                // After Stop, the files written before it are listed at once.
+                let unlisted =
+                    !hits.is_empty() && (self.listed + hits.len() > LISTED_LINES || stopped);
+                let hits = if unlisted {
+                    self.unlisted_files += 1;
+                    summary.push_str(", lines not listed");
+                    Vec::new()
+                } else {
+                    hits
+                };
+                self.listed += hits.len();
+                let lines = hits.len().max(1);
+                Some((
+                    FileNode {
+                        label: label(&path),
+                        target: FileTarget::Path(path),
+                        hits,
+                        summary: Some(summary),
+                    },
+                    lines,
+                ))
+            }
+            RifEvent::Skipped {
+                path,
+                reason,
+                matches,
+            } => {
+                self.totals.skipped += 1;
+                Some((skipped_node(label(&path), path, &reason, matches), 1))
+            }
+            RifEvent::Failed { path, error } => {
+                self.totals.failed += 1;
+                Some((
+                    FileNode {
+                        label: label(&path),
+                        target: FileTarget::Path(path),
+                        hits: Vec::new(),
+                        summary: Some(format!("failed: {error}")),
+                    },
+                    1,
+                ))
+            }
+            RifEvent::OpenDocument { path } => {
+                self.open_queue.push_back(path);
+                None
+            }
+        }
+    }
+
+    fn heading(run: &StreamingRun<Self>, searched: Option<usize>) -> String {
+        let feed = &run.feed;
+        heading(
+            &feed.pattern,
+            &feed.replacement,
+            feed.totals.replacements,
+            feed.totals.files,
+            searched,
+            feed.totals.skipped,
+        )
+    }
+
+    fn progress(run: &StreamingRun<Self>, _added: bool, finished: bool) -> Option<String> {
+        (!finished).then(|| {
+            replace_in_files_progress(
+                &run.feed.folder,
+                run.handle.progress().files_searched,
+                run.feed.totals.files,
+            )
+        })
+    }
+
+    /// Starts the next open document, one at a time, until Stop.
+    fn advance(run: &mut StreamingRun<Self>, window: &Window, ticket: &Ticket) {
+        let feed = &mut run.feed;
+        if feed.open_busy || run.stop_requested.is_some() {
             return;
         }
+        let Some(path) = feed.open_queue.pop_front() else {
+            return;
+        };
+        feed.open_busy = true;
+        let matcher = Arc::clone(&feed.matcher);
+        let template = feed.template.clone();
+        let cancel = Arc::clone(&feed.cancel);
+        let owned = window.clone();
+        let ticket = ticket.clone();
+        window.spawn(async move {
+            let node = owned
+                .replace_in_open_document(path, matcher, template, cancel)
+                .await;
+            owned.open_document_done(&ticket, node);
+        });
+    }
+
+    fn busy(run: &StreamingRun<Self>) -> bool {
+        run.feed.open_busy || (!run.feed.open_queue.is_empty() && run.stop_requested.is_none())
+    }
+
+    fn stop(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    fn finish(run: StreamingRun<Self>, window: &Window) -> RifStats {
+        let stopped_after = run.stop_requested.map(|at| at.elapsed());
+        let total = run.started.elapsed();
+        let summary = run.handle.wait();
+        let feed = run.feed;
+        let totals = feed.totals;
+        let text = heading(
+            &feed.pattern,
+            &feed.replacement,
+            totals.replacements,
+            totals.files,
+            Some(summary.files_searched),
+            totals.skipped,
+        );
+        window.inner.results.set_heading(&run.search, text.clone());
+        window
+            .inner
+            .results
+            .set_status_text(&replace_in_files_status(
+                &text,
+                total,
+                summary.cancelled,
+                totals.failed,
+                feed.unlisted_files,
+            ));
+        window.inner.find.set_message(&text, Tone::Info);
+        tracing::info!(
+            files_searched = summary.files_searched,
+            files_changed = totals.files,
+            replacements = totals.replacements,
+            skipped = totals.skipped,
+            failed = totals.failed,
+            open_documents = totals.open_documents,
+            cancelled = summary.cancelled,
+            total_ms = total.as_secs_f64() * 1e3,
+            "replace in files"
+        );
+        RifStats {
+            total,
+            summary,
+            replacements: totals.replacements,
+            files: totals.files,
+            skipped: totals.skipped,
+            failed: totals.failed,
+            open_documents: totals.open_documents,
+            stopped_after,
+        }
+    }
+}
+
+impl Window {
+    /// Replace in Files: needs the files row; asks first, then runs.
+    pub(in crate::window) fn replace_in_files(&self) {
+        if !self.files_row_shown() {
+            return;
+        }
+        let find = &self.inner.find;
         if self.replace_in_files_running() {
             find.set_message("Replace in Files is already running", Tone::Info);
             return;
         }
-        if find.compiled().is_none() {
-            find.compile();
-        }
-        let Some(compiled) = find.compiled() else {
-            if find.pattern_error().is_none() {
-                find.set_message("Type what to search for", Tone::Info);
-            }
+        let Some(compiled) = find.query() else {
             return;
         };
-        let template = match self.template() {
+        let template = match find.replace_template() {
             Ok(template) => template,
             Err(message) => {
                 find.set_message(&message, Tone::Error);
                 return;
             }
         };
-        let folder_text = find.directory.text().trim().to_owned();
-        if folder_text.is_empty() {
-            find.set_message("Choose a folder to replace in", Tone::Error);
+        let Some(request) = self.files_request("Choose a folder to replace in") else {
             return;
-        }
-        let replacement = find.replace_entry.text().to_string();
-        let filters = find.filters.text().trim().to_owned();
+        };
+        let replacement = find.replace_text();
         find.remember(Field::Find, &compiled.query.pattern);
         find.remember(Field::Replace, &replacement);
-        find.remember(Field::Directory, &folder_text);
-        find.remember(Field::Filters, &filters);
-        let folder = expand_home(&folder_text, std::env::home_dir().as_deref());
+        find.remember(Field::Directory, &request.folder);
+        find.remember(Field::Filters, &request.filters);
         let window = self.clone();
         self.spawn(async move {
-            let is_folder = worker::run({
-                let folder = folder.clone();
-                move || folder.is_dir()
-            })
-            .await
-            .unwrap_or(false);
-            if !is_folder {
-                window
-                    .inner
-                    .find
-                    .set_message(&format!("“{folder_text}” is not a folder"), Tone::Error);
-                return;
-            }
-            let pattern = compiled.query.pattern.clone();
-            if !window
-                .ask_replace_in_files(&pattern, &replacement, &folder_text, &filters)
-                .await
+            if !window.is_folder(&request).await
+                || !window
+                    .ask_replace_in_files(&compiled.query.pattern, &replacement, &request)
+                    .await
             {
                 return;
             }
-            window.run_replace_in_files(
-                Arc::clone(&compiled.matcher),
-                compiled.query.clone(),
-                template,
-                (pattern, replacement),
-                folder,
-                folder_text,
-                filters,
-            );
+            window.run_replace_in_files(&compiled, template, replacement, request);
         });
     }
 
@@ -170,26 +312,31 @@ impl Window {
         &self,
         pattern: &str,
         replacement: &str,
-        folder: &str,
-        filters: &str,
+        request: &FilesRequest,
     ) -> bool {
-        let find = &self.inner.find;
+        let FilesRequest {
+            folder,
+            filters,
+            subfolders,
+            hidden,
+            gitignore,
+        } = request;
         let files = if filters.is_empty() || filters == "*.*" {
             "every file".to_owned()
         } else {
             format!("the files matching {filters}")
         };
-        let subfolders = if find.subfolders.is_active() {
+        let subfolders = if *subfolders {
             "with subfolders"
         } else {
             "without subfolders"
         };
-        let hidden = if find.hidden.is_active() {
+        let hidden = if *hidden {
             "hidden files included"
         } else {
             "hidden files left out"
         };
-        let ignored = if find.gitignore.is_active() {
+        let ignored = if *gitignore {
             "what .gitignore ignores left out"
         } else {
             "what .gitignore ignores included"
@@ -207,26 +354,26 @@ impl Window {
         self.ask(&dialog).await == "replace"
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn run_replace_in_files(
         &self,
-        matcher: Arc<Matcher>,
-        query: stet_domain::search::Query,
+        compiled: &Rc<Compiled>,
         template: Template,
-        (pattern, replacement): (String, String),
-        folder: PathBuf,
-        folder_text: String,
-        filters: String,
+        replacement: String,
+        request: FilesRequest,
     ) {
         self.stop_find_in_files();
-        let find = &self.inner.find;
         let backups = self.inner.shared.config.dirs.state.join(SAVE_BACKUPS_DIR);
-        let mut request = RifRequest::new(vec![folder], query, template.clone(), backups);
-        request.filters = filters;
-        request.include_hidden = find.hidden.is_active();
-        request.respect_gitignore = find.gitignore.is_active();
-        request.include_subfolders = find.subfolders.is_active();
-        request.open_documents = self
+        let mut job = RifRequest::new(
+            vec![request.folder_path()],
+            compiled.query.clone(),
+            template.clone(),
+            backups,
+        );
+        job.filters = request.filters;
+        job.include_hidden = request.hidden;
+        job.respect_gitignore = request.gitignore;
+        job.include_subfolders = request.subfolders;
+        job.open_documents = self
             .documents()
             .iter()
             .filter_map(|page| {
@@ -234,287 +381,71 @@ impl Window {
                 state.canonical.or(state.path)
             })
             .collect();
-        let started = Instant::now();
-        let (sender, receiver) = async_channel::unbounded::<RifEvent>();
-        let handle = match rif::start(request, move |event| {
-            let _ = sender.send_blocking(event);
-        }) {
-            Ok(handle) => handle,
-            Err(error) => {
-                find.set_message(&error.to_string(), Tone::Error);
-                return;
-            }
-        };
-        let results = &self.inner.results;
-        let search = results.begin(heading(&pattern, &replacement, 0, 0, None, 0));
-        results
-            .status
-            .set_label(&format!("Replacing in {folder_text}…"));
-        results.status.set_tooltip_text(None);
-        results.stop.set_visible(true);
-        if let Some(action) = self.action(ActionId::StopFindInFiles) {
-            action.set_enabled(true);
-        }
-        find.set_message("Replacing in files…", Tone::Info);
-        self.show_results(false);
-        let nav = &self.inner.nav;
-        let ticket = nav.rif_runs.next();
-        nav.rif_stats.replace(None);
-        nav.rif.replace(Some(RifRun {
-            handle,
-            receiver,
-            search,
+        let pattern = compiled.query.pattern.clone();
+        let first_heading = heading(&pattern, &replacement, 0, 0, None, 0);
+        let status = format!("Replacing in {}…", request.folder);
+        let feed = ReplaceFeed {
             pattern,
             replacement,
-            folder: folder_text,
-            started,
-            matcher,
+            folder: request.folder,
+            home: std::env::home_dir(),
+            matcher: Arc::clone(&compiled.matcher),
             template,
             cancel: Arc::new(AtomicBool::new(false)),
-            stop_requested: None,
             open_queue: VecDeque::new(),
             open_busy: false,
             totals: Totals::default(),
             listed: 0,
             unlisted_files: 0,
-        }));
-        glib::timeout_add_local(
-            DRAIN_INTERVAL,
-            glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                #[upgrade_or]
-                glib::ControlFlow::Break,
-                move || Window { inner }.drain_replace_in_files(&ticket)
-            ),
+        };
+        self.start_run(
+            feed,
+            first_heading,
+            &status,
+            "Replacing in files…",
+            move |sender, _| {
+                rif::start(job, move |event| {
+                    let _ = sender.send_blocking(event);
+                })
+            },
         );
     }
 
-    /// Moves reported files into the panel, starts the next open document, and finishes the
-    /// run once the walk, every event and every open document are done.
-    /// Only `ticket`'s run, the newest, is in the slot.
-    fn drain_replace_in_files(&self, ticket: &Ticket) -> glib::ControlFlow {
-        let nav = &self.inner.nav;
-        let mut slot = nav.rif.borrow_mut();
-        let Some(run) = slot.as_mut().filter(|_| ticket.is_current()) else {
-            return glib::ControlFlow::Break;
-        };
-        let finished = run.handle.is_finished();
-        let home = std::env::home_dir();
-        let mut files = Vec::new();
-        let mut lines = 0;
-        while lines < LINES_PER_DRAIN {
-            let Ok(event) = run.receiver.try_recv() else {
-                break;
-            };
-            let label = |path: &Path| tilde(path, home.as_deref());
-            match event {
-                RifEvent::Replaced {
-                    path,
-                    replacements,
-                    written,
-                    hits,
-                    ..
-                } => {
-                    run.totals.replacements += replacements;
-                    let mut summary = file_summary(replacements, None);
-                    if written {
-                        run.totals.files += 1;
-                    } else {
-                        summary.push_str(", already as replaced");
-                    }
-                    // After Stop, the files written before it are listed at once.
-                    let unlisted = !hits.is_empty()
-                        && (run.listed + hits.len() > LISTED_LINES || run.stop_requested.is_some());
-                    let hits = if unlisted {
-                        run.unlisted_files += 1;
-                        summary.push_str(", lines not listed");
-                        Vec::new()
-                    } else {
-                        hits
-                    };
-                    run.listed += hits.len();
-                    lines += hits.len().max(1);
-                    files.push(FileNode {
-                        label: label(&path),
-                        target: FileTarget::Path(path),
-                        hits,
-                        summary: Some(summary),
-                    });
-                }
-                RifEvent::Skipped {
-                    path,
-                    reason,
-                    matches,
-                } => {
-                    run.totals.skipped += 1;
-                    lines += 1;
-                    files.push(skipped_node(label(&path), path, &reason, matches));
-                }
-                RifEvent::Failed { path, error } => {
-                    run.totals.failed += 1;
-                    lines += 1;
-                    files.push(FileNode {
-                        label: label(&path),
-                        target: FileTarget::Path(path),
-                        hits: Vec::new(),
-                        summary: Some(format!("failed: {error}")),
-                    });
-                }
-                RifEvent::OpenDocument { path } => run.open_queue.push_back(path),
-            }
-        }
-        if !files.is_empty() {
-            self.inner.results.add_files(&run.search, files);
-            self.update_rif_heading(run, None);
-        }
-        let progress = run.handle.progress();
-        if !finished {
-            self.inner
-                .results
-                .status
-                .set_label(&replace_in_files_progress(
-                    &run.folder,
-                    progress.files_searched,
-                    run.totals.files,
-                ));
-        }
-        if !run.open_busy
-            && run.stop_requested.is_none()
-            && let Some(path) = run.open_queue.pop_front()
-        {
-            run.open_busy = true;
-            let matcher = Arc::clone(&run.matcher);
-            let template = run.template.clone();
-            let cancel = Arc::clone(&run.cancel);
-            let window = self.clone();
-            let ticket = ticket.clone();
-            self.spawn(async move {
-                let node = window
-                    .replace_in_open_document(path, matcher, template, cancel)
-                    .await;
-                window.open_document_done(&ticket, node);
-            });
-        }
-        let done = finished
-            && run.receiver.is_empty()
-            && !run.open_busy
-            && (run.open_queue.is_empty() || run.stop_requested.is_some());
-        if !done {
-            return glib::ControlFlow::Continue;
-        }
-        let run = slot.take().expect("checked above");
-        drop(slot);
-        self.finish_replace_in_files(run);
-        glib::ControlFlow::Break
-    }
-
+    /// An open document is done: its row and totals join the run's, and the next document,
+    /// or the end of the run, needn't wait for the next drain.
     fn open_document_done(&self, ticket: &Ticket, node: Option<(FileNode, Totals)>) {
-        let mut slot = self.inner.nav.rif.borrow_mut();
-        let Some(run) = slot.as_mut().filter(|_| ticket.is_current()) else {
+        let mut current = self.inner.files.replace.run.borrow_mut();
+        let Some(run) = current.as_mut().filter(|_| ticket.is_current()) else {
             return;
         };
-        run.open_busy = false;
+        run.feed.open_busy = false;
         if let Some((node, totals)) = node {
-            run.totals.replacements += totals.replacements;
-            run.totals.files += totals.files;
-            run.totals.skipped += totals.skipped;
-            run.totals.failed += totals.failed;
-            run.totals.open_documents += 1;
-            self.inner.results.add_files(&run.search, vec![node]);
-            self.update_rif_heading(run, None);
+            let sum = &mut run.feed.totals;
+            sum.replacements += totals.replacements;
+            sum.files += totals.files;
+            sum.skipped += totals.skipped;
+            sum.failed += totals.failed;
+            sum.open_documents += 1;
+            let results = &self.inner.results;
+            results.add_files(&run.search, vec![node]);
+            results.set_heading(&run.search, ReplaceFeed::heading(run, None));
         }
-        drop(slot);
-        // The next open document, or the end of the run, needn't wait for the next drain.
-        self.drain_replace_in_files(ticket);
-    }
-
-    fn update_rif_heading(&self, run: &RifRun, searched: Option<usize>) {
-        let text = heading(
-            &run.pattern,
-            &run.replacement,
-            run.totals.replacements,
-            run.totals.files,
-            searched,
-            run.totals.skipped,
-        );
-        self.inner.results.set_heading(&run.search, text);
-    }
-
-    fn finish_replace_in_files(&self, run: RifRun) {
-        let stopped_after = run.stop_requested.map(|at| at.elapsed());
-        let total = run.started.elapsed();
-        let RifRun {
-            handle,
-            search,
-            pattern,
-            replacement,
-            totals,
-            unlisted_files,
-            ..
-        } = run;
-        let summary = handle.wait();
-        let text = heading(
-            &pattern,
-            &replacement,
-            totals.replacements,
-            totals.files,
-            Some(summary.files_searched),
-            totals.skipped,
-        );
-        let results = &self.inner.results;
-        results.set_heading(&search, text.clone());
-        results.status.set_label(&replace_in_files_status(
-            &text,
-            total,
-            summary.cancelled,
-            totals.failed,
-            unlisted_files,
-        ));
-        results.stop.set_visible(false);
-        if let Some(action) = self.action(ActionId::StopFindInFiles) {
-            action.set_enabled(self.find_in_files_running());
-        }
-        self.inner.find.set_message(&text, Tone::Info);
-        tracing::info!(
-            files_searched = summary.files_searched,
-            files_changed = totals.files,
-            replacements = totals.replacements,
-            skipped = totals.skipped,
-            failed = totals.failed,
-            open_documents = totals.open_documents,
-            cancelled = summary.cancelled,
-            total_ms = total.as_secs_f64() * 1e3,
-            "replace in files"
-        );
-        self.inner.nav.rif_stats.replace(Some(RifStats {
-            total,
-            summary,
-            replacements: totals.replacements,
-            files: totals.files,
-            skipped: totals.skipped,
-            failed: totals.failed,
-            open_documents: totals.open_documents,
-            stopped_after,
-        }));
+        drop(current);
+        self.drain::<ReplaceFeed>(ticket);
     }
 
     /// Stop: no file is written after this; files already written are reported.
-    pub(super) fn stop_replace_in_files(&self) {
-        if let Some(run) = self.inner.nav.rif.borrow_mut().as_mut() {
-            run.stop_requested.get_or_insert_with(Instant::now);
-            run.cancel.store(true, Ordering::Relaxed);
-            run.handle.cancel();
-        }
+    pub(in crate::window) fn stop_replace_in_files(&self) {
+        self.stop_run::<ReplaceFeed>();
     }
 
     pub fn replace_in_files_running(&self) -> bool {
-        self.inner.nav.rif.borrow().is_some()
+        self.is_running::<ReplaceFeed>()
     }
 
     #[cfg(feature = "selftest")]
     pub fn replace_in_files_stats(&self) -> Option<RifStats> {
-        self.inner.nav.rif_stats.borrow().clone()
+        self.inner.files.replace.stats.borrow().clone()
     }
 
     /// Replaces in the open document whose file is `path` (links resolved): in its buffer, as
@@ -612,7 +543,7 @@ impl Window {
         let changed = !result.edits.is_empty();
         if changed {
             page.clear_current_match();
-            super::replace::apply_tracked(&page, &result, &text);
+            apply_tracked(&page, &result, &text);
         }
         let count = result.count;
         let hits = worker::run(move || {

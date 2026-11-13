@@ -8,7 +8,7 @@
 
 use super::quick_open::QuickOpenStats;
 use super::toolbox::ToolStats;
-use super::{BarMode, IndentChoice, PickerMode, ReplaceStats, Shared, ViewPane, Window};
+use super::{BarMode, IndentChoice, PickerMode, Shared, ViewPane, Window};
 use crate::page_search::Compiled;
 use gtk4 as gtk;
 use gtk4::{gdk, gio, glib};
@@ -162,9 +162,8 @@ impl Window {
     pub fn focus_target(&self, name: &str) -> Option<gtk::Widget> {
         let inner = &self.inner;
         Some(match name {
-            "find" => inner.find.entry.clone().upcast(),
-            "replace" => inner.find.replace_entry.clone().upcast(),
-            "results" => inner.results.root.clone().upcast(),
+            "find" | "replace" => inner.find.field(name)?.upcast(),
+            "results" => inner.results.root().clone().upcast(),
             popover => self.popover(popover)?.upcast(),
         })
     }
@@ -244,56 +243,26 @@ impl Window {
     /// The text field named `name`: find, replace, directory or filters on the find bar, or
     /// quick-open.
     pub fn field(&self, name: &str) -> Option<gtk::Editable> {
-        let find = &self.inner.find;
-        Some(match name {
-            "find" => find.entry.clone().upcast(),
-            "replace" => find.replace_entry.clone().upcast(),
-            "directory" => find.directory.clone().upcast(),
-            "filters" => find.filters.clone().upcast(),
-            "quick-open" => self.inner.nav.quick_open.entry.clone().upcast(),
-            _ => return None,
-        })
+        match name {
+            "quick-open" => Some(self.inner.nav.quick_open.entry.clone().upcast()),
+            name => self.inner.find.field(name),
+        }
     }
 
     /// Sets the find bar's option named `name` (case, word, selection, wrap, backward,
     /// dot-newline, subfolders, hidden, gitignore, bookmark or purge); false if there is no
     /// such option.
     pub fn set_find_option(&self, name: &str, active: bool) -> bool {
-        let find = &self.inner.find;
-        let button: gtk::Widget = match name {
-            "case" => find.case.clone().upcast(),
-            "word" => find.word.clone().upcast(),
-            "selection" => find.in_selection.clone().upcast(),
-            "wrap" => find.wrap.clone().upcast(),
-            "backward" => find.backward.clone().upcast(),
-            "dot-newline" => find.dot_newline.clone().upcast(),
-            "subfolders" => find.subfolders.clone().upcast(),
-            "hidden" => find.hidden.clone().upcast(),
-            "gitignore" => find.gitignore.clone().upcast(),
-            "bookmark" => find.bookmark_line.clone().upcast(),
-            "purge" => find.purge.clone().upcast(),
-            _ => return false,
-        };
-        if let Some(toggle) = button.downcast_ref::<gtk::ToggleButton>() {
-            toggle.set_active(active);
-        } else if let Some(check) = button.downcast_ref::<gtk::CheckButton>() {
-            check.set_active(active);
-        }
-        true
+        self.inner.find.set_option(name, active)
     }
 
     /// The key handler of the field named `name`: find, replace, directory, filters or
     /// results.
     pub fn key_controller(&self, name: &str) -> Option<gtk::EventControllerKey> {
-        let find = &self.inner.find;
-        Some(match name {
-            "find" => find.keys.clone(),
-            "replace" => find.replace_keys.clone(),
-            "directory" => find.directory_keys.clone(),
-            "filters" => find.filters_keys.clone(),
-            "results" => self.inner.results.keys.clone(),
-            _ => return None,
-        })
+        match name {
+            "results" => Some(self.inner.results.keys().clone()),
+            name => self.inner.find.key_controller(name),
+        }
     }
 
     /// The window's key handler for tab switching (Ctrl+Tab).
@@ -303,17 +272,18 @@ impl Window {
 
     /// The find bar's match count.
     pub fn find_count(&self) -> String {
-        self.inner.find.count.label().to_string()
+        self.inner.find.count_text()
     }
 
     /// The find bar's message, and whether it shows as an error.
     pub fn find_message(&self) -> (String, bool) {
-        let message = &self.inner.find.message;
-        (message.label().to_string(), message.has_css_class("error"))
+        self.inner.find.message()
     }
 
     pub fn clear_find_message(&self) {
-        self.inner.find.set_message("", super::Tone::Info);
+        self.inner
+            .find
+            .set_message("", super::search::bar::Tone::Info);
     }
 
     /// The find field's text when it was last compiled.
@@ -344,29 +314,13 @@ impl Window {
 
     /// Clicks the find bar's Find in Files button.
     pub fn click_find_in_files(&self) {
-        self.inner.find.find_in_files.emit_clicked();
+        self.inner.find.click_find_in_files();
     }
 
     /// Picks entry `index` of the find or replace field's history drop-down, as a click
     /// would; `None` if there is no drop-down `name`.
     pub fn pick_history(&self, name: &str, index: i32) -> Option<bool> {
-        let find = &self.inner.find;
-        let button = match name {
-            "find" => &find.find_history,
-            "replace" => &find.replace_history,
-            _ => return None,
-        };
-        Some(button.pick(index))
-    }
-
-    /// What the last Replace All cost.
-    pub fn replace_stats(&self) -> Option<ReplaceStats> {
-        *self.inner.find.stats.borrow()
-    }
-
-    /// Forgets the last Replace All's cost.
-    pub fn reset_replace_stats(&self) {
-        self.inner.find.stats.replace(None);
+        self.inner.find.pick_history(name, index)
     }
 
     // ----- the results panel ----------------------------------------------------------------
@@ -382,7 +336,7 @@ impl Window {
 
     /// The results panel's status line.
     pub fn results_status(&self) -> String {
-        self.inner.results.status.label().to_string()
+        self.inner.results.status_text()
     }
 
     /// The heading of the newest search in the results panel.

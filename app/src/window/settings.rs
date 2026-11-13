@@ -3,24 +3,18 @@
 //! highlighting, applied when Stet starts and whenever a file changes. Also the palette's
 //! Open Settings and Open Keyboard Shortcuts, and the read-only Keyboard Shortcuts overview.
 
-use super::snapshot::{PageSnapshot, run_sized};
 use super::{Location, Window};
 use crate::actions;
-use crate::editor::{EditorPage, IndentSource};
+use crate::editor::IndentSource;
 use crate::preferences::Update;
 use crate::runtime::worker;
 use gtk4::glib;
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use std::time::Duration;
 use stet_domain::actions::{ActionId, KeyScope, Menu};
 use stet_domain::settings::keymap::default_keys_file;
 use stet_domain::settings::{Keymap, Settings, default_config_file};
-use stet_domain::text::count_words;
 use stet_infrastructure::settings_files::create_if_missing;
-
-/// How long the text must rest before its words are counted again.
-const WORD_COUNT_DELAY: Duration = Duration::from_millis(250);
 
 impl Window {
     /// The settings in use.
@@ -127,57 +121,6 @@ impl Window {
         for problem in &update.problems {
             self.toast(problem);
         }
-    }
-
-    /// The status bar's word count (config.toml's `word_count`): counted 250 ms after the
-    /// text last changed, on a worker for a large document; not in large-file mode.
-    pub(super) fn update_word_count(&self, page: &EditorPage) {
-        let status = &self.inner.status;
-        if page.large_file_mode() {
-            status.set_words(None);
-            return;
-        }
-        let revision = page.revision();
-        let cached = self
-            .inner
-            .tools
-            .words
-            .borrow()
-            .as_ref()
-            .filter(|(counted, at, _)| counted.upgrade().as_ref() == Some(page) && *at == revision)
-            .map(|(_, _, words)| *words);
-        if let Some(words) = cached {
-            status.set_words(Some(words));
-            return;
-        }
-        status.set_words(None);
-        let window = self.clone();
-        let page = page.clone();
-        self.inner
-            .tools
-            .words_pending
-            .schedule(WORD_COUNT_DELAY, move || {
-                if page.revision() != revision || window.tab_page(&page).is_none() {
-                    return;
-                }
-                let (snapshot, text) = PageSnapshot::take(&page);
-                let inner = window.clone();
-                window.spawn(async move {
-                    let words = run_sized(text, count_words).await;
-                    if let Some(words) = words
-                        && !snapshot.edited()
-                    {
-                        inner
-                            .inner
-                            .tools
-                            .words
-                            .replace(Some((page.downgrade(), revision, words)));
-                        if inner.current_page().as_ref() == Some(&page) {
-                            inner.inner.status.set_words(Some(words));
-                        }
-                    }
-                });
-            });
     }
 
     /// Open Settings and Open Keyboard Shortcuts: the file in a tab, created with every

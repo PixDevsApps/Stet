@@ -13,7 +13,7 @@
 //!   whole word, case-sensitively, in one of five styles.
 
 use super::Window;
-use super::find::{BarMode, Tone};
+use super::search::bar::{BarMode, Tone};
 use super::snapshot::{PageSnapshot, Stale, is_small};
 use crate::editor::EditorPage;
 use crate::edits;
@@ -364,16 +364,14 @@ impl Window {
             find.set_message("The document is still loading", Tone::Error);
             return;
         }
-        let style = find.mark_style();
-        let bookmark = find.bookmark_line.is_active();
-        let purge = find.purge.is_active();
+        let mark = find.mark_options();
         let options = find.options();
         let (range, _) = Self::command_scope(&page, options);
         let matcher = Arc::clone(&compiled.matcher);
         let request = MarkRequest {
-            style,
-            bookmark,
-            purge,
+            style: mark.style,
+            bookmark: mark.bookmark_line,
+            purge: mark.purge,
             range: Some(range),
         };
         self.run_mark(&page, matcher, request, "Mark");
@@ -511,9 +509,9 @@ impl Window {
             return;
         };
         let find = &self.inner.find;
-        let style = find.mark_style();
-        page.marks().update_marks(|marks| marks.clear(style));
-        if find.bookmark_line.is_active() {
+        let mark = find.mark_options();
+        page.marks().update_marks(|marks| marks.clear(mark.style));
+        if mark.bookmark_line {
             page.set_bookmarks(&Bookmarks::new());
         }
         page.retag_marks();
@@ -528,7 +526,7 @@ impl Window {
         let Some(page) = self.current_page() else {
             return;
         };
-        let style = self.inner.find.mark_style();
+        let style = self.inner.find.mark_options().style;
         let ranges = page.marks().marks().ranges(style).to_vec();
         if ranges.is_empty() {
             self.toast("Nothing is marked in that style");
