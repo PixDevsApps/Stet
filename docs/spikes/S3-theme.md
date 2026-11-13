@@ -1,6 +1,6 @@
 # S3 — Theme: Omarchy palette to GtkSourceView scheme and libadwaita CSS, with live reload
 
-> Recorded on 2026-09-30 under the working name Notes. Since [ADR-010](../DECISIONS.md#adr-010-accepted--stet-2026-09-30) the crates `notes-domain`, `notes-infrastructure` and `notes-spikes` are `stet-domain`, `stet-infrastructure` and `stet-spikes`; the `notes:*` style ids are `stet:*`, the generated schemes are `stet-omarchy-<fingerprint>.xml`, and the per-theme override is `stet.toml`. The raw output under `.local/` (`s3-run4.jsonl`, `s3/results-run4.md`) was deleted on 2026-09-30 to free disk space; re-run the spike to regenerate it. Decisions on its recommendations: [PLAN.md, 2026-09-30](../PLAN.md#name-repository-and-spike-changes-approved--2026-09-30).
+> Recorded on 2026-09-30 under the working name Notes. Since [ADR-010](../DECISIONS.md#adr-010-accepted--stet-2026-09-30) the crates `notes-domain`, `notes-infrastructure` and `notes-spikes` are `stet-domain`, `stet-infrastructure` and `stet-spikes`; the `notes:*` style ids are `stet:*`, the generated schemes are `stet-omarchy-<fingerprint>.xml`, and the per-theme override is `stet.toml`. The raw output under `.local/` (`s3-run4.jsonl`, `s3/results-run4.md`) was deleted on 2026-09-30 to free disk space; re-run the spike to regenerate it. Decisions on its recommendations: [PLAN.md, 2026-09-30](../history/PLAN-to-1.0.md#name-repository-and-spike-changes-approved--2026-09-30).
 
 **Date:** 2026-09-30 · **Milestone:** M0 · **Overall verdict: PASS**, with the caveats and rule change below.
 

@@ -75,18 +75,19 @@ Details are in [BUILD.md](docs/BUILD.md); installing for your user only, and mak
 | [Install](docs/INSTALL.md) | Building, the Arch package, a user-local install, making Stet the default editor |
 | [User guide](docs/USER_GUIDE.md) | Using Stet: files, search, text tools, indentation, `config.toml`, `keys.toml`, the keymap |
 | [Product requirements](docs/PRD.md) | Problem, users, positioning, feature tiers, goals and non-goals |
-| [Plan](docs/PLAN.md) | Current state, milestones M0–M9, scope control, authorization log |
+| [Architecture](docs/ARCHITECTURE.md) | The three crates, the bounded contexts, threads, commands, tests, where new code goes |
+| [Plan](docs/PLAN.md) | Current state, scope control, authorization log; the history to 1.0 in [docs/history/](docs/history/PLAN-to-1.0.md) |
 | [Decisions](docs/DECISIONS.md) | Architecture decision records |
 | [Design](docs/DESIGN.md) | Window layout, theme tokens, chrome rules |
 | [Research](docs/RESEARCH.md) | Condensed research and M0 spike results |
-| [Build](docs/BUILD.md) | Toolchain, workspace layout, commands, packaging, spikes |
+| [Build](docs/BUILD.md) | Toolchain, workspace layout, commands, packaging |
 | [Testing](docs/TESTING.md) | Test strategy, the `--self-test` scripts, performance targets, manual Omarchy acceptance |
 | [Integrations](docs/INTEGRATIONS.md) | Omarchy theme, font, desktop entry, default editor, snippets |
 | [Assets](docs/ASSETS.md) | Icon and fixture provenance |
 | [Operating guide](docs/OPERATING.md) | How work proceeds: milestones, preview gates, authorizations |
 | [Upstream issue draft](docs/upstream/sourceview5-replace-all.md) | The `sourceview5` search-binding bugs, for the user to file |
 | [Third-party notices](THIRD_PARTY.md) | System libraries and Rust crate licenses |
-| [Contributing](CONTRIBUTING.md) | Workflow, checks, ADRs, docs rule |
+| [Contributing](CONTRIBUTING.md) | Setting up, checks, making a change, ADRs, issues |
 | [Agent guide](AGENTS.md) | Rules for coding agents working in this repository |
 
 ## License

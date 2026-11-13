@@ -28,7 +28,7 @@ Bugs and follow-ups found along the way go into PLAN.md with a priority, not int
 
 ## Milestones and preview gates
 
-Work proceeds through milestones M0–M9 ([PLAN.md](PLAN.md#milestone-plan)), each with a Goal, Key outcomes, Exit criteria and a size in focused engineering days. A milestone ends only after its **preview gate**:
+Work proceeds through milestones M0–M9 ([the plan history](history/PLAN-to-1.0.md#milestone-plan)), each with a Goal, Key outcomes, Exit criteria and a size in focused engineering days. A milestone ends only after its **preview gate**:
 
 1. **Screenshots** of the current build in `tools/progress/`: captured headlessly by the app or by the user in the live session (the capture method is set up in M1). M0's gate shows the spike window and the spike reports.
 2. **A dated PLAN.md entry**: what changed, which exit criteria are met with links to evidence, what is not verified, and known limits.

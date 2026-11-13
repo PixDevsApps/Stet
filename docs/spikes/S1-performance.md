@@ -1,6 +1,6 @@
 # S1: Performance, with S6: Startup
 
-> Recorded on 2026-09-30 under the working name Notes. Since [ADR-010](../DECISIONS.md#adr-010-accepted--stet-2026-09-30) the crate `notes-spikes` is `stet-spikes`, the app crate and binary `notes` are `stet`, and the `NOTES_*` environment variables are `STET_*`. The raw per-run JSON and logs under `.local/s1/` and the generated fixtures under `target/fixtures/` were deleted on 2026-09-30 to free disk space; regenerate the fixtures with `python3 tools/gen-fixtures.py` and re-run the spike to regenerate the output. Decisions on its recommendations: [PLAN.md, 2026-09-30](../PLAN.md#name-repository-and-spike-changes-approved--2026-09-30).
+> Recorded on 2026-09-30 under the working name Notes. Since [ADR-010](../DECISIONS.md#adr-010-accepted--stet-2026-09-30) the crate `notes-spikes` is `stet-spikes`, the app crate and binary `notes` are `stet`, and the `NOTES_*` environment variables are `STET_*`. The raw per-run JSON and logs under `.local/s1/` and the generated fixtures under `target/fixtures/` were deleted on 2026-09-30 to free disk space; regenerate the fixtures with `python3 tools/gen-fixtures.py` and re-run the spike to regenerate the output. Decisions on its recommendations: [PLAN.md, 2026-09-30](../history/PLAN-to-1.0.md#name-repository-and-spike-changes-approved--2026-09-30).
 
 **Date:** 2026-09-30 · **Milestone:** M0 · **Binary:** `spikes/src/bin/s1_perf.rs` · **Runs:** headless under GTK Broadway, display `:11`
 

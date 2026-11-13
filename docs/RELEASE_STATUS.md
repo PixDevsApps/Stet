@@ -4,7 +4,7 @@ Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
 Synced: 2026-11-12
 
-The M9 exit criteria ([PLAN.md](PLAN.md#m9--polish-qa-and-10-6-8-days)) are: every checklist item passes or is recorded here, no P1 bugs, and the user's sign-off. This page is the record. Evidence, with commands, dates and caveats, is in [TESTING.md](TESTING.md); decisions in [DECISIONS.md](DECISIONS.md).
+The M9 exit criteria ([the plan history](history/PLAN-to-1.0.md#m9--polish-qa-and-10-68-days)) are: every checklist item passes or is recorded here, no P1 bugs, and the user's sign-off. This page is the record. Evidence, with commands, dates and caveats, is in [TESTING.md](TESTING.md); decisions in [DECISIONS.md](DECISIONS.md).
 
 **State on 2026-10-02:** every milestone, M0–M9, is built and merged on `main`; no P1 bug is open. The source and the release tag `v1.3.4` are in the GitHub repository [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet), public since 2026-10-02. **The user signed off on 2026-10-02:** "(if there is something I have not signed off, I accept and sign off now), everyting in Stet is working beautifully". The live checks only the user could run (below) were not run; the sign-off accepts them.
 
@@ -36,15 +36,15 @@ The M9 exit criteria ([PLAN.md](PLAN.md#m9--polish-qa-and-10-6-8-days)) are: eve
 
 | Milestone | Status | Evidence |
 | --- | --- | --- |
-| M0 Foundation and spikes | Closed with GO by the user (2026-10-01) | [PLAN.md](PLAN.md#m0-closed-and-the-whole-plan-authorized--2026-10-01), [spikes](spikes/) |
-| M1 Themed shell, installable | Done; live checks in the live acceptance script | [PLAN.md](PLAN.md#m1-built-and-checked-headless-live-checks-pending--2026-10-01) |
-| M2 Never lose work | Done; live: SUPER+W, SIGTERM, `kill -9`, `systemctl --user stop`, `GIT_EDITOR` | [PLAN.md](PLAN.md#m2-built-and-checked-headless-live-checks-pending--2026-10-01) |
-| M3 Files done right | Done | [PLAN.md](PLAN.md#m3-built-and-checked-headless-live-checks-pending--2026-10-01) |
-| M4 Search (0.2.0) | Done | [PLAN.md](PLAN.md#m4-search-built-and-checked-headless-live-checks-pending--2026-10-01) |
-| M5 Text toolbox, the MVP (0.3.0) | Done | [PLAN.md](PLAN.md#m5-built-and-checked-headless-live-checks-pending--2026-10-01) |
-| M6 Column mode | Done | [PLAN.md](PLAN.md#m6-column-mode-built-and-checked-headless-live-checks-pending--2026-10-01) |
-| M7 Marking, split view, compare | Done | [PLAN.md](PLAN.md#m7-built-and-checked-headless-live-checks-pending--2026-10-01) |
-| M8 Navigation, Replace in Files | Done | [PLAN.md](PLAN.md#m8-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M0 Foundation and spikes | Closed with GO by the user (2026-10-01) | [the plan history](history/PLAN-to-1.0.md#m0-closed-and-the-whole-plan-authorized--2026-10-01), [spikes](spikes/) |
+| M1 Themed shell, installable | Done; live checks in the live acceptance script | [the plan history](history/PLAN-to-1.0.md#m1-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M2 Never lose work | Done; live: SUPER+W, SIGTERM, `kill -9`, `systemctl --user stop`, `GIT_EDITOR` | [the plan history](history/PLAN-to-1.0.md#m2-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M3 Files done right | Done | [the plan history](history/PLAN-to-1.0.md#m3-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M4 Search (0.2.0) | Done | [the plan history](history/PLAN-to-1.0.md#m4-search-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M5 Text toolbox, the MVP (0.3.0) | Done | [the plan history](history/PLAN-to-1.0.md#m5-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M6 Column mode | Done | [the plan history](history/PLAN-to-1.0.md#m6-column-mode-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M7 Marking, split view, compare | Done | [the plan history](history/PLAN-to-1.0.md#m7-built-and-checked-headless-live-checks-pending--2026-10-01) |
+| M8 Navigation, Replace in Files | Done | [the plan history](history/PLAN-to-1.0.md#m8-built-and-checked-headless-live-checks-pending--2026-10-01) |
 | M9 Polish, QA and 1.0 | Done; signed off by the user on 2026-10-02 | [PLAN.md](PLAN.md) (the M9 entry) |
 
 Preview gates: M0 approved by the user; M1–M8 judged by the agent from their screenshots in `tools/progress/public/` under the standing authorization of 2026-10-01.

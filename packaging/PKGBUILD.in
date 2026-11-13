@@ -23,7 +23,8 @@ prepare() {
 
 build() {
   cd "$srcdir/stet-$pkgver"
-  cargo build --release --locked --offline
+  # Without the self-test harness, which only the project's own tests use (ADR-020).
+  cargo build --release --locked --offline -p stet --no-default-features
 }
 
 check() {

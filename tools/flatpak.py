@@ -19,7 +19,9 @@ Flatpak repository people install it from (ADR-019). The steps, in order:
                                     key means everyone adds the repository again)
 
 build needs HEAD to be the commit tagged v<version> and the working tree clean (--untagged builds
-HEAD anyway, and --worktree the files git would commit now, tracked or new, for a test). site
+HEAD anyway, and --worktree the files git would commit now, tracked or new, for a test; a
+--worktree build keeps the self-test harness, which releases leave out, so that the self-test
+scripts can run inside it). site
 serves the repository from STET_FLATPAK_URL, ending in "/" (by default GitHub Pages' address of
 PixDevsApps/stet-flatpak), and writes it into STET_FLATPAK_SITE (by default .local/flatpak/site).
 publish publishes: an agent runs it only on the owner's word.
@@ -99,6 +101,13 @@ def build(ver: str) -> None:
         archive = subprocess.run(["git", "archive", "--format=tar", "HEAD"], cwd=root,
                                  check=True, capture_output=True).stdout
         subprocess.run(["tar", "-x", "-C", str(src)], input=archive, check=True)
+    if "--worktree" in sys.argv[2:]:
+        manifest = src / MANIFEST.relative_to(root)
+        text = manifest.read_text()
+        release = " -p stet --no-default-features\n"
+        if release not in text:
+            raise SystemExit(f"{manifest.name} no longer builds{release.strip()}")
+        manifest.write_text(text.replace(release, " -p stet\n"))
     run(sys.executable, "-I", "tools/flatpak-cargo-sources.py", "--check", cwd=src)
     run(
         "flatpak-builder", "--force-clean",

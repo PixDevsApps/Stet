@@ -1,80 +1,58 @@
 # Contributing to Stet
 
-Stet is a native, keyboard-first text editor for Omarchy. Keep changes within the
-[product requirements](docs/PRD.md) and the current milestone in the [plan](docs/PLAN.md).
-Ideas outside the lean 1.0 scope go on the 1.x or Later lists, not into the code.
+Stet is a native, keyboard-first text and code editor for Omarchy, written in Rust with GTK 4, libadwaita and GtkSourceView 5. Thank you for helping. This page is for anyone opening an issue or a pull request; [AGENTS.md](AGENTS.md) adds the rules for AI coding agents working in the project owner's checkout.
 
-The repository is [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet) on GitHub (public since
-2026-10-02); `main` is the only branch, and releases are annotated tags (`v1.6.0`). Propose changes as a
-branch and a pull request against `main`.
+The repository is [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet). `main` is the only long-lived branch and releases are annotated tags (`v1.6.0`). Propose a change as a branch and a pull request against `main`.
 
-For the original development environment, work only in
-`/home/fredrick/Projects/linux-apps/notes` (the folder keeps the M0 working name).
-Contributors elsewhere use their own checkout; that path is a session constraint, not a
-build requirement.
+## Before you start
 
-## Workflow
+- **Scope.** Stet keeps a lean feature set ([PRD](docs/PRD.md), [ADR-013](docs/DECISIONS.md#adr-013--lean-10-scope-2026-09-30)). New features go on the 1.x or Later lists in [PLAN.md](docs/PLAN.md#scope-control) first; please open an issue to discuss one before writing it.
+- **Architecture.** Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): three crates in one direction (`domain` pure logic ← `infrastructure` std I/O ← `app` GTK), modules by bounded context, and a table of where new code goes.
+- **Decisions.** [docs/DECISIONS.md](docs/DECISIONS.md) records why things are the way they are. If your change contradicts an ADR, say so in the pull request.
 
-1. Read [BUILD.md](docs/BUILD.md), the [decisions](docs/DECISIONS.md) and the current
-   milestone in [PLAN.md](docs/PLAN.md).
-2. Keep each change small and the application runnable after it.
-3. Respect the crate boundaries: `domain` is pure logic, `infrastructure` does std I/O,
-   and only `app` links GTK. Nothing blocks the GTK thread. Every user-visible command
-   is an `ActionId`.
-4. Add tests with the change: proptest or insta for `domain`, tempfile-based tests for
-   `infrastructure`, and a `.stet-test` script in `tests/selftest/` for UI behaviour
-   (`stet --self-test`, run headless; see [TESTING.md](docs/TESTING.md)).
-5. Run the checks below, then describe the user-visible change, what you ran and any
-   remaining limitation in the commit or PR.
+## Set up
 
-Git commits, pushes, package builds and installs by agents need a dated user
-authorization recorded in PLAN.md first; see [AGENTS.md](AGENTS.md).
+On Arch or Omarchy:
+
+```sh
+sudo pacman -S --needed rust gtk4 libadwaita gtksourceview5 pcre2 pkgconf python
+cargo run
+```
+
+Rust 1.92 or newer (edition 2024), GTK 4.18, libadwaita 1.9 and GtkSourceView 5.18 or newer. [docs/BUILD.md](docs/BUILD.md) has the details, the release packaging and the Flatpak.
 
 ## Checks
 
 ```sh
-bash tools/ci.sh
+bash tools/ci.sh            # rustfmt, Clippy (-D warnings), tests, rustdoc, build, link check
+STET_CI_DISPLAY=9 bash tools/ci.sh --ui   # plus the headless UI self-tests
 ```
 
-The script runs `cargo fmt --all --check`, Clippy with `-D warnings`, the test suite and
-a build; `--ui` adds a headless smoke run of the app. Run GTK programs headless with
-`tools/headless.sh <display> <cmd...>` (Broadway backend); see [BUILD.md](docs/BUILD.md)
-and [TESTING.md](docs/TESTING.md). A passing headless run does not prove Wayland,
-input-method, fractional-scaling or Hyprland behaviour; those are on the manual Omarchy
-acceptance list.
+The UI self-tests run Stet under GTK's Broadway backend through `tools/headless.sh`, with a private D-Bus session, so nothing opens on your desktop. Pick a free display number. [docs/TESTING.md](docs/TESTING.md) explains the self-test scripts.
 
-Report measurements only from runs you actually did, with the date, command, machine and
-caveats. Never mark an unrun check as passed.
+## Making a change
+
+1. Keep each change small and the application runnable after it.
+2. Follow the layer rules: no I/O and no GTK in `domain`, no GTK in `infrastructure`, nothing that blocks the GTK thread in `app`, `unsafe` only in `app/src/sys/`. The workspace lints (`Cargo.toml`) enforce much of this.
+3. Every user-visible command is an `ActionId` in `domain/src/actions/registry.rs`; menus, the command palette and shortcuts come from it.
+4. Add tests with the change: unit tests, `proptest` or `insta` in `domain`; `tempfile`-based tests in `infrastructure`; a `.stet-test` script in `tests/selftest/` for UI behaviour.
+5. Update the docs the change affects in the same pull request ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [USER_GUIDE.md](docs/USER_GUIDE.md), [DESIGN.md](docs/DESIGN.md), …), and add a line to [RELEASE_NOTES.md](docs/RELEASE_NOTES.md) under "Unreleased" for anything a user would notice.
+6. In the pull request, describe the user-visible change, what you ran, and what you could not check (for example Wayland input methods, fractional scaling or Hyprland behaviour, which headless runs don't cover).
+
+Report measurements only from runs you actually did, with the command and machine. A check that wasn't run is "not verified", never "passed".
+
+## Code style
+
+Idiomatic Rust 2024, formatted by rustfmt, clean under the workspace lints. Comments say why, not when: no milestone or version tags in code. Never log the contents of documents.
 
 ## Architecture decisions
 
-Decisions with long-term cost get an ADR in [DECISIONS.md](docs/DECISIONS.md):
-
-- Use the next free number and the heading `## ADR-NNN — Title (YYYY-MM-DD)`.
-- Write **Status**, **Decision**, **Reason** and **Consequence**; add **Alternatives** and
-  **References** (authoritative links with versions) when they help.
-- Status is `Proposed`, `Accepted` (say by whom: user decision, spike evidence),
-  `Superseded by ADR-NNN` or `Rejected`.
-- Change an accepted decision with a dated `###` amendment under it that says what it
-  supersedes. Do not rewrite history.
-
-## Documentation sync rule
-
-The repository docs are the canonical project memory ([ADR-012](docs/DECISIONS.md)).
-
-- A change that alters behaviour, scope, architecture, commands or acceptance updates
-  the affected docs in the same change.
-- Progress, preview gates and authorizations are dated entries in PLAN.md, newest first.
-  Older entries stay as history; newer entries take precedence.
-- Keep the "Synced:" date at the top of each doc current when you edit it.
+A decision with long-term cost (a dependency, a file format or location, hard-to-change behaviour) gets an ADR in [docs/DECISIONS.md](docs/DECISIONS.md): the next free number, `## ADR-NNN — Title (YYYY-MM-DD)`, with **Status**, **Decision**, **Reason**, **Alternatives** and **Consequences**. An accepted ADR is changed by a dated `###` amendment under it, never rewritten.
 
 ## Issues
 
-For bugs, include the version or commit, Omarchy and GTK/libadwaita/GtkSourceView
-versions, steps to reproduce and a short log. Never attach file contents that may contain
-secrets; backups and sessions can hold unsaved private text.
+For a bug, include the Stet version (`stet --version`), how you installed it (Arch package or Flatpak), your distribution and the GTK, libadwaita and GtkSourceView versions, the steps to reproduce, and a short log (`RUST_LOG=debug stet`). Never attach files that may contain private text: Stet's session and backups keep unsaved documents.
 
-## Licenses
+## License
 
-Original contributions use the repository's [MIT license](LICENSE). Keep third-party
-notices when dependencies change.
+Contributions are under the repository's [MIT license](LICENSE). Keep third-party notices when dependencies change (`python3 tools/license-report.py`).

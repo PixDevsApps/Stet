@@ -1,6 +1,6 @@
 # Spike S2 — Search through GtkSourceView
 
-> Recorded on 2026-09-30 under the working name Notes. Since [ADR-010](../DECISIONS.md#adr-010-accepted--stet-2026-09-30) the crate `notes-spikes` (Rust path `notes_spikes`) is `stet-spikes` (`stet_spikes`), and the `NOTES_*` environment variables are `STET_*`. The raw JSON lines under `.local/`, the generated tables under `target/spikes/s2/` and the fixture `target/fixtures/search-1m.log` were deleted on 2026-09-30 to free disk space; regenerate the fixture with `python3 tools/gen-fixtures.py` and re-run the spike to regenerate the output. Decisions on its recommendations: [PLAN.md, 2026-09-30](../PLAN.md#name-repository-and-spike-changes-approved--2026-09-30).
+> Recorded on 2026-09-30 under the working name Notes. Since [ADR-010](../DECISIONS.md#adr-010-accepted--stet-2026-09-30) the crate `notes-spikes` (Rust path `notes_spikes`) is `stet-spikes` (`stet_spikes`), and the `NOTES_*` environment variables are `STET_*`. The raw JSON lines under `.local/`, the generated tables under `target/spikes/s2/` and the fixture `target/fixtures/search-1m.log` were deleted on 2026-09-30 to free disk space; regenerate the fixture with `python3 tools/gen-fixtures.py` and re-run the spike to regenerate the output. Decisions on its recommendations: [PLAN.md, 2026-09-30](../history/PLAN-to-1.0.md#name-repository-and-spike-changes-approved--2026-09-30).
 
 Project: Notes (working name), a text editor for Omarchy
 

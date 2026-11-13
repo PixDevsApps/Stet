@@ -2,14 +2,14 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-12
+Synced: 2026-11-13
 
 Run commands from the repository root (the original working copy is `/home/fredrick/Projects/linux-apps/notes`; the folder keeps the M0 working name). Milestones M1, M3 and M4 are built and merged (Wave A, 2026-10-01): the editor shell with its headless self-tests and a local Arch package, the file pipeline for encodings and large files, and search; M2 and M5 are next. [PLAN.md](PLAN.md) has the current state.
 
 ## Toolchain
 
 - Rust edition 2024, Cargo resolver 3.
-- **MSRV 1.92** (`rust-version` in the workspace manifest, the same floor as Hertz). The development machine has **rustc and cargo 1.98.1**; the 1.92 floor has not been separately verified.
+- **MSRV 1.92** (`rust-version` in the workspace manifest, the same floor as Hertz). The development machine has **rustc and cargo 1.98.1**; `cargo +1.92 check --workspace --all-targets --locked` passed on 2026-11-13, and the CI workflow (`.github/workflows/ci.yml`) checks the floor on every push.
 - rustfmt and Clippy are required. Arch's `rust` package includes them; rustup users add the `rustfmt` and `clippy` components and should not also install Arch's `rust`.
 - No C or C++ compiler is needed for the planned dependency set.
 
@@ -177,7 +177,7 @@ Environment variables:
 bash tools/ci.sh
 ```
 
-The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, the same Clippy run for the app without its self-test harness (`cargo clippy -p stet --no-default-features --all-targets -- -D warnings`, which fails if anything outside the harness needs it), `cargo test --workspace`, `cargo doc --workspace --no-deps` with warnings as errors, and `cargo build --workspace` (plus the check that the Flatpak's crate list matches `Cargo.lock`). Run it before every change is proposed.
+The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, the same Clippy run for the app without its self-test harness (`cargo clippy -p stet --no-default-features --all-targets -- -D warnings`, which fails if anything outside the harness needs it), `cargo test --workspace`, `cargo doc --workspace --no-deps` with warnings as errors, and `cargo build --workspace` (plus the checks that the Flatpak's crate list matches `Cargo.lock` and that every relative link in the Markdown files resolves, `tools/check-links.py`). Run it before every change is proposed.
 
 ```sh
 bash tools/ci.sh --ui

@@ -292,7 +292,7 @@ The product-level UX principles are in [PRD.md](PRD.md#ux-principles). In short:
 
 **Toasts** (AdwToast) confirm things that need no decision: a clean file reloaded from disk, a save, "Set as default editor" done.
 
-**Dialogs** are in-window and appear only when a decision is required: closing a dirty tab with Ctrl+W, a character the target encoding can't represent, the long-line choice (open formatted, read-only with display breaks, open anyway; S1 proposes dropping or changing "open anyway", which awaits the user's review in [PLAN.md](PLAN.md#name-repository-and-spike-changes-approved--2026-09-30)), "Set as default editor", and "Forget unsaved drafts".
+**Dialogs** are in-window and appear only when a decision is required: closing a dirty tab with Ctrl+W, a character the target encoding can't represent, the long-line choice (open formatted, read-only with display breaks, open anyway; S1 proposes dropping or changing "open anyway", which awaits the user's review in [the plan history](history/PLAN-to-1.0.md#name-repository-and-spike-changes-approved--2026-09-30)), "Set as default editor", and "Forget unsaved drafts".
 
 ## Hamburger menu
 

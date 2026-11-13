@@ -27,7 +27,7 @@ modules:
   - name: stet
     buildsystem: simple
     build-commands:
-      - cargo build --release --locked --offline -p stet
+      - cargo build --release --locked --offline -p stet --no-default-features
       - install -Dm755 target/release/stet /app/bin/stet
       - install -Dm644 packaging/io.github.pixdevsapps.Stet.desktop /app/share/applications/io.github.pixdevsapps.Stet.desktop
       - install -Dm644 packaging/io.github.pixdevsapps.Stet.metainfo.xml /app/share/metainfo/io.github.pixdevsapps.Stet.metainfo.xml

@@ -12,7 +12,7 @@ The product is **Stet** ([ADR-010](docs/DECISIONS.md), accepted 2026-09-30). "No
 
 The repository docs are the canonical project memory ([ADR-012](docs/DECISIONS.md)). There is no Notion project and no external tracker.
 
-Before substantive work, read [PLAN.md](docs/PLAN.md), [DECISIONS.md](docs/DECISIONS.md), [PRD.md](docs/PRD.md) and [OPERATING.md](docs/OPERATING.md).
+Before substantive work, read [PLAN.md](docs/PLAN.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DECISIONS.md](docs/DECISIONS.md), [PRD.md](docs/PRD.md) and [OPERATING.md](docs/OPERATING.md).
 
 - Record progress as dated entries in PLAN.md, newest first.
 - Record decisions with long-term cost as ADRs; amend with dated sub-entries instead of rewriting history.

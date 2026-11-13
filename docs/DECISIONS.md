@@ -53,7 +53,7 @@ ADR-001 to ADR-013 were drafted on 2026-09-30 under the working name "Notes". [A
 
 **Status:** Accepted by user decision on 2026-09-30, **pending confirmation by the M0 spikes** (S1–S6). A failed spike is decided separately, as below.
 
-**Status update, 2026-09-30:** the headless M0 spikes support the stack. S1, S3, S5 and the startup part of S6 pass or have mitigations the user approved on 2026-09-30 ([ADR-014](#adr-014--syntax-highlighting-size-policy-2026-09-30), [ADR-015](#adr-015--exact-tab-stops-in-pango-units-2026-09-30), [ADR-016](#adr-016--column-mode-editing-and-undo-model-2026-09-30), and the amendments to [ADR-003](#adr-003-amendment--bulk-edits-by-edit-count-2026-09-30) and [ADR-004](#adr-004-amendment--reload-trigger-for-a-missing-current-directory-2026-09-30)). S2's Replace All failure is addressed by the [ADR-005 amendment](#adr-005-amendment--our-own-replace-engine-2026-09-30). The live Hyprland checks (S4) and the live re-measures of S1, S5 and S6 ran later that day and support the stack too ([S4-live.md](spikes/S4-live.md)). A few live items were not completed; moving them into the milestones that build them is proposed in [PLAN.md](PLAN.md#m0-live-checks-on-hyprland--2026-09-30). M0 closes when the user approves the preview gate. **Closed on 2026-10-01 with GO** (user decision).
+**Status update, 2026-09-30:** the headless M0 spikes support the stack. S1, S3, S5 and the startup part of S6 pass or have mitigations the user approved on 2026-09-30 ([ADR-014](#adr-014--syntax-highlighting-size-policy-2026-09-30), [ADR-015](#adr-015--exact-tab-stops-in-pango-units-2026-09-30), [ADR-016](#adr-016--column-mode-editing-and-undo-model-2026-09-30), and the amendments to [ADR-003](#adr-003-amendment--bulk-edits-by-edit-count-2026-09-30) and [ADR-004](#adr-004-amendment--reload-trigger-for-a-missing-current-directory-2026-09-30)). S2's Replace All failure is addressed by the [ADR-005 amendment](#adr-005-amendment--our-own-replace-engine-2026-09-30). The live Hyprland checks (S4) and the live re-measures of S1, S5 and S6 ran later that day and support the stack too ([S4-live.md](spikes/S4-live.md)). A few live items were not completed; moving them into the milestones that build them is proposed in [the plan history](history/PLAN-to-1.0.md#m0-live-checks-on-hyprland--2026-09-30). M0 closes when the user approves the preview gate. **Closed on 2026-10-01 with GO** (user decision).
 
 **Decision:** Build the UI with plain gtk4-rs (no relm4):
 - `gtk4` 0.11.5 with `v4_18`, `libadwaita` 0.9.2 with `v1_9`, `sourceview5` 0.11.2 with `v5_18` (the crate has no `v5_20` flag);
@@ -116,7 +116,7 @@ Fallback: GPUI + gpui-component. The `domain` and `infrastructure` crates carry 
 
 ### ADR-003 amendment — The undo cap is 1,000 steps (2026-10-01)
 
-**Status:** Accepted — decided in M1 under the user's standing authorization of 2026-10-01 ([PLAN.md](PLAN.md#m0-closed-and-the-whole-plan-authorized--2026-10-01)). It settles the value the amendment above left to M1.
+**Status:** Accepted — decided in M1 under the user's standing authorization of 2026-10-01 ([the plan history](history/PLAN-to-1.0.md#m0-closed-and-the-whole-plan-authorized--2026-10-01)). It settles the value the amendment above left to M1.
 
 **Decision:** Every buffer is created with `max-undo-levels` = **1,000** (`stet_domain::view::MAX_UNDO_LEVELS`).
 
@@ -414,7 +414,7 @@ Every 7 s the pending documents are snapshotted. The writer writes each backup (
 
 **Reason:** Lazy stubs keep a large session's start to the active tab's cost; loading stubs before operations over all open documents keeps their results complete and makes Save and Close All write the restored text, not an empty buffer. Reusing M3's disk banner for the restore conflict keeps one banner and one set of actions for "the file and the buffer differ", and its persisted baseline needs no new field. A second process with another application id can only meet a locked store briefly (a quitting instance) or for good (a development build next to the installed one); running without a session is safer than waiting forever or writing another instance's session.
 
-**Consequence:** Measured headless on 2026-10-01 ([TESTING.md](TESTING.md#2026-10-01--m2-sessions-backups-restore-and---wait)): 43 dirty and untitled tabs back after SIGKILL with only the typing after the last backup lost (the backup landed 6.6–7.0 s after the edits), after quitting and after SIGTERM exactly as they were; a 50-tab session's window painted its first frame 157.5–166.9 ms after the process started (release build, three runs; 168.2 ms in the debug build); taking a dirty document's text for a backup cost the GTK thread 0.5 ms at 1 MB, 8 ms at 10 MB and 43 ms at 50 MB (release build). The live checks are in [PLAN.md](PLAN.md#m2-built-and-checked-headless-live-checks-pending--2026-10-01).
+**Consequence:** Measured headless on 2026-10-01 ([TESTING.md](TESTING.md#2026-10-01--m2-sessions-backups-restore-and---wait)): 43 dirty and untitled tabs back after SIGKILL with only the typing after the last backup lost (the backup landed 6.6–7.0 s after the edits), after quitting and after SIGTERM exactly as they were; a 50-tab session's window painted its first frame 157.5–166.9 ms after the process started (release build, three runs; 168.2 ms in the debug build); taking a dirty document's text for a backup cost the GTK thread 0.5 ms at 1 MB, 8 ms at 10 MB and 43 ms at 50 MB (release build). The live checks are in [the plan history](history/PLAN-to-1.0.md#m2-built-and-checked-headless-live-checks-pending--2026-10-01).
 
 ### ADR-006 amendment — The backup settings (merge of M2 and M5, 2026-10-01)
 
@@ -812,7 +812,7 @@ The project folder stays `/home/fredrick/Projects/linux-apps/notes`.
 
 **Reason:** GApplication blocks only remote command lines, so `stet --wait` must never become the primary (technical critique #1); activation by the bus also keeps the editor alive when the terminal it was started from closes. The fallback spawns only for `--wait`, because a plain development `stet file` that becomes the editor keeps its log in the terminal, as before, and the self-tests' and CI's private buses have no service files by design.
 
-**Consequence:** `tests/selftest/activation.stet-test` runs it on a private `dbus-daemon` whose only service directory holds Stet's own test service file, or nothing ([TESTING.md](TESTING.md#2026-10-01--m2-sessions-backups-restore-and---wait)): status 0 and 1 as above, through the real `--gapplication-service` and through the fallback. GTK exports no window actions over D-Bus under Broadway (only its Wayland and X11 backends do), so the editing half of that test runs a self-test as the activated service. The live `GIT_EDITOR` and `SUDO_EDITOR` checks, with an installed service file, are in [PLAN.md](PLAN.md#m2-built-and-checked-headless-live-checks-pending--2026-10-01).
+**Consequence:** `tests/selftest/activation.stet-test` runs it on a private `dbus-daemon` whose only service directory holds Stet's own test service file, or nothing ([TESTING.md](TESTING.md#2026-10-01--m2-sessions-backups-restore-and---wait)): status 0 and 1 as above, through the real `--gapplication-service` and through the fallback. GTK exports no window actions over D-Bus under Broadway (only its Wayland and X11 backends do), so the editing half of that test runs a self-test as the activated service. The live `GIT_EDITOR` and `SUDO_EDITOR` checks, with an installed service file, are in [the plan history](history/PLAN-to-1.0.md#m2-built-and-checked-headless-live-checks-pending--2026-10-01).
 
 ## ADR-012 — Repository docs as canonical project memory (2026-09-30)
 
@@ -1012,7 +1012,7 @@ The project folder stays `/home/fredrick/Projects/linux-apps/notes`.
 **Reason:** S5's evidence above. The triggers as built cover every way a key, a click, the menu or the palette can act while a burst is open, and the self-tests check them one by one.
 
 **Consequence:**
-- Exit criteria, headless: a burst undoes in one step; inserting at column 0 on 10,000 lines is one undo step in 14.1–15.2 ms (release build), and its undo and redo take 24.7–27.7 ms; typed text through `insert-text` goes in on every line. fcitx5 typing in column mode needs the live session ([PLAN.md](PLAN.md#m6-column-mode-built-and-checked-headless-live-checks-pending--2026-10-01)).
+- Exit criteria, headless: a burst undoes in one step; inserting at column 0 on 10,000 lines is one undo step in 14.1–15.2 ms (release build), and its undo and redo take 24.7–27.7 ms; typed text through `insert-text` goes in on every line. fcitx5 typing in column mode needs the live session ([the plan history](history/PLAN-to-1.0.md#m6-column-mode-built-and-checked-headless-live-checks-pending--2026-10-01)).
 - The primary selection (middle-click paste) is not set from a rectangle.
 
 ## ADR-017 — Settings in config.toml and keys.toml (2026-10-01)

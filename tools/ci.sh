@@ -20,6 +20,8 @@ display=${STET_CI_DISPLAY:-9}
 cargo fmt --all --check
 # The Flatpak's crate list must match Cargo.lock (ADR-019).
 python3 -I tools/flatpak-cargo-sources.py --check
+# Every relative link in the Markdown files resolves.
+python3 -I tools/check-links.py
 cargo clippy --workspace --all-targets -- -D warnings
 # Without the self-test harness (ADR-020), as the packages build it: nothing else may need it.
 cargo clippy -p stet --no-default-features --all-targets -- -D warnings

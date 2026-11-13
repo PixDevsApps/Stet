@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: Format, lints, tests, docs and build
+    runs-on: ubuntu-latest
+    # Arch Linux has the GTK 4, libadwaita and GtkSourceView 5 versions Stet builds against.
+    container: archlinux:base-devel
+    steps:
+      - name: System packages
+        run: pacman -Syu --noconfirm --needed rust gtk4 libadwaita gtksourceview5 pcre2 pkgconf python git
+      - uses: actions/checkout@v4
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: checks-${{ hashFiles('Cargo.lock') }}
+          restore-keys: checks-
+      # The UI self-tests (tools/ci.sh --ui) need a patched gtk4-broadwayd on GTK 4.24
+      # (docs/upstream/gtk-broadway-shared-render-node.md); they run on the maintainer's machine.
+      - name: tools/ci.sh
+        run: bash tools/ci.sh
+
+  msrv:
+    name: Minimum Rust version
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: System packages
+        run: pacman -Syu --noconfirm --needed rustup gtk4 libadwaita gtksourceview5 pcre2 pkgconf git
+      - uses: actions/checkout@v4
+      - name: Toolchain from rust-version
+        run: |
+          version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
+          rustup toolchain install "$version" --profile minimal
+          echo "MSRV=$version" >> "$GITHUB_ENV"
+      - name: cargo check
+        run: cargo +"$MSRV" check --workspace --all-targets --locked
