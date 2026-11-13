@@ -219,6 +219,7 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
 }
 
 /// The kind of difference on `line` of `page`'s document, from its tags, for the self-test.
+#[cfg(feature = "selftest")]
 pub fn line_kind_at(page: &EditorPage, line: usize) -> Option<LineKind> {
     let buffer = page.buffer();
     let iter = buffer.iter_at_line(line as i32)?;
@@ -229,6 +230,7 @@ pub fn line_kind_at(page: &EditorPage, line: usize) -> Option<LineKind> {
 }
 
 /// The character ranges of `line` that the changed-text tag covers, for the self-test.
+#[cfg(feature = "selftest")]
 pub fn inline_ranges_at(page: &EditorPage, line: usize) -> Vec<std::ops::Range<usize>> {
     let buffer = page.buffer();
     let Some(tag) = buffer.tag_table().lookup(INLINE_TAG) else {

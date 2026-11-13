@@ -125,7 +125,7 @@ Debug builds use the app-id `io.github.pixdevsapps.Stet.Devel`; release builds u
 
 Logging goes to stderr through `tracing`, filtered by `RUST_LOG` (default `info`; for example `RUST_LOG=stet=debug`). The app logs `first-frame <ms>` after its first paint. Document contents are never logged.
 
-Command line (M1): `stet [FILE[:LINE[:COL]]]... [-n LINE] [-c COL]`, plus `--help`, `--version` and `--self-test <script>`. A second `stet` hands its command line to the running instance; the `:LINE[:COL]` suffix is split off only when the literal path does not exist.
+Command line (M1): `stet [FILE[:LINE[:COL]]]... [-n LINE] [-c COL]`, plus `--help`, `--version` and `--self-test <script>`. `--self-test` is hidden from `--help` and exists only in builds with the `selftest` Cargo feature, which is on by default ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13)); `cargo build -p stet --no-default-features` builds the app without the harness, its probes and `serde_json`. A second `stet` hands its command line to the running instance; the `:LINE[:COL]` suffix is split off only when the literal path does not exist.
 
 M2 adds `--wait` (`-w`: return when the files given are closed; status 1 if one closed unsaved) and `--no-session` (when it starts Stet: no restore and no session kept), and accepts GApplication's `--gapplication-service`, which the D-Bus service file runs. When no Stet is running, a command line asks the session bus to start the service and then hands over its files ([ADR-011 amendment](DECISIONS.md#adr-011-amendment--d-bus-activation-and---wait-as-built-in-m2-2026-10-01)). A build without an installed service file, such as `cargo run` (app-id `….Devel`), becomes the editor itself, as before, except with `--wait`, where it starts `stet --gapplication-service` in the background and waits for its own tabs.
 
@@ -147,7 +147,7 @@ Environment variables:
 bash tools/ci.sh
 ```
 
-The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo doc --workspace --no-deps` with warnings as errors, and `cargo build --workspace` (plus the check that the Flatpak's crate list matches `Cargo.lock`). Run it before every change is proposed.
+The script runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, the same Clippy run for the app without its self-test harness (`cargo clippy -p stet --no-default-features --all-targets -- -D warnings`, which fails if anything outside the harness needs it), `cargo test --workspace`, `cargo doc --workspace --no-deps` with warnings as errors, and `cargo build --workspace` (plus the check that the Flatpak's crate list matches `Cargo.lock`). Run it before every change is proposed.
 
 ```sh
 bash tools/ci.sh --ui

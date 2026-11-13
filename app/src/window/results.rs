@@ -378,6 +378,7 @@ impl ResultsPanel {
         }
     }
 
+    #[cfg(feature = "selftest")]
     pub fn is_shown(&self) -> bool {
         self.root.is_visible()
     }
@@ -470,6 +471,7 @@ impl ResultsPanel {
         }
     }
 
+    #[cfg(feature = "selftest")]
     pub fn search_count(&self) -> u32 {
         self.searches.n_items()
     }
@@ -568,6 +570,7 @@ impl ResultsPanel {
     }
 
     /// Activates the selected row, as Enter does.
+    #[cfg(feature = "selftest")]
     pub fn activate_selected(&self) -> bool {
         let position = self.selection.selected();
         if position == gtk::INVALID_LIST_POSITION {
@@ -578,6 +581,7 @@ impl ResultsPanel {
     }
 
     /// Selects the row at `position` of the flattened list, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn select_position(&self, position: u32) -> bool {
         if position >= self.tree.n_items() {
             return false;

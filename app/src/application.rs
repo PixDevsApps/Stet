@@ -48,17 +48,20 @@ impl AppState {
     }
 
     /// Runs `hook` once the first window has been presented (the self-test starts there).
+    #[cfg(feature = "selftest")]
     pub fn connect_first_window(&self, hook: impl FnOnce(Window) + 'static) {
         self.on_first_window.replace(Some(Box::new(hook)));
     }
 
     /// Keeps the first window hidden until `gate` resolves as well as the theme. The self-test
     /// opens its startup files first that way, as a slow theme load does in a live session.
+    #[cfg(feature = "selftest")]
     pub fn hold_first_window(&self, gate: impl Future<Output = ()> + 'static) {
         self.present_gate.replace(Some(Box::pin(gate)));
     }
 
     /// When the first window's first frame was painted.
+    #[cfg(feature = "selftest")]
     pub fn first_frame(&self) -> Option<Instant> {
         self.first_frame.get()
     }
@@ -248,6 +251,7 @@ fn command_line_received(
             return glib::ExitCode::from(error.exit_code() as u8);
         }
     };
+    #[cfg(feature = "selftest")]
     if parsed.self_test.is_some() {
         command_line.printerr_literal(
             "stet: --self-test starts its own instance; it cannot be sent to a running one\n",

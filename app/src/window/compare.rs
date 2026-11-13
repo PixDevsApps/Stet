@@ -36,6 +36,10 @@ const RECOMPARE_DELAY: Duration = Duration::from_millis(300);
 
 /// The last comparison run, for the self-test's report.
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(
+    not(feature = "selftest"),
+    expect(dead_code, reason = "only the self-test reads the figures")
+)]
 pub struct CompareRun {
     pub stats: CompareStats,
     /// Lines of the old and the new text.
@@ -652,17 +656,20 @@ impl Window {
     // ----- for the self-test -----------------------------------------------------------
 
     /// The last comparison run.
+    #[cfg(feature = "selftest")]
     pub fn compare_run(&self) -> Option<CompareRun> {
         self.inner.comparing.last.get()
     }
 
     /// Whether a comparison run is due or on its way.
+    #[cfg(feature = "selftest")]
     pub fn compare_busy(&self) -> bool {
         let state = &self.inner.comparing;
         state.running.get() || state.pending.borrow().is_some()
     }
 
     /// The comparison on screen, with the old and the new document.
+    #[cfg(feature = "selftest")]
     pub fn comparison(&self) -> Option<(EditorPage, EditorPage, Rc<Comparison>)> {
         let active = self.inner.comparing.active.borrow();
         let active = active.as_ref()?;

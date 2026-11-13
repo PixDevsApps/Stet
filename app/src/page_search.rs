@@ -175,6 +175,7 @@ impl PageSearch {
     }
 
     /// The pattern smart highlighting looks for.
+    #[cfg(feature = "selftest")]
     pub fn smart_pattern(&self) -> Option<String> {
         self.smart_settings
             .search_text()
@@ -182,6 +183,7 @@ impl PageSearch {
     }
 
     /// The smart-highlight context while it highlights something.
+    #[cfg(feature = "selftest")]
     pub fn smart_context(&self) -> Option<sourceview5::SearchContext> {
         self.smart_settings.search_text()?;
         self.smart.borrow().clone()

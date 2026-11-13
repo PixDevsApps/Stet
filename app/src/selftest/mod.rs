@@ -336,6 +336,13 @@ impl Harness {
             .ok_or_else(|| "no tab is selected".to_owned())
     }
 
+    /// The window's text field `name` (see [`Window::field`]).
+    fn field(&self, name: &str) -> Result<gtk::Editable, String> {
+        self.window
+            .field(name)
+            .ok_or_else(|| format!("no field {name}"))
+    }
+
     async fn step(&self, step: &Step) -> StepResult {
         if let Some(result) = self.search_step(step).await {
             return result;
@@ -417,12 +424,12 @@ impl Harness {
             "key" => self.key(arg(0), arg(1)),
             "find" => {
                 self.window.show_find();
-                self.window.inner.find.entry.set_text(arg(0));
+                self.field("find")?.set_text(arg(0));
                 self.wait_until_settled().await;
                 Ok(())
             }
             "find-case" => {
-                self.window.inner.find.case.set_active(boolean(arg(0))?);
+                self.window.set_find_option("case", boolean(arg(0))?);
                 Ok(())
             }
             "palette" => {
@@ -431,15 +438,15 @@ impl Harness {
                 Ok(())
             }
             "palette-activate" => {
-                self.window.palette().activate_selected();
+                self.window.palette_activate();
                 self.wait_idle().await
             }
             "palette-close" => {
-                self.window.palette().popover.popdown();
+                self.window.close_palette();
                 Ok(())
             }
             "choose-language" => {
-                if self.window.inner.languages.choose_matching(arg(0)) {
+                if self.window.pick_language(arg(0)) {
                     Ok(())
                 } else {
                     Err(format!("no language matches {}", arg(0)))
@@ -569,7 +576,7 @@ impl Harness {
                     other => return Err(format!("{other}: use reinterpret or convert")),
                 };
                 self.window.update_status();
-                if !self.window.inner.encodings.choose_id(mode, arg(1)) {
+                if !self.window.pick_encoding(mode, arg(1)) {
                     return Err(format!("the picker can't {} {}", arg(0), arg(1)));
                 }
                 self.wait_idle().await
@@ -631,13 +638,17 @@ impl Harness {
                     .ok()
                     .and_then(|page| tools::context_popover(page.view().upcast_ref()))
                     .map(Cast::upcast::<gtk::Popover>);
-                let mut popovers = vec![
-                    &self.window.palette().popover,
-                    &self.window.inner.languages.popover,
-                    &self.window.inner.encodings.popover,
-                    &self.window.inner.indentation.popover,
-                    &self.window.inner.nav.quick_open.popover,
-                ];
+                let own: Vec<gtk::Popover> = [
+                    "palette",
+                    "language",
+                    "encoding",
+                    "indentation",
+                    "quick-open",
+                ]
+                .into_iter()
+                .filter_map(|name| self.window.popover(name))
+                .collect();
+                let mut popovers: Vec<&gtk::Popover> = own.iter().collect();
                 popovers.extend(context.as_ref());
                 let menus: Vec<gtk::Popover> = self
                     .window
@@ -741,19 +752,9 @@ impl Harness {
     }
 
     fn key(&self, target: &str, key: &str) -> StepResult {
-        let find = &self.window.inner.find;
-        let controller = match target {
-            "find" => find.keys.clone(),
-            "replace" => find.replace_keys.clone(),
-            "directory" => find.directory_keys.clone(),
-            "filters" => find.filters_keys.clone(),
-            "results" => self.window.inner.results.keys.clone(),
-            other => {
-                return Err(format!(
-                    "no key target {other}; use find, replace, directory, filters or results"
-                ));
-            }
-        };
+        let controller = self.window.key_controller(target).ok_or_else(|| {
+            format!("no key target {target}; use find, replace, directory, filters or results")
+        })?;
         let (keyval, modifiers) =
             gtk::accelerator_parse(key).ok_or_else(|| format!("bad key {key}"))?;
         let values: [&dyn ToValue; 3] = [&keyval.into_glib(), &0u32, &modifiers];
@@ -1163,27 +1164,21 @@ echo "$name" > theme.name
                 }
             }
             "assert-status" => {
-                let status = self.window.inner.status.text();
+                let status = self.window.status_text();
                 if status.contains(arg(0)) {
                     Ok(())
                 } else {
                     Err(format!("status {status:?} lacks {:?}", arg(0)))
                 }
             }
-            "assert-match-count" => equal(
-                "match count",
-                self.window.inner.find.count.label().to_string(),
-                arg(0).to_owned(),
-            ),
-            "assert-find-open" => equal(
-                "find bar open",
-                self.window.inner.find.is_open(),
-                boolean(arg(0))?,
-            ),
+            "assert-match-count" => {
+                equal("match count", self.window.find_count(), arg(0).to_owned())
+            }
+            "assert-find-open" => equal("find bar open", self.window.find_open(), boolean(arg(0))?),
             "assert-theme" => self.check_theme(arg(0), arg(1), arg(2)),
             "assert-chrome-fg" => {
                 let wanted = color(arg(0))?;
-                let rgba = self.window.inner.status.root.color();
+                let rgba = self.window.status_color();
                 let actual = Rgb {
                     r: (rgba.red() * 255.0).round() as u8,
                     g: (rgba.green() * 255.0).round() as u8,
@@ -1258,7 +1253,7 @@ echo "$name" > theme.name
                 equal("most recent file", first, PathBuf::from(arg(0)))
             }
             "assert-palette-first" => {
-                let labels = self.window.palette().shown_labels();
+                let labels = self.window.palette_labels();
                 equal(
                     "first palette row",
                     labels.first().cloned().unwrap_or_default(),
@@ -1266,7 +1261,7 @@ echo "$name" > theme.name
                 )
             }
             "assert-palette-contains" => {
-                let labels = self.window.palette().shown_labels();
+                let labels = self.window.palette_labels();
                 if labels.iter().any(|label| label == arg(0)) {
                     Ok(())
                 } else {

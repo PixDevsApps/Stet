@@ -21,6 +21,8 @@ mod marking;
 mod nav;
 mod palette;
 mod pins;
+#[cfg(feature = "selftest")]
+mod probe;
 mod quick_open;
 mod replace;
 mod results;
@@ -60,15 +62,19 @@ use stet_domain::document::{next_untitled_number, tab_title, window_title};
 use stet_domain::nav::RecentFiles;
 use stet_domain::text::Position;
 
+#[cfg(feature = "selftest")]
 pub use compare::CompareRun;
 pub use encoding::grouped_entries;
 pub use encoding_picker::{EncodingPicker, PickerMode};
 pub use fif::FifStats;
-pub use find::{BarMode, Field, FindBar, Tone};
-pub use indentation::{IndentChoice, IndentPicker};
+pub use find::FindBar;
+#[cfg(feature = "selftest")]
+pub use find::{BarMode, Field, Tone};
+#[cfg(feature = "selftest")]
+pub use indentation::IndentChoice;
+pub use indentation::IndentPicker;
 pub use language::LanguagePicker;
 pub use palette::{Command as PaletteCommand, Palette};
-pub use pins::tab_menu_items;
 pub use replace::ReplaceStats;
 pub use results::ResultsPanel;
 
@@ -112,6 +118,7 @@ pub struct Shared {
     /// The editors' shortcuts, shared by every editor's controller (`actions`).
     pub editor_shortcuts: gio::ListStore,
     /// While the self-test asks for it, desktop commands are recorded instead of run.
+    #[cfg(feature = "selftest")]
     launches: RefCell<Option<Vec<Vec<OsString>>>>,
     /// The recent files, kept in the session.
     recent: RefCell<RecentFiles>,
@@ -128,6 +135,7 @@ impl Shared {
             appearance,
             preferences,
             editor_shortcuts,
+            #[cfg(feature = "selftest")]
             launches: RefCell::new(None),
             recent: RefCell::new(RecentFiles::default()),
             recent_listeners: RefCell::new(Vec::new()),
@@ -150,16 +158,6 @@ impl Shared {
         );
         self.recent.replace(merged);
         self.notify_recent();
-    }
-
-    /// Records desktop commands (a terminal, the file manager) instead of running them.
-    pub fn record_launches(&self) {
-        self.launches.replace(Some(Vec::new()));
-    }
-
-    /// The commands recorded since [`Self::record_launches`].
-    pub fn launches(&self) -> Vec<Vec<OsString>> {
-        self.launches.borrow().clone().unwrap_or_default()
     }
 
     pub fn connect_recent_changed(&self, listener: impl Fn() + 'static) {
@@ -213,6 +211,7 @@ pub struct ViewPane {
     trail: gtk::Box,
     /// The strip's tabs, as wide as they are, so that the + follows them. `None` if
     /// libadwaita's tab strip is built differently: the + then sits at the strip's far end.
+    #[cfg(feature = "selftest")]
     tab_scroller: Option<gtk::ScrolledWindow>,
     /// Takes a tab dropped on the + or the empty part of the strip after it, which libadwaita's
     /// strip doesn't cover since the tabs are only as wide as they are.
@@ -258,16 +257,10 @@ impl ViewPane {
             bar,
             new_tab,
             trail,
+            #[cfg(feature = "selftest")]
             tab_scroller,
             tab_drop,
         }
-    }
-
-    /// The strip's visible tabs end here, in its coordinates.
-    pub fn tabs_end(&self) -> Option<f32> {
-        let scroller = self.tab_scroller.as_ref()?;
-        let bounds = scroller.compute_bounds(&self.bar)?;
-        Some(bounds.x() + bounds.width())
     }
 }
 
@@ -347,6 +340,7 @@ pub struct Inner {
     drop_stage: adw::TabView,
     actions: RefCell<HashMap<ActionId, gio::SimpleAction>>,
     last_focus_check: Cell<Option<Instant>>,
+    #[cfg(feature = "selftest")]
     last_toast: RefCell<String>,
     session: session::WindowSession,
     /// Navigation, pinned tabs, quick open and Replace in Files.
@@ -500,6 +494,7 @@ impl Window {
                 drop_stage: adw::TabView::new(),
                 actions: RefCell::new(HashMap::new()),
                 last_focus_check: Cell::new(None),
+                #[cfg(feature = "selftest")]
                 last_toast: RefCell::new(String::new()),
                 session: session::WindowSession::default(),
                 nav,
@@ -817,19 +812,6 @@ impl Window {
             })
     }
 
-    /// Tab `number` (from 1) across the views, with its view's tab view, for the self-test.
-    pub fn tab_at(&self, number: usize) -> Option<(adw::TabView, adw::TabPage)> {
-        let mut left = number.checked_sub(1)?;
-        for view in &self.inner.views {
-            let count = usize::try_from(view.tabs.n_pages()).unwrap_or(0);
-            if left < count {
-                return Some((view.tabs.clone(), view.tabs.nth_page(left as i32)));
-            }
-            left -= count;
-        }
-        None
-    }
-
     /// Shows `page` and makes its view the active one.
     pub fn select(&self, page: &EditorPage) {
         let Some((index, tab_page)) = self.locate(page) else {
@@ -1066,14 +1048,6 @@ impl Window {
             self.update_layout();
         }
         self.update_actions();
-    }
-
-    pub fn title(&self) -> String {
-        self.inner
-            .window
-            .title()
-            .map(|title| title.to_string())
-            .unwrap_or_default()
     }
 
     fn update_title(&self) {
@@ -1370,10 +1344,6 @@ impl Window {
             }
         }
         self.update_actions();
-    }
-
-    pub fn closed_count(&self) -> usize {
-        self.inner.closed.borrow().len()
     }
 
     /// Closing the window. With the session on it never asks, except about documents in
@@ -1831,35 +1801,6 @@ impl Window {
         self.update_compare_actions();
     }
 
-    pub fn menu_model(&self) -> Option<gio::MenuModel> {
-        self.ensure_menu();
-        self.inner.menu_button.menu_model()
-    }
-
-    /// The hamburger menu's button.
-    pub fn menu_button(&self) -> &gtk::MenuButton {
-        &self.inner.menu_button
-    }
-
-    /// The + after view `index`'s last tab, which opens a new tab there.
-    pub fn new_tab_button(&self, index: usize) -> &gtk::Button {
-        &self.inner.views[index].new_tab
-    }
-
-    /// What takes a tab dropped after view `index`'s last tab, for the self-test.
-    pub fn tab_drop_target(&self, index: usize) -> &gtk::DropTarget {
-        &self.inner.views[index].tab_drop
-    }
-
-    /// The view whose tab strip has the menu at its start.
-    pub fn menu_view(&self) -> Option<usize> {
-        let start = self.inner.start.upcast_ref::<gtk::Widget>();
-        self.inner
-            .views
-            .iter()
-            .position(|view| view.bar.start_action_widget().as_ref() == Some(start))
-    }
-
     /// The menu is out of date (keys, recent files): it is built again when it next opens.
     /// Building it takes about 20 ms, which used to run twice at startup and once for every
     /// opened file.
@@ -1926,10 +1867,6 @@ impl Window {
     pub fn open_palette(&self, text: &str) {
         let items = self.palette_items();
         self.inner.palette.open(&self.inner.content, items, text);
-    }
-
-    pub fn palette(&self) -> &Rc<Palette> {
-        &self.inner.palette
     }
 
     fn palette_items(&self) -> Vec<palette::Item> {

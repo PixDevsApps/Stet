@@ -211,6 +211,7 @@ impl LanguagePicker {
     }
 
     /// Chooses the best language matching `query`, as typing it and pressing Enter would.
+    #[cfg(feature = "selftest")]
     pub fn choose_matching(&self, query: &str) -> bool {
         match self.rank(query).first() {
             Some(best) => {

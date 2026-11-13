@@ -32,6 +32,7 @@ pub fn running() -> Version {
 
 impl Window {
     /// The self-test's release server, in place of GitHub.
+    #[cfg(feature = "selftest")]
     pub fn set_update_url(&self, url: Option<String>) {
         self.inner.updates.url.replace(url);
     }

@@ -149,6 +149,7 @@ impl IndentPicker {
     }
 
     /// Chooses as a click would, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn choose(&self, choice: IndentChoice) {
         match choice {
             IndentChoice::Spaces(true) => self.spaces.set_active(true),

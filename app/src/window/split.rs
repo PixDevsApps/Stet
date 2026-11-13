@@ -133,15 +133,6 @@ impl Window {
             .map(|tab_page| super::page_of(&tab_page))
     }
 
-    /// The tabs of view `index`, for the self-test.
-    pub fn view_pages(&self, index: usize) -> Vec<EditorPage> {
-        self.inner
-            .views
-            .get(index)
-            .map(|view| super::view_pages(&view.tabs))
-            .unwrap_or_default()
-    }
-
     /// Makes view `index` the active one, if it shows tabs.
     pub(super) fn set_active_view(&self, index: usize, take_focus: bool) {
         let inner = &self.inner;
@@ -215,7 +206,8 @@ impl Window {
             .set_position(restored.unwrap_or(width / 2));
     }
 
-    /// Moves the divider to `position`, or keeps it for the next split.
+    /// Moves the divider to `position`, or keeps it for the next split (for the self-test).
+    #[cfg(feature = "selftest")]
     pub fn set_split_position(&self, position: i32) {
         if self.is_split() {
             self.inner.views_paned.set_position(position);

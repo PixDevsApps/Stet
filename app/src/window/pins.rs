@@ -8,8 +8,7 @@
 
 use super::Window;
 use crate::editor::EditorPage;
-use gtk4::{gio, glib};
-use libadwaita as adw;
+use gtk4::gio;
 use libadwaita::prelude::*;
 use stet_domain::actions::ActionId;
 
@@ -95,33 +94,5 @@ impl Window {
             .into_iter()
             .filter(|page| !self.is_pinned(page))
             .collect()
-    }
-}
-
-/// The tab menu's model, for the self-test: (label, action) of every item.
-pub fn tab_menu_items(tabs: &adw::TabView) -> Vec<(String, String)> {
-    let Some(model) = tabs.menu_model() else {
-        return Vec::new();
-    };
-    let mut items = Vec::new();
-    collect(model.upcast_ref(), &mut items);
-    items
-}
-
-fn collect(model: &gio::MenuModel, out: &mut Vec<(String, String)>) {
-    let text = |index: i32, attribute: &str| {
-        model
-            .item_attribute_value(index, attribute, Some(glib::VariantTy::STRING))
-            .and_then(|value| value.get::<String>())
-            .unwrap_or_default()
-    };
-    for index in 0..model.n_items() {
-        let action = text(index, "action");
-        if !action.is_empty() {
-            out.push((text(index, "label"), action));
-        }
-        if let Some(section) = model.item_link(index, "section") {
-            collect(&section, out);
-        }
     }
 }

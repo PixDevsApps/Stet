@@ -1034,6 +1034,7 @@ impl EditorPage {
     }
 
     /// The titles of the banners on screen, top to bottom.
+    #[cfg(feature = "selftest")]
     pub fn banner_texts(&self) -> Vec<String> {
         self.imp()
             .banners
@@ -1045,6 +1046,7 @@ impl EditorPage {
     }
 
     /// Clicks the button labelled `label` on a banner on screen.
+    #[cfg(feature = "selftest")]
     pub fn click_banner(&self, label: &str) -> bool {
         let banners: Vec<Rc<Banner>> = self.imp().banners.borrow().values().cloned().collect();
         banners
@@ -1054,6 +1056,7 @@ impl EditorPage {
     }
 
     /// The labels of the buttons on the banners on screen.
+    #[cfg(feature = "selftest")]
     pub fn banner_buttons(&self) -> Vec<String> {
         self.imp()
             .banners
@@ -1121,6 +1124,7 @@ impl EditorPage {
     }
 
     /// Whether the document map is on screen.
+    #[cfg(feature = "selftest")]
     pub fn map_shown(&self) -> bool {
         self.imp()
             .map

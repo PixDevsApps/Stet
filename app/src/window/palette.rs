@@ -109,6 +109,7 @@ impl Palette {
     }
 
     /// The labels of the rows shown, in order, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn shown_labels(&self) -> Vec<String> {
         self.shown
             .borrow()

@@ -49,7 +49,7 @@ impl Harness {
     async fn run_nav_step(&self, step: &Step) -> StepResult {
         let args = &step.args;
         let arg = |index: usize| args[index].as_str();
-        let quick_open = &self.window.inner.nav.quick_open;
+        let window = &self.window;
         match step.command.as_str() {
             // Opens quick open, as Ctrl+P does, and waits until it is on screen; quick-open-in
             // lists the project of the folder given instead of the current document's.
@@ -66,7 +66,7 @@ impl Harness {
                         .open_quick_open_from(args.get(1).map_or("", String::as_str), Some(folder));
                 }
                 let started = Instant::now();
-                while !quick_open.popover.is_visible() {
+                while !window.quick_open_shown() {
                     if started.elapsed() > WAIT_TIMEOUT {
                         return Err("quick open never opened".to_owned());
                     }
@@ -75,20 +75,21 @@ impl Harness {
                 Ok(())
             }
             "quick-open-type" => {
-                quick_open.entry.set_text(arg(0));
+                self.field("quick-open")?.set_text(arg(0));
                 Ok(())
             }
             "quick-open-select" => {
                 let index = number(arg(0))?;
-                quick_open.select_row(index)
+                window.quick_open_select(index)
             }
             "quick-open-activate" => {
-                quick_open.activate_selected();
+                window.quick_open_activate();
                 self.wait_idle().await
             }
             // What Escape does in the field.
             "quick-open-close" => {
-                quick_open.entry.emit_by_name::<()>("stop-search", &[]);
+                self.field("quick-open")?
+                    .emit_by_name::<()>("stop-search", &[]);
                 Ok(())
             }
             "wait-quick-open" => {
@@ -98,7 +99,7 @@ impl Harness {
                     .transpose()?
                     .map_or(WAIT_TIMEOUT, Duration::from_secs);
                 let started = Instant::now();
-                while !quick_open.is_settled() {
+                while !window.quick_open_settled() {
                     if started.elapsed() > limit {
                         return Err(format!("quick open did not settle in {limit:?}"));
                     }
@@ -107,7 +108,7 @@ impl Harness {
                 Ok(())
             }
             "report-quick-open" => {
-                let stats = quick_open.stats();
+                let stats = window.quick_open_stats();
                 let walk = stats.walk.unwrap_or_default();
                 println!(
                     "  # quick open: first rows {}, first project rows {}, walk {} (first \
@@ -200,7 +201,7 @@ impl Harness {
             gtk::gdk::ModifierType::empty()
         };
         let values: [&dyn ToValue; 3] = [&keyval.into_glib(), &0u32, &state];
-        let keys = &self.window.inner.nav.keys;
+        let keys = self.window.window_keys();
         if signal == "key-pressed" {
             keys.emit_by_name::<bool>(signal, &values);
         } else {
@@ -211,10 +212,10 @@ impl Harness {
     /// Runs one of these assertions; `None` when `assertion` is not one.
     pub(super) fn nav_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
         let arg = |index: usize| args[index].as_str();
-        let quick_open = &self.window.inner.nav.quick_open;
+        let window = &self.window;
         Some(match assertion {
             "assert-quick-open-row" => number(arg(0)).and_then(|index| {
-                let labels = quick_open.shown_labels();
+                let labels = window.quick_open_labels();
                 equal(
                     &format!("quick open row {index}"),
                     labels.get(index).cloned().unwrap_or_default(),
@@ -222,7 +223,7 @@ impl Harness {
                 )
             }),
             "assert-quick-open-contains" | "assert-quick-open-lacks" => {
-                let labels = quick_open.shown_labels();
+                let labels = window.quick_open_labels();
                 let found = labels.iter().any(|label| label == arg(0));
                 let wanted = assertion == "assert-quick-open-contains";
                 if found == wanted {
@@ -232,10 +233,10 @@ impl Harness {
                 }
             }
             "assert-quick-open-count" => number(arg(0))
-                .and_then(|wanted| equal("rows", quick_open.shown_labels().len(), wanted)),
+                .and_then(|wanted| equal("rows", window.quick_open_labels().len(), wanted)),
             "assert-quick-open-positions" => number(arg(0)).and_then(|index| {
-                let positions = quick_open
-                    .shown_positions(index)
+                let positions = window
+                    .quick_open_positions(index)
                     .ok_or_else(|| format!("there is no row {index}"))?;
                 let shown = positions
                     .iter()
@@ -245,23 +246,21 @@ impl Harness {
                 equal("matched characters", shown, arg(1).to_owned())
             }),
             "assert-quick-open-files" => number(arg(0))
-                .and_then(|wanted| equal("project files", quick_open.stats().files, wanted)),
+                .and_then(|wanted| equal("project files", window.quick_open_stats().files, wanted)),
             "assert-quick-open-note" => {
-                let note = quick_open.note.label();
+                let note = window.quick_open_note();
                 if note.contains(arg(0)) {
                     Ok(())
                 } else {
                     Err(format!("the note {note:?} lacks {:?}", arg(0)))
                 }
             }
-            "assert-quick-open-shown" => boolean(arg(0)).and_then(|wanted| {
-                equal("quick open shown", quick_open.popover.is_visible(), wanted)
-            }),
+            "assert-quick-open-shown" => boolean(arg(0))
+                .and_then(|wanted| equal("quick open shown", window.quick_open_shown(), wanted)),
             "assert-switcher" => boolean(arg(0)).and_then(|wanted| {
-                let switcher = &self.window.inner.nav.switcher;
-                equal("switcher shown", switcher.is_shown(), wanted)?;
+                equal("switcher shown", window.switcher_shown(), wanted)?;
                 if let Some(selected) = args.get(1) {
-                    let (_, current) = switcher.shown();
+                    let (_, current) = window.switcher_rows();
                     equal("selected", current.unwrap_or_default(), selected.clone())?;
                 }
                 Ok(())
@@ -305,7 +304,7 @@ impl Harness {
                 equal("tab icon", icon, arg(1).to_owned())
             }),
             "assert-tab-menu-shown" => boolean(arg(1)).and_then(|wanted| {
-                let items = crate::window::tab_menu_items(&self.window.inner.views[0].tabs);
+                let items = self.window.tab_menu_items(0);
                 let shown = items.iter().any(|(label, action)| {
                     label == arg(0)
                         && stet_domain::actions::ActionId::from_name(action)

@@ -99,6 +99,7 @@ impl Window {
     }
 
     /// The strip that shows `tab_page` and the tab on it (for the self-test).
+    #[cfg(feature = "selftest")]
     pub fn tab_widget(&self, tab_page: &adw::TabPage) -> Option<(gtk::Widget, gtk::Widget)> {
         self.inner.views.iter().find_map(|view| {
             let bar = view.bar.upcast_ref::<gtk::Widget>();
@@ -302,6 +303,7 @@ impl Window {
 
     /// Runs a desktop command detached, or records it while the self-test asks for that.
     pub async fn launch(&self, command: Vec<OsString>) {
+        #[cfg(feature = "selftest")]
         if let Some(recorded) = self.inner.shared.launches.borrow_mut().as_mut() {
             recorded.push(command);
             return;

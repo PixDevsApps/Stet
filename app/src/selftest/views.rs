@@ -87,16 +87,14 @@ impl Harness {
                 Ok(())
             }),
             "mark-style" => mark_style(arg(0)).map(|style| {
-                self.window.inner.find.set_mark_style(style);
+                self.window.set_mark_style(style);
             }),
-            "mark-option" => boolean(arg(1)).and_then(|on| {
-                let find = &self.window.inner.find;
-                match arg(0) {
-                    "bookmark" => find.bookmark_line.set_active(on),
-                    "purge" => find.purge.set_active(on),
-                    other => return Err(format!("no Mark option {other}; use bookmark or purge")),
+            "mark-option" => boolean(arg(1)).and_then(|on| match arg(0) {
+                name @ ("bookmark" | "purge") => {
+                    self.window.set_find_option(name, on);
+                    Ok(())
                 }
-                Ok(())
+                other => Err(format!("no Mark option {other}; use bookmark or purge")),
             }),
             "assert-menu-at" => match view_index(arg(0)) {
                 Ok(index) => self.check_menu_at(index).await,
@@ -148,13 +146,13 @@ impl Harness {
             "drag-tab" => match number(arg(0)) {
                 Ok(index) => match self.window.tab_at(index) {
                     Some((tabs, tab_page)) => {
-                        let views = &self.window.inner.views;
-                        let target = if tabs == views[0].tabs {
-                            &views[1].tabs
+                        let other = if tabs == self.window.tab_view(0) {
+                            1
                         } else {
-                            &views[0].tabs
+                            0
                         };
-                        tabs.transfer_page(&tab_page, target, target.n_pages());
+                        let target = self.window.tab_view(other);
+                        tabs.transfer_page(&tab_page, &target, target.n_pages());
                         self.wait_until_settled().await;
                         Ok(())
                     }
@@ -522,7 +520,7 @@ impl Harness {
                 )
             }),
             "assert-status-lacks" => {
-                let status = self.window.inner.status.text();
+                let status = self.window.status_text();
                 if status.contains(arg(0)) {
                     Err(format!("status {status:?} has {:?}", arg(0)))
                 } else {
@@ -684,15 +682,14 @@ impl Harness {
             self.window.menu_view(),
             Some(index),
         )?;
-        let bar = self.window.inner.views[index]
-            .bar
-            .upcast_ref::<gtk::Widget>();
+        let bar = self.window.tab_bar(index);
+        let bar = bar.upcast_ref::<gtk::Widget>();
         let menu = self
             .window
             .menu_button()
             .compute_bounds(bar)
             .ok_or("the menu is not on its strip")?;
-        let first = self.window.inner.views[index].tabs.nth_page(0);
+        let first = self.window.tab_view(index).nth_page(0);
         let (_, tab) = self
             .window
             .tab_widget(&first)
@@ -716,18 +713,23 @@ impl Harness {
     /// tabs on screen, and lies within the strip.
     async fn check_new_tab_at(&self, index: usize) -> StepResult {
         self.wait_frames(2).await?;
-        let view = &self.window.inner.views[index];
-        let bar = view.bar.upcast_ref::<gtk::Widget>();
-        let plus = view
-            .new_tab
+        let bar = self.window.tab_bar(index);
+        let bar = bar.upcast_ref::<gtk::Widget>();
+        let tabs = self.window.tab_view(index);
+        let plus = self
+            .window
+            .new_tab_button(index)
             .compute_bounds(bar)
             .ok_or("the + is not on its strip")?;
-        let last = (0..view.tabs.n_pages())
-            .filter_map(|n| self.window.tab_widget(&view.tabs.nth_page(n)))
+        let last = (0..tabs.n_pages())
+            .filter_map(|n| self.window.tab_widget(&tabs.nth_page(n)))
             .filter_map(|(_, tab)| tab.compute_bounds(bar))
             .map(|tab| tab.x() + tab.width())
             .fold(f32::MIN, f32::max);
-        let end = view.tabs_end().ok_or("the strip has no tab scroller")?;
+        let end = self
+            .window
+            .tabs_end(index)
+            .ok_or("the strip has no tab scroller")?;
         let after = last.min(end);
         let gap = plus.x() - after;
         if plus.width() > 0.0

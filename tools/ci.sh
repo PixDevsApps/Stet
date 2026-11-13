@@ -21,6 +21,8 @@ cargo fmt --all --check
 # The Flatpak's crate list must match Cargo.lock (ADR-019).
 python3 -I tools/flatpak-cargo-sources.py --check
 cargo clippy --workspace --all-targets -- -D warnings
+# Without the self-test harness (ADR-020), as the packages build it: nothing else may need it.
+cargo clippy -p stet --no-default-features --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --quiet
 cargo build --workspace

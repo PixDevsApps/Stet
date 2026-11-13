@@ -118,17 +118,20 @@ impl Harness {
     pub(super) async fn search_step(&self, step: &Step) -> Option<StepResult> {
         let args = &step.args;
         let arg = |index: usize| args[index].as_str();
-        let find = &self.window.inner.find;
+        let window = &self.window;
+        let set_field = |name: &str| self.field(name).map(|field| field.set_text(arg(0)));
         Some(match step.command.as_str() {
             // Opens the bar unless it is open (keeping its mode), and waits until the text is
             // compiled, so the steps after it see the new query.
             "find" => {
-                if !find.is_open() {
-                    self.window.show_find();
+                if !window.find_open() {
+                    window.show_find();
                 }
-                find.entry.set_text(arg(0));
+                if let Err(error) = set_field("find") {
+                    return Some(Err(error));
+                }
                 let started = Instant::now();
-                while find.compiled_text() != arg(0) {
+                while window.find_compiled_text() != arg(0) {
                     if started.elapsed() > WAIT_TIMEOUT {
                         return Some(Err("the find field was never searched".to_owned()));
                     }
@@ -155,22 +158,13 @@ impl Harness {
                         )));
                     }
                 };
-                find.set_search_mode(mode);
+                window.set_find_search_mode(mode);
                 Ok(())
             }
             "find-option" => self.set_option(arg(0), arg(1)),
-            "replace-text" => {
-                find.replace_entry.set_text(arg(0));
-                Ok(())
-            }
-            "fif-folder" => {
-                find.directory.set_text(arg(0));
-                Ok(())
-            }
-            "fif-filters" => {
-                find.filters.set_text(arg(0));
-                Ok(())
-            }
+            "replace-text" => set_field("replace"),
+            "fif-folder" => set_field("directory"),
+            "fif-filters" => set_field("filters"),
             "select" => self.select(args),
             "fif-start" => {
                 if let Some(old) = FIF_HEARTBEAT.with(|beat| beat.replace(Some(Heartbeat::start())))
@@ -205,12 +199,11 @@ impl Harness {
             }
             "report-fif" => self.report_fif(),
             "results-activate" => {
-                let results = &self.window.inner.results;
                 let position = match number(arg(0)) {
                     Ok(position) => position as u32,
                     Err(error) => return Some(Err(error)),
                 };
-                if results.select_position(position) && results.activate_selected() {
+                if window.activate_result(position) {
                     self.wait_idle().await
                 } else {
                     Err(format!("the results panel has no row {position}"))
@@ -218,13 +211,14 @@ impl Harness {
             }
             "set-history" => self.set_history(arg(0), arg(1)),
             "pick-history" => {
-                let button = match arg(0) {
-                    "find" => &find.find_history,
-                    "replace" => &find.replace_history,
+                let name = match arg(0) {
+                    name @ ("find" | "replace") => name,
                     other => return Some(Err(format!("no history drop-down {other}"))),
                 };
                 match number(arg(1)) {
-                    Ok(index) if button.pick(index as i32) => self.wait_idle().await,
+                    Ok(index) if window.pick_history(name, index as i32) == Some(true) => {
+                        self.wait_idle().await
+                    }
                     Ok(index) => Err(format!("the drop-down has no entry {index}")),
                     Err(error) => Err(error),
                 }
@@ -253,8 +247,7 @@ impl Harness {
     /// Checks a search assertion; `None` when `assertion` is not one.
     pub(super) fn search_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
         let arg = |index: usize| args[index].as_str();
-        let find = &self.window.inner.find;
-        let results = &self.window.inner.results;
+        let window = &self.window;
         Some(match assertion {
             // Whether GtkSourceView highlights every match in the current tab.
             "assert-search-highlight" => match (self.page(), boolean(arg(0))) {
@@ -269,11 +262,14 @@ impl Harness {
             },
             "assert-find-message" => equal(
                 "find bar message",
-                find.message.label().to_string(),
+                window.find_message().0,
                 arg(0).to_owned(),
             ),
             "assert-replace-hint" => {
-                let entry = &find.replace_entry;
+                let entry = match self.field("replace") {
+                    Ok(entry) => entry,
+                    Err(error) => return Some(Err(error)),
+                };
                 let tooltip = entry.tooltip_text().map(|text| text.to_string());
                 let styled = entry.has_css_class("warning") || entry.has_css_class("error");
                 match (arg(0), tooltip) {
@@ -287,16 +283,18 @@ impl Harness {
             }
             "assert-field" => {
                 let text = match arg(0) {
-                    "find" => find.entry.text(),
-                    "replace" => find.replace_entry.text(),
-                    "directory" => find.directory.text(),
-                    "filters" => find.filters.text(),
+                    name @ ("find" | "replace" | "directory" | "filters") => {
+                        match self.field(name) {
+                            Ok(field) => field.text(),
+                            Err(error) => return Some(Err(error)),
+                        }
+                    }
                     other => return Some(Err(format!("no field {other}"))),
                 };
                 equal("field", text.to_string(), arg(1).to_owned())
             }
             "assert-find-error" => self.check_error(args),
-            "assert-routed" => match (find.compiled(), boolean(arg(0))) {
+            "assert-routed" => match (window.find_compiled(), boolean(arg(0))) {
                 (Some(compiled), Ok(wanted)) => {
                     equal("routed to our matcher", compiled.own(), wanted)
                 }
@@ -334,7 +332,7 @@ impl Harness {
                     .map_err(|error| format!("{error} (pattern {:?})", search.smart_pattern()))
             }),
             "assert-bar-mode" => {
-                let mode = match find.bar_mode() {
+                let mode = match window.find_bar_mode() {
                     crate::window::BarMode::Find => "find",
                     crate::window::BarMode::Replace => "replace",
                     crate::window::BarMode::Files => "files",
@@ -350,14 +348,11 @@ impl Harness {
                 .and_then(|page| equal("can redo", page.buffer().can_redo(), boolean(arg(0))?)),
             "assert-results-heading" => equal(
                 "newest results heading",
-                results
-                    .latest()
-                    .map(|search| search.heading())
-                    .unwrap_or_default(),
+                window.results_heading().unwrap_or_default(),
                 arg(0).to_owned(),
             ),
             "assert-results-contains" => {
-                let text = results.text();
+                let text = window.results_text();
                 if text.contains(arg(0)) {
                     Ok(())
                 } else {
@@ -365,7 +360,7 @@ impl Harness {
                 }
             }
             "assert-results-status" => {
-                let status = results.status.label().to_string();
+                let status = window.results_status();
                 if status.contains(arg(0)) {
                     Ok(())
                 } else {
@@ -373,13 +368,13 @@ impl Harness {
                 }
             }
             "assert-results-shown" => boolean(arg(0))
-                .and_then(|wanted| equal("results shown", results.is_shown(), wanted)),
+                .and_then(|wanted| equal("results shown", window.results_shown(), wanted)),
             "assert-results-focused" => boolean(arg(0))
                 .and_then(|wanted| equal("results focused", self.window.results_focused(), wanted)),
             "assert-results-searches" => number(arg(0)).and_then(|wanted| {
                 equal(
                     "searches in the results panel",
-                    results.search_count() as usize,
+                    window.results_search_count() as usize,
                     wanted,
                 )
             }),
@@ -399,7 +394,7 @@ impl Harness {
                     arg(1).to_owned(),
                 )
             }),
-            "assert-replace-stats" => match *find.stats.borrow() {
+            "assert-replace-stats" => match window.replace_stats() {
                 None => Err("no Replace All has finished".to_owned()),
                 Some(stats) => number(arg(0)).and_then(|count| {
                     equal(
@@ -421,25 +416,14 @@ impl Harness {
 
     fn set_option(&self, name: &str, value: &str) -> StepResult {
         let value = boolean(value)?;
-        let find = &self.window.inner.find;
-        let button: gtk::Widget = match name {
-            "case" => find.case.clone().upcast(),
-            "word" => find.word.clone().upcast(),
-            "selection" => find.in_selection.clone().upcast(),
-            "wrap" => find.wrap.clone().upcast(),
-            "backward" => find.backward.clone().upcast(),
-            "dot-newline" => find.dot_newline.clone().upcast(),
-            "subfolders" => find.subfolders.clone().upcast(),
-            "hidden" => find.hidden.clone().upcast(),
-            "gitignore" => find.gitignore.clone().upcast(),
-            other => return Err(format!("no option {other}")),
-        };
-        if let Some(toggle) = button.downcast_ref::<gtk::ToggleButton>() {
-            toggle.set_active(value);
-        } else if let Some(check) = button.downcast_ref::<gtk::CheckButton>() {
-            check.set_active(value);
+        match name {
+            "case" | "word" | "selection" | "wrap" | "backward" | "dot-newline" | "subfolders"
+            | "hidden" | "gitignore" => {
+                self.window.set_find_option(name, value);
+                Ok(())
+            }
+            other => Err(format!("no option {other}")),
         }
-        Ok(())
     }
 
     /// `select l1 c1 l2 c2`: selects from line l1, column c1 to l2, c2 (1-based); the caret
@@ -467,12 +451,12 @@ impl Harness {
     }
 
     fn check_error(&self, args: &[String]) -> StepResult {
-        let error = self.window.inner.find.pattern_error();
+        let error = self.window.find_pattern_error();
         match (args, error) {
             ([none], None) if none == "none" => Ok(()),
             ([none], Some(error)) if none == "none" => Err(format!("pattern error {error}")),
             ([offset, text], Some(error)) => {
-                let marked = self.window.inner.find.entry.has_css_class("error");
+                let marked = self.field("find")?.has_css_class("error");
                 equal("error style on the find field", marked, true)?;
                 equal("error offset", error.offset, number(offset)?)?;
                 if error.message.contains(text.as_str()) {
@@ -490,9 +474,7 @@ impl Harness {
         let page = self.page()?;
         let compiled = self
             .window
-            .inner
-            .find
-            .compiled()
+            .find_compiled()
             .ok_or_else(|| "the find field holds no valid query".to_owned())?;
         let count = page
             .search()
@@ -565,21 +547,20 @@ impl Harness {
     /// the search runs, has ended, or failed to start with a message in the bar.
     async fn fif_start(&self) -> StepResult {
         let window = &self.window;
-        let find = &window.inner.find;
-        if find.bar_mode() != crate::window::BarMode::Files || !find.is_open() {
+        if window.find_bar_mode() != crate::window::BarMode::Files || !window.find_open() {
             window.run_search_action(ActionId::FindInFiles);
         }
-        find.set_message("", crate::window::Tone::Info);
-        find.find_in_files.emit_clicked();
+        window.clear_find_message();
+        window.click_find_in_files();
         let started = Instant::now();
         while !window.find_in_files_running()
             && window.find_in_files_stats().is_none()
-            && !find.message.has_css_class("error")
+            && !window.find_message().1
         {
             if started.elapsed() > WAIT_TIMEOUT {
                 return Err(format!(
                     "Find in Files did not start: {}",
-                    find.message.label()
+                    window.find_message().0
                 ));
             }
             glib::timeout_future(Duration::from_millis(1)).await;
@@ -631,19 +612,19 @@ impl Harness {
     /// Replace All with the bar's fields, reporting the cost of every phase and how long the
     /// main loop was blocked.
     async fn bench_replace_all(&self, args: &[String]) -> StepResult {
-        let find = &self.window.inner.find;
-        find.stats.replace(None);
+        let window = &self.window;
+        window.reset_replace_stats();
         let (rss_before, _) = memory();
         let heartbeat = Heartbeat::start();
         let started = Instant::now();
         self.window.run_search_action(ActionId::ReplaceAll);
         let limit = Duration::from_secs(600);
-        while find.stats.borrow().is_none() {
+        while window.replace_stats().is_none() {
             if started.elapsed() > limit {
                 heartbeat.stop();
                 return Err(format!(
                     "no result after {limit:?}: {}",
-                    find.message.label()
+                    window.find_message().0
                 ));
             }
             glib::timeout_future(Duration::from_millis(2)).await;
@@ -651,7 +632,7 @@ impl Harness {
         let seen = started.elapsed();
         let stall = heartbeat.take();
         let (rss_after, peak) = memory();
-        let stats = find.stats.borrow().expect("checked above");
+        let stats = window.replace_stats().expect("checked above");
         // GtkSourceView then rescans and GtkTextView revalidates in idle callbacks.
         let settled = wait_low_idle(limit).await;
         let idle = started.elapsed();

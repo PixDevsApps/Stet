@@ -181,6 +181,7 @@ impl DocMarks {
         update(&mut self.marks.borrow_mut())
     }
 
+    #[cfg(feature = "selftest")]
     pub fn history_steps(&self) -> usize {
         self.history.borrow().len()
     }

@@ -311,11 +311,13 @@ impl StetView {
     }
 
     /// Rows painted in the last frame, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn painted_rows(&self) -> usize {
         self.imp().painted_rows.get()
     }
 
     /// The last column operation's size and cost, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn last_op(&self) -> Option<edit::OpStats> {
         self.imp().last_op.get()
     }
@@ -325,6 +327,7 @@ impl StetView {
     }
 
     /// The key controller column mode uses, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn column_keys(&self) -> gtk::EventControllerKey {
         self.imp().keys.get().expect("constructed").clone()
     }
@@ -506,6 +509,7 @@ impl StetView {
         }
     }
 
+    #[cfg(feature = "selftest")]
     pub fn burst_open(&self) -> bool {
         self.imp().burst.get()
     }
@@ -747,6 +751,7 @@ impl StetView {
     }
 
     /// A point of the widget inside the cell at `pos`, for the self-test's drags.
+    #[cfg(feature = "selftest")]
     pub fn point_of(&self, pos: VisualPos) -> (f64, f64) {
         let iter = self.iter_at_pos(pos);
         let location = self.iter_location(&iter);

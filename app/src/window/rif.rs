@@ -515,6 +515,7 @@ impl Window {
         self.inner.nav.rif.borrow().is_some()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn replace_in_files_stats(&self) -> Option<RifStats> {
         self.inner.nav.rif_stats.borrow().clone()
     }

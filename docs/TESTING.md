@@ -655,6 +655,8 @@ The test pyramid follows the crate boundaries: most logic lives in `stet-domain`
 
 `stet --self-test <script>` starts the real app (window and all) with its own application id (`<app-id>.SelfTest`) and a scratch directory for its state, cache, fake Omarchy state and fontconfig directories, runs a `.stet-test` script against it, prints a TAP report on stdout and exits 0 only if every step passed. It refuses to run unless GTK targets Broadway (`tools/headless.sh`) or `STET_SELFTEST_ALLOW_LIVE=1` is set. The PKGBUILD `check()` never runs it. A step that runs longer than 300 s (`STET_SELFTEST_STEP_TIMEOUT`, in seconds) fails as timed out, and the steps after it are reported as not run, so a step waiting for a popover or dialog that never comes can't hang a run.
 
+The harness (`app/src/selftest/`) is compiled only with the `selftest` Cargo feature, on by default; the packages are built without it ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13)). It reaches the window only through the probe methods in `app/src/window/probe.rs`, and a feature's probes that need its private state sit in a `#[cfg(feature = "selftest")]` item in that feature's module; `tools/ci.sh` runs Clippy without the feature, so nothing outside the harness can come to need them.
+
 ```sh
 cargo build
 tools/headless.sh 20 target/debug/stet --self-test tests/selftest/files.stet-test

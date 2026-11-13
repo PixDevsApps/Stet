@@ -8,6 +8,7 @@
 
 use clap::{Arg, ArgAction, Command, value_parser};
 use std::ffi::OsString;
+#[cfg(feature = "selftest")]
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -15,6 +16,8 @@ pub struct Cli {
     pub files: Vec<OsString>,
     pub line: Option<u32>,
     pub column: Option<u32>,
+    /// The self-test script to run (`--self-test`, a hidden option of development builds).
+    #[cfg(feature = "selftest")]
     pub self_test: Option<PathBuf>,
     /// Block until every file given is closed (`GIT_EDITOR="stet --wait"`).
     pub wait: bool,
@@ -25,7 +28,7 @@ pub struct Cli {
 }
 
 pub fn command() -> Command {
-    Command::new("stet")
+    let command = Command::new("stet")
         .about("A fast, keyboard-first text and code editor for Omarchy")
         .version(env!("CARGO_PKG_VERSION"))
         .arg(
@@ -77,14 +80,17 @@ pub fn command() -> Command {
                 .long("gapplication-service")
                 .action(ArgAction::SetTrue)
                 .hide(true),
-        )
-        .arg(
-            Arg::new("self-test")
-                .long("self-test")
-                .value_name("SCRIPT")
-                .value_parser(value_parser!(PathBuf))
-                .help("Run a self-test script in a new window and exit (see docs/TESTING.md)"),
-        )
+        );
+    #[cfg(feature = "selftest")]
+    let command = command.arg(
+        Arg::new("self-test")
+            .long("self-test")
+            .value_name("SCRIPT")
+            .value_parser(value_parser!(PathBuf))
+            .hide(true)
+            .help("Run a self-test script in a new window and exit (see docs/TESTING.md)"),
+    );
+    command
 }
 
 /// Parses `args`, including the program name. Help and version requests come back as errors
@@ -102,6 +108,7 @@ where
             .unwrap_or_default(),
         line: matches.get_one::<u32>("line").copied(),
         column: matches.get_one::<u32>("column").copied(),
+        #[cfg(feature = "selftest")]
         self_test: matches.get_one::<PathBuf>("self-test").cloned(),
         wait: matches.get_flag("wait"),
         no_session: matches.get_flag("no-session"),
@@ -123,6 +130,7 @@ mod tests {
         );
         assert_eq!(cli.line, Some(5));
         assert_eq!(cli.column, Some(3));
+        #[cfg(feature = "selftest")]
         assert_eq!(cli.self_test, None);
         assert_eq!(parse(["stet"]).unwrap(), Cli::default());
     }
@@ -172,13 +180,23 @@ mod tests {
         assert!(!help.contains("gapplication-service"), "{help}");
     }
 
+    #[cfg(feature = "selftest")]
     #[test]
-    fn self_test_takes_a_script() {
+    fn self_test_takes_a_hidden_script() {
         let cli = parse(["stet", "--self-test", "tests/selftest/files.stet-test"]).unwrap();
         assert_eq!(
             cli.self_test,
             Some(PathBuf::from("tests/selftest/files.stet-test"))
         );
+        let help = parse(["stet", "--help"]).unwrap_err().to_string();
+        assert!(!help.contains("self-test"), "{help}");
+    }
+
+    #[cfg(not(feature = "selftest"))]
+    #[test]
+    fn no_self_test_without_the_harness() {
+        let error = parse(["stet", "--self-test", "x.stet-test"]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
     }
 
     #[test]

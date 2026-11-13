@@ -9,11 +9,13 @@
 //! replaced, by a function that calls GtkTextView's with storage of its own and hands the
 //! ranges out only when the caller asked for them.
 
+#[cfg(feature = "selftest")]
 use super::view::StetView;
 use gtk4::ffi;
 use gtk4::glib;
 use gtk4::glib::translate::IntoGlib;
 use gtk4::glib::{ffi as glib_ffi, gobject_ffi};
+#[cfg(feature = "selftest")]
 use gtk4::prelude::*;
 use std::sync::OnceLock;
 
@@ -100,6 +102,7 @@ unsafe extern "C" fn get_selection(
 /// the way GTK's AT-SPI `AddSelection` calls it: with `ranges` NULL when `with_ranges` is
 /// false. Returns the result, the range count, the ranges when asked for, and whether the
 /// vtable's function is this module's.
+#[cfg(feature = "selftest")]
 pub fn probe_selection(
     view: &StetView,
     with_ranges: bool,

@@ -564,6 +564,7 @@ impl QuickOpen {
     }
 
     /// Selects row `index`, as Down and Up do, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn select_row(&self, index: usize) -> Result<(), String> {
         let row = i32::try_from(index)
             .ok()
@@ -607,6 +608,7 @@ impl QuickOpen {
     }
 
     /// The rows shown, as their text, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn shown_labels(&self) -> Vec<String> {
         let state = self.state.borrow();
         state
@@ -621,6 +623,7 @@ impl QuickOpen {
     }
 
     /// The matched characters of shown row `index`.
+    #[cfg(feature = "selftest")]
     pub fn shown_positions(&self, index: usize) -> Option<Vec<usize>> {
         self.state
             .borrow()
@@ -630,11 +633,13 @@ impl QuickOpen {
     }
 
     /// The walk is over and the ranking for the field's text is on screen.
+    #[cfg(feature = "selftest")]
     pub fn is_settled(&self) -> bool {
         let state = self.state.borrow();
         state.settled && !state.walking && state.requested == self.entry.text().as_str()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn stats(&self) -> QuickOpenStats {
         self.state.borrow().stats
     }

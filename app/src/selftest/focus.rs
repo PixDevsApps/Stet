@@ -48,7 +48,7 @@ impl Harness {
             },
             "popdown" => match arg(0) {
                 "palette" => {
-                    self.window.palette().popover.popdown();
+                    self.window.close_palette();
                     Ok(())
                 }
                 name => self.menu_button(name).map(|button| button.popdown()),
@@ -106,22 +106,18 @@ impl Harness {
     }
 
     fn menu_button(&self, name: &str) -> Result<gtk::MenuButton, String> {
-        let status = &self.window.inner.status;
         match name {
-            "language" => Ok(status.language.clone()),
-            "eol" => Ok(status.eol.clone()),
-            "encoding" => Ok(status.encoding.clone()),
-            "indentation" => Ok(status.indentation.clone()),
             "menu" => Ok(self.window.menu_button().clone()),
-            other => Err(format!(
-                "no popover {other}; use palette, language, eol, encoding, indentation or menu"
-            )),
+            other => self.window.status_button(other).ok_or_else(|| {
+                format!(
+                    "no popover {other}; use palette, language, eol, encoding, indentation or menu"
+                )
+            }),
         }
     }
 
     /// Whether the window's focus widget is `target`, or inside it, and on screen.
     pub(super) fn check_focus(&self, target: &str) -> StepResult {
-        let inner = &self.window.inner;
         let focus = RootExt::focus(self.window.window());
         let within = |widget: &gtk::Widget| {
             focus
@@ -133,14 +129,11 @@ impl Harness {
                 let page = self.page()?;
                 focus.as_ref() == Some(page.view().upcast_ref::<gtk::Widget>())
             }
-            "find" => within(inner.find.entry.upcast_ref()),
-            "replace" => within(inner.find.replace_entry.upcast_ref()),
-            "results" => within(inner.results.root.upcast_ref()),
-            "palette" => within(self.window.palette().popover.upcast_ref()),
-            "quick-open" => within(self.window.inner.nav.quick_open.popover.upcast_ref()),
-            "language" => within(inner.languages.popover.upcast_ref()),
-            "encoding" => within(inner.encodings.popover.upcast_ref()),
-            "indentation" => within(inner.indentation.popover.upcast_ref()),
+            "find" | "replace" | "results" | "palette" | "quick-open" | "language" | "encoding"
+            | "indentation" => self
+                .window
+                .focus_target(target)
+                .is_some_and(|widget| within(&widget)),
             "dialog" => self
                 .window
                 .open_dialog()

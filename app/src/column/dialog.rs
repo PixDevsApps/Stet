@@ -433,6 +433,7 @@ impl EditorDialog {
     }
 
     /// The message on screen, if any.
+    #[cfg(feature = "selftest")]
     pub fn error_text(&self) -> Option<String> {
         self.error
             .is_visible()
@@ -440,6 +441,7 @@ impl EditorDialog {
     }
 
     /// Chooses the format whose label (without the mnemonic) is `name`, case-insensitively.
+    #[cfg(feature = "selftest")]
     pub fn choose_base(&self, name: &str) -> bool {
         let found = BASES
             .iter()
@@ -452,6 +454,7 @@ impl EditorDialog {
     }
 
     /// Chooses the Leading entry labelled `name`, case-insensitively.
+    #[cfg(feature = "selftest")]
     pub fn choose_leading(&self, name: &str) -> bool {
         match LEADING
             .iter()

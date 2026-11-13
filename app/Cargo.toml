@@ -10,6 +10,11 @@ publish.workspace = true
 name = "stet"
 path = "src/main.rs"
 
+[features]
+# The self-test interpreter (`stet --self-test`, ADR-020). Release packages are built without it.
+default = ["selftest"]
+selftest = ["dep:serde_json"]
+
 [dependencies]
 stet-domain.workspace = true
 stet-infrastructure.workspace = true
@@ -20,7 +25,7 @@ gio.workspace = true
 glib-unix.workspace = true
 async-channel.workspace = true
 clap.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, optional = true }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

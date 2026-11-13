@@ -365,6 +365,7 @@ impl Window {
         self.inner.fif.borrow().is_some()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn find_in_files_stats(&self) -> Option<FifStats> {
         self.inner.fif_stats.borrow().clone()
     }

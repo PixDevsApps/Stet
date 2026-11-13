@@ -160,6 +160,7 @@ impl Appearance {
         self.scheme.borrow().clone()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn source(&self) -> Option<ThemeSource> {
         self.source.borrow().clone()
     }
@@ -198,10 +199,12 @@ impl Appearance {
     }
 
     /// Completed theme reloads (the first load included), for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn reloads(&self) -> u32 {
         self.reloads.get()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn font_reloads(&self) -> u32 {
         self.font_reloads.get()
     }

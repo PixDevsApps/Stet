@@ -121,6 +121,7 @@ impl Switcher {
     }
 
     /// The tab names in the switcher, and the selected one, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn shown(&self) -> (Vec<String>, Option<String>) {
         let rows = self.rows.borrow();
         let selected = self
@@ -405,6 +406,7 @@ impl Window {
 
     /// The history's places as (tab name, line), and the index of the current one, for the
     /// self-test.
+    #[cfg(feature = "selftest")]
     pub fn history_places(&self) -> (Vec<(String, usize)>, Option<usize>) {
         let history = self.inner.nav.history.borrow();
         let places = history
@@ -512,6 +514,7 @@ impl Window {
     }
 
     /// The tabs in most-recently-used order, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn recent_order(&self) -> Vec<String> {
         self.inner
             .nav

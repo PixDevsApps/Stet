@@ -17,6 +17,7 @@ mod page_search;
 mod preferences;
 #[expect(unsafe_code, reason = "GtkSourceView's async search through its C API")]
 mod search;
+#[cfg(feature = "selftest")]
 mod selftest;
 mod session;
 mod tabstops;
@@ -48,6 +49,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    #[cfg(feature = "selftest")]
     if let Some(script) = parsed.self_test {
         return selftest::run(&script, started);
     }

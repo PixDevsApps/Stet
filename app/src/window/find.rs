@@ -129,6 +129,7 @@ impl HistoryButton {
     }
 
     /// Opens the drop-down and picks entry `index` as a click would, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn pick(&self, index: i32) -> bool {
         self.button.popup();
         match self.list.row_at_index(index) {
@@ -585,6 +586,7 @@ impl FindBar {
             .map_or(MarkStyle::Mark, |(style, _)| *style)
     }
 
+    #[cfg(feature = "selftest")]
     pub fn set_mark_style(&self, style: MarkStyle) {
         if let Some(index) = MARK_STYLES.iter().position(|(each, _)| *each == style) {
             self.mark_style.set_selected(index as u32);
@@ -714,6 +716,7 @@ impl FindBar {
     }
 
     /// The find field's text when it was last compiled.
+    #[cfg(feature = "selftest")]
     pub fn compiled_text(&self) -> String {
         self.compiled_text.borrow().clone()
     }

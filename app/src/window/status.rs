@@ -196,6 +196,7 @@ impl StatusBar {
     }
 
     /// Every item's text, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn text(&self) -> String {
         let button = |button: &gtk::MenuButton| {
             button

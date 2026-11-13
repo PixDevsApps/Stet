@@ -636,16 +636,19 @@ impl Window {
     }
 
     /// The marks of a style in the current document, for the self-test.
+    #[cfg(feature = "selftest")]
     pub fn marked(&self, style: MarkStyle) -> Vec<Range<usize>> {
         self.current_page()
             .map(|page| page.marks().marks().ranges(style).to_vec())
             .unwrap_or_default()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn mark_stats(&self) -> Option<MarkStats> {
         self.inner.marking.stats.get()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn line_op_stats(&self) -> Option<LineOpStats> {
         self.inner.marking.line_stats.get()
     }

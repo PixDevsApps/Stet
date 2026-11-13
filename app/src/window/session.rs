@@ -50,9 +50,9 @@ use stet_infrastructure::fs::{
     DocumentFormat, EncodingChoice, LoadError, SizeClass, SizePolicy, file_meta, read_file,
 };
 use stet_infrastructure::recent as recent_store;
-use stet_infrastructure::session_store::{
-    Orphan, Restored, SessionStore, Snapshot, StoreError, StoreStatus,
-};
+#[cfg(feature = "selftest")]
+use stet_infrastructure::session_store::StoreStatus;
+use stet_infrastructure::session_store::{Orphan, Restored, SessionStore, Snapshot, StoreError};
 
 /// A mark at the first visible line of a restored tab, scrolled to once the view is laid out.
 const TOP_MARK: &str = "stet-restore-top";
@@ -128,6 +128,10 @@ pub struct SnapshotStats {
 
 /// When the parts of the last restore were done.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(
+    not(feature = "selftest"),
+    expect(dead_code, reason = "only the self-test reads the figures")
+)]
 pub struct RestoreStats {
     pub tabs: usize,
     pub orphans: usize,
@@ -1180,6 +1184,7 @@ impl Window {
     }
 
     /// `--wait` command lines still waiting.
+    #[cfg(feature = "selftest")]
     pub fn waiting(&self) -> usize {
         self.inner.session.waits.borrow().len()
     }
@@ -1398,10 +1403,12 @@ impl Window {
     // ----- for the self-test -----------------------------------------------------------------
 
     /// What the last commit took from the GTK thread.
+    #[cfg(feature = "selftest")]
     pub fn session_stats(&self) -> SnapshotStats {
         self.inner.session.stats.get()
     }
 
+    #[cfg(feature = "selftest")]
     pub fn restore_stats(&self) -> Option<RestoreStats> {
         self.inner.session.restore.get()
     }
@@ -1411,6 +1418,7 @@ impl Window {
     }
 
     /// The store writer's progress, while the session is on.
+    #[cfg(feature = "selftest")]
     pub fn store_status(&self) -> Option<StoreStatus> {
         self.inner
             .session
@@ -1421,6 +1429,7 @@ impl Window {
     }
 
     /// Waits until every commit sent so far is on disk, on a worker.
+    #[cfg(feature = "selftest")]
     pub async fn flush_session(&self) -> Result<(), String> {
         let Some(store) = self.inner.session.store.borrow().clone() else {
             return Err("the session is off".to_owned());
@@ -1432,6 +1441,7 @@ impl Window {
     }
 
     /// Whether every document that needs a backup has its current text in one.
+    #[cfg(feature = "selftest")]
     pub fn backups_current(&self) -> bool {
         self.documents().iter().all(|page| {
             let session = page.session();

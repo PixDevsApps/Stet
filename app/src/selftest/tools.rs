@@ -97,7 +97,7 @@ impl Harness {
             },
             "indent-choose" => match indent_choice(arg(0)) {
                 Ok(choice) => {
-                    self.window.inner.indentation.choose(choice);
+                    self.window.pick_indentation(choice);
                     self.wait_idle().await
                 }
                 Err(error) => Err(error),
@@ -114,8 +114,8 @@ impl Harness {
             },
             "tab-press" => self.tab_press(arg(0), arg(1), arg(2)).await,
             "tab-menu-close" => {
-                self.window.inner.views[0]
-                    .tabs
+                self.window
+                    .tab_view(0)
                     .emit_by_name::<()>("setup-menu", &[&None::<adw::TabPage>]);
                 self.wait_until_settled().await;
                 Ok(())
@@ -182,7 +182,7 @@ impl Harness {
             "assert-editor-key" => self.check_editor_key(arg(0), arg(1)),
             "assert-editor-keys" => self.check_editor_keys(),
             "assert-tool-stats" => {
-                let stats = *self.window.inner.tools.stats.borrow();
+                let stats = self.window.tool_stats();
                 match (stats, boolean(arg(0)), boolean(arg(1))) {
                     (Some(stats), Ok(worker), Ok(bulk)) => {
                         println!(
@@ -199,8 +199,7 @@ impl Harness {
                     (_, Err(error), _) | (_, _, Err(error)) => Err(error),
                 }
             }
-            "assert-tool-pieces" => match (*self.window.inner.tools.stats.borrow(), number(arg(0)))
-            {
+            "assert-tool-pieces" => match (self.window.tool_stats(), number(arg(0))) {
                 (Some(stats), Ok(minimum)) if stats.pieces >= minimum => Ok(()),
                 (Some(stats), Ok(minimum)) => Err(format!(
                     "the result went in as {} pieces, fewer than {minimum}",
@@ -217,7 +216,7 @@ impl Harness {
                 (Ok(page), Ok(wanted)) => equal("document map", page.map_shown(), wanted),
                 (Err(error), _) | (_, Err(error)) => Err(error),
             },
-            "assert-tab-menu" => match self.window.inner.views[0].tabs.menu_model() {
+            "assert-tab-menu" => match self.window.tab_view(0).menu_model() {
                 Some(model) => contains_label(&model, arg(0)),
                 None => Err("the tabs have no context menu".to_owned()),
             },
@@ -428,8 +427,8 @@ impl Harness {
         }
         // AdwTabView's own shortcuts (Alt+1…9, Ctrl+Tab, Ctrl+Home…) are off: the registry
         // owns those keys (ADR-009).
-        for view in &self.window.inner.views {
-            let tab_shortcuts = view.tabs.shortcuts();
+        for tabs in self.window.tab_views() {
+            let tab_shortcuts = tabs.shortcuts();
             if !tab_shortcuts.is_empty() {
                 problems.push(format!("a tab view still has {tab_shortcuts:?}"));
             }

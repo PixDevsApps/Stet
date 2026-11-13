@@ -298,11 +298,6 @@ impl Window {
         }
     }
 
-    /// The alert dialog on screen, if any; the self-test answers it.
-    pub fn open_dialog(&self) -> Option<adw::AlertDialog> {
-        self.inner.dialog.borrow().clone()
-    }
-
     pub async fn choose_files_to_open(&self, folder: Option<&Path>) -> Vec<PathBuf> {
         let dialog = gtk::FileDialog::builder().title("Open").modal(true).build();
         if let Some(folder) = folder {
@@ -371,12 +366,8 @@ impl Window {
             .timeout(4)
             .build();
         self.inner.toasts.add_toast(toast);
+        #[cfg(feature = "selftest")]
         self.inner.last_toast.replace(message.to_owned());
-    }
-
-    /// The text of the last toast, for the self-test.
-    pub fn last_toast(&self) -> String {
-        self.inner.last_toast.borrow().clone()
     }
 }
 
@@ -403,6 +394,7 @@ pub fn click_response(dialog: &adw::AlertDialog, response: &str) -> bool {
 }
 
 /// Clicks the button labelled `label` in the dialog's own content, such as Copy Command.
+#[cfg(feature = "selftest")]
 pub fn click_button(dialog: &adw::AlertDialog, label: &str) -> bool {
     find_button(dialog.upcast_ref(), label).is_some_and(|button| {
         button.emit_clicked();

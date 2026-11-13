@@ -287,6 +287,7 @@ impl EncodingPicker {
     }
 
     /// Chooses the entry with `id` in `mode`, as a click would (for the self-test).
+    #[cfg(feature = "selftest")]
     pub fn choose_id(&self, mode: PickerMode, id: &str) -> bool {
         let Some(row) = self
             .rows
