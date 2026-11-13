@@ -1,4 +1,4 @@
-//! The M4 parity table: searches and replacements with their results written out by hand, from
+//! The parity table: searches and replacements with their results written out by hand, from
 //! spike S2's 52 pattern and 52 template probes (their "as expected" column is what
 //! GtkSourceView returned) and the research digest.
 //!

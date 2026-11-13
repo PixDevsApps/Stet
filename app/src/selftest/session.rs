@@ -1,4 +1,4 @@
-//! Self-test commands for the session (M2): commits and the files the store keeps, restored
+//! Self-test commands for the session: commits and the files the store keeps, restored
 //! stubs and a digest of every tab; `stet` processes in the background (`--wait`); child
 //! self-tests that share a scratch directory, so a session can be killed, signalled or quit
 //! and then restored by a new process; and a private D-Bus bus for activation, whose only

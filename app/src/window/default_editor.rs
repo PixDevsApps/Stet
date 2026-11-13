@@ -1,4 +1,4 @@
-//! Set as Default Editor… (M5, INTEGRATIONS.md section 4): an opt-in command that says what it
+//! Set as Default Editor… (INTEGRATIONS.md section 4): an opt-in command that says what it
 //! will change and asks first, then writes `stet` to Omarchy's default-editor file, so
 //! SUPER+SHIFT+N (`omarchy-launch-editor`) starts Stet, and makes Stet the default for the
 //! text types in its desktop entry with `xdg-mime`, so a double-click in the file manager

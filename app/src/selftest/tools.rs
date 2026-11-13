@@ -1,4 +1,4 @@
-//! Self-test commands for M5: the text toolbox, the editors' shortcuts and the built-in
+//! Self-test commands for the text toolbox, the editors' shortcuts and the built-in
 //! bindings ADR-009 overrides, `config.toml` and `keys.toml`, the context menus, indentation,
 //! the document map, the Keyboard Shortcuts overview and Set as Default Editor
 //! (docs/TESTING.md).
@@ -50,7 +50,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
 ];
 
 impl Harness {
-    /// Runs an M5 command; `None` when `step` is not one.
+    /// Runs one of these commands; `None` when `step` is not one.
     pub(super) async fn tools_step(&self, step: &Step) -> Option<StepResult> {
         let arg = |index: usize| step.args[index].as_str();
         Some(match step.command.as_str() {
@@ -155,7 +155,7 @@ impl Harness {
         })
     }
 
-    /// Checks an M5 assertion; `None` when `assertion` is not one.
+    /// Checks one of these assertions; `None` when `assertion` is not one.
     pub(super) fn tools_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
         let arg = |index: usize| args[index].as_str();
         Some(match assertion {

@@ -73,8 +73,7 @@ pub(super) fn apply(
     let applying = Instant::now();
     let bulk = edit.needs_bulk();
     if bulk && let Some(tracker) = view.column_tracker() {
-        // Undo and Redo collapse the bookmarks on the replaced lines; the document keeps
-        // them (M7).
+        // Undo and Redo collapse the bookmarks on the replaced lines; the document keeps them.
         let logical: Vec<TextEdit> = edit
             .edits
             .iter()
@@ -123,7 +122,7 @@ pub(super) fn apply(
 /// the view stays; at most a few screens of single edits keep undo and redo fast. The source
 /// marks on replaced lines (bookmarks) are made again on the same line numbers, which a column
 /// edit keeps; undo and redo collapse them again, and the document's bookmark history puts
-/// them back (M7). Returns the replacements, in the buffer's offsets before the edit.
+/// them back. Returns the replacements, in the buffer's offsets before the edit.
 fn apply_bulk(
     view: &StetView,
     buffer: &sourceview5::Buffer,
@@ -247,7 +246,7 @@ fn replace(buffer: &sourceview5::Buffer, base: usize, edit: &TextEdit) {
     }
 }
 
-/// What the views of one buffer share (M7: a clone shows the same buffer in the other view):
+/// What the views of one buffer share (a clone shows the same buffer in the other view):
 /// the redo workaround's state, and which view is in column mode, since only one may be.
 #[derive(Debug, Default)]
 pub struct BufferShared {

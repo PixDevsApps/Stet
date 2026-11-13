@@ -1,4 +1,4 @@
-//! Replace in Files (M8, ADR-005 amendment): walk folders as Find in Files does, and replace in
+//! Replace in Files (ADR-005 amendment): walk folders as Find in Files does, and replace in
 //! every file with the in-document engine, keeping each file's encoding, byte-order mark and
 //! line endings byte for byte outside the replacements.
 //!

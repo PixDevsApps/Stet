@@ -1,4 +1,4 @@
-//! Opening and saving files (M3). A worker reads and decodes a file (ADR-007, ADR-008); the
+//! Opening and saving files. A worker reads and decodes a file (ADR-007, ADR-008); the
 //! editor inserts its text in pieces with the view read-only and undo off; saving encodes a
 //! snapshot of the buffer on a worker and writes it through the safe save. Only taking the
 //! snapshot runs on the GTK thread (ADR-003).
@@ -145,7 +145,7 @@ impl Window {
             }
             return;
         }
-        // A `--wait` file (a commit message, a sudoedit copy) stays out of the session (M2).
+        // A `--wait` file (a commit message, a sudoedit copy) stays out of the session.
         if page.session().waits.is_empty() {
             self.inner.shared.add_recent(location.path.clone());
         }
@@ -404,7 +404,7 @@ impl Window {
     }
 
     /// [`Self::save_to`], with a toast when `announce`; Replace in Files saves the open
-    /// documents it changed without one each (M8).
+    /// documents it changed without one each.
     pub(super) async fn write_to(&self, page: &EditorPage, path: PathBuf, announce: bool) -> bool {
         if !self.ensure_loaded(page).await || !self.can_save(page) {
             return false;

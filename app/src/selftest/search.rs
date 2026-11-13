@@ -1,4 +1,4 @@
-//! Self-test commands for M4's search: the find bar's options and fields, the results panel,
+//! Self-test commands for search: the find bar's options and fields, the results panel,
 //! Find in Files, the widget parity table, and the performance probes (docs/TESTING.md).
 
 use super::script::{Step, boolean};
@@ -712,7 +712,7 @@ impl Harness {
         Ok(())
     }
 
-    /// The M4 parity table against the real GtkSourceView: every row the translation leaves
+    /// The parity table against the real GtkSourceView: every row the translation leaves
     /// to the widget must give the same spans and count as our matcher.
     async fn widget_parity(&self) -> StepResult {
         let rows = parity::rows();

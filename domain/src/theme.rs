@@ -8,7 +8,7 @@ use std::fmt::{self, Write as _};
 pub const SMART_HIGHLIGHT_STYLE: &str = "stet:smart-highlight";
 /// Scheme style for the search match the caret is on.
 pub const SEARCH_CURRENT_STYLE: &str = "stet:search-current";
-/// Scheme styles for the Find Mark Style and the five token styles (M7): the backgrounds the
+/// Scheme styles for the Find Mark Style and the five token styles: the backgrounds the
 /// Mark command and Style All Occurrences of Token give text.
 pub const MARK_STYLE: &str = "stet:mark";
 pub const TOKEN_STYLES: [&str; 5] = [
@@ -18,9 +18,9 @@ pub const TOKEN_STYLES: [&str; 5] = [
     "stet:token-4",
     "stet:token-5",
 ];
-/// Scheme style whose foreground is the bookmark in the gutter (M7).
+/// Scheme style whose foreground is the bookmark in the gutter.
 pub const BOOKMARK_STYLE: &str = "stet:bookmark";
-/// Scheme styles for a comparison (M7): the backgrounds of added, removed, changed and moved
+/// Scheme styles for a comparison: the backgrounds of added, removed, changed and moved
 /// lines, of the characters that differ inside changed lines, and of the padding that faces
 /// lines only the other side has.
 pub const COMPARE_ADDED_STYLE: &str = "stet:compare-added";
@@ -642,11 +642,11 @@ pub struct EditorTheme {
     pub smart_highlight: Rgb,
     pub snippet_focus: Rgb,
     /// The Find Mark Style and the five token styles, from the palette: red; cyan, orange,
-    /// yellow, magenta and green (M7).
+    /// yellow, magenta and green.
     pub mark: Rgb,
     pub tokens: [Rgb; 5],
     /// A comparison's added, removed, changed and moved lines, the changed characters, and
-    /// the padding (M7).
+    /// the padding.
     pub compare_added: Rgb,
     pub compare_removed: Rgb,
     pub compare_changed: Rgb,

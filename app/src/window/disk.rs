@@ -1,4 +1,4 @@
-//! Changes made to open files by other programs (M3). Each file has a monitor (renames into
+//! Changes made to open files by other programs. Each file has a monitor (renames into
 //! its place included, debounced 300 ms), and every open file is checked again when the
 //! window gets focus, for file systems that send no events. A change is a fingerprint that no
 //! longer matches the baseline ([`Fingerprint::matches`], which ignores the device number).
@@ -27,7 +27,7 @@ const FOCUS_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 /// What a reload read, ready to apply.
 enum Reloaded {
     /// The smallest edit from the buffer to the file, `None` when the text is the same, and
-    /// the old text's lines when bookmarks must follow it (M7).
+    /// the old text's lines when bookmarks must follow it.
     Edit {
         info: DocInfo,
         edit: Option<TextEdit>,

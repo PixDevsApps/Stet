@@ -14,7 +14,7 @@ use std::rc::Rc;
 use stet_domain::text::{LONG_LINE_CHARS, LongestLine};
 use stet_infrastructure::encoding::{Unmappable, status_label};
 
-/// What About › Details says about Stet (1.3.2), as Pango markup.
+/// What About › Details says about Stet, as Pango markup.
 const ABOUT_DETAILS: &str = "Stet is a fast, keyboard-first text and code editor for Omarchy, \
 written in Rust with GTK 4, libadwaita and GtkSourceView 5.
 

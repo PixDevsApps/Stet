@@ -1,4 +1,4 @@
-//! Quick open (Ctrl+P, M8) without a toolkit: what a query asks for, how the open documents,
+//! Quick open (Ctrl+P) without a toolkit: what a query asks for, how the open documents,
 //! the recent files and the project's files rank.
 
 use crate::fuzzy;

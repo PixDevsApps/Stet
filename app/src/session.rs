@@ -1,4 +1,4 @@
-//! The session (ADR-006, M2): what each tab keeps for it, and opening the store. The window
+//! The session (ADR-006): what each tab keeps for it, and opening the store. The window
 //! side (restoring, the 7 s backups, quitting and `--wait`) is in `window::session`.
 
 use std::path::{Path, PathBuf};

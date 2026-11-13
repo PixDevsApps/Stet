@@ -40,7 +40,7 @@ pub enum BarMode {
     Find,
     Replace,
     Files,
-    /// The Mark row (M7).
+    /// The Mark row.
     Mark,
 }
 
@@ -51,7 +51,7 @@ const MODES: [(SearchMode, &str); 3] = [
     (SearchMode::Regex, "Regex"),
 ];
 
-/// The Mark row's styles, in order (M7).
+/// The Mark row's styles, in order.
 const MARK_STYLES: [(MarkStyle, &str); 6] = [
     (MarkStyle::Mark, "Find Mark Style"),
     (MarkStyle::Token1, "1st Style"),
@@ -209,7 +209,7 @@ pub struct FindBar {
     pub replace_all_button: gtk::Button,
     pub replace_open_button: gtk::Button,
     pub files_row: gtk::Box,
-    /// Replace in Files (M8), next to Find in Files.
+    /// Replace in Files, next to Find in Files.
     pub replace_in_files: gtk::Button,
     pub directory: gtk::Entry,
     pub browse: gtk::Button,
@@ -218,7 +218,7 @@ pub struct FindBar {
     pub hidden: gtk::CheckButton,
     pub gitignore: gtk::CheckButton,
     pub find_in_files: gtk::Button,
-    /// Mark (M7): the row, its style, its options and its buttons.
+    /// Mark: the row, its style, its options and its buttons.
     pub mark_row: gtk::Box,
     pub mark_style: gtk::DropDown,
     pub bookmark_line: gtk::CheckButton,
@@ -1076,7 +1076,7 @@ impl Window {
         }
         find.bar_mode.set(mode);
         // Find in Files has the replace field too, for Replace in Files; the buttons that
-        // replace in the document belong to Replace (M8).
+        // replace in the document belong to Replace.
         find.replace_row
             .set_visible(matches!(mode, BarMode::Replace | BarMode::Files));
         for button in [
@@ -1155,7 +1155,7 @@ impl Window {
         let current = self.current_page();
         let compiled = find.compiled();
         let wrap = find.wrap.is_active();
-        // Per document: one in both views (M7) is searched once, in the current view.
+        // Per document: one in both views is searched once, in the current view.
         for page in self.documents() {
             let visible = open && Some(&page) == current.as_ref();
             let state = page.search();
@@ -1532,7 +1532,7 @@ impl Window {
         }
     }
 
-    /// The histories, for the session (M2) to save: find and replace map to
+    /// The histories, for the session to save: find and replace map to
     /// `session.json`'s `find_history` and `replace_history`.
     pub fn search_history(&self) -> SearchHistory {
         self.inner.find.history()

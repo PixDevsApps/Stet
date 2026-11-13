@@ -163,7 +163,7 @@ pub struct Settings {
     pub smart_highlight: bool,
     /// Count words in the status bar.
     pub word_count: bool,
-    /// Backups of unsaved work (M2) and how often they are written, in seconds.
+    /// Backups of unsaved work and how often they are written, in seconds.
     pub backups: bool,
     pub backup_interval: u32,
     /// ADR-014's limits for highlighting a file when it opens.
@@ -430,7 +430,7 @@ impl Settings {
         bytes <= self.highlight_max_bytes && lines <= self.highlight_max_lines
     }
 
-    /// How often M2 writes backups, or `None` when they are off.
+    /// How often backups are written, or `None` when they are off.
     pub fn backup_every(&self) -> Option<Duration> {
         self.backups
             .then(|| Duration::from_secs(u64::from(self.backup_interval)))

@@ -1,5 +1,5 @@
-//! Text around every line and incrementing numbers at a column: the MVP's stand-in for the
-//! Column Editor (Alt+C), which arrives with column mode in M6.
+//! Text around every line and incrementing numbers at a column: a simpler form of the Column
+//! Editor (Alt+C).
 
 use super::{Change, Doc, Target};
 use crate::text::TextEdit;

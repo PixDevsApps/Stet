@@ -1,7 +1,7 @@
 //! One tab: a GtkSourceView over its document's buffer, and the banners above it; and the
-//! document itself: the file, how it is read and written, and what loading found (M3). The
+//! document itself: the file, how it is read and written, and what loading found. The
 //! buffer is the source of truth for the text (ADR-003) and holds LF line endings only
-//! (ADR-008). Since M7 a document can be shown by two tabs, one in each view of a split
+//! (ADR-008). A document can be shown by two tabs, one in each view of a split
 //! window: a clone shares the [`Document`] and its buffer, and has a view, a caret and banners
 //! of its own.
 
@@ -51,7 +51,7 @@ pub enum ReadOnly {
     /// Long lines were broken for display, so the text isn't the file's; saving is off.
     DisplayBreaks,
     /// A text a comparison opened (the clipboard, the saved version); it closes with the
-    /// comparison (M7).
+    /// comparison.
     Comparison,
 }
 
@@ -127,10 +127,10 @@ pub struct DocState {
     pub highlight_limited: bool,
     pub loading: bool,
     pub saving: bool,
-    /// What a text a comparison opened is called (M7): it has no file, stays out of the
+    /// What a text a comparison opened is called: it has no file, stays out of the
     /// session and closes with the comparison.
     pub temporary: Option<String>,
-    /// The name the user gave an untitled document with Rename… (1.2), in place of its first
+    /// The name the user gave an untitled document with Rename…, in place of its first
     /// line; a file's name is its file's.
     pub custom_name: Option<String>,
 }
@@ -219,7 +219,7 @@ pub enum IndentSource {
 }
 
 /// What a tab shows, whichever views show it: the buffer and everything about the document.
-/// A clone in the other view (M7) is a second [`EditorPage`] over the same document.
+/// A clone in the other view is a second [`EditorPage`] over the same document.
 #[derive(Debug)]
 pub struct Document {
     buffer: sourceview5::Buffer,
@@ -237,15 +237,15 @@ pub struct Document {
     load_stats: Cell<LoadStats>,
     session: RefCell<TabSession>,
     last_change: Cell<Option<Instant>>,
-    /// An untitled document's first-line name and the revision it was read at (M8).
+    /// An untitled document's first-line name and the revision it was read at.
     first_line: RefCell<Option<(u64, Option<String>)>>,
-    /// Bookmarks across Undo and Redo, and the Mark and style-token ranges (M7).
+    /// Bookmarks across Undo and Redo, and the Mark and style-token ranges.
     marks: DocMarks,
     /// The marks' tags follow the views in an idle once something moved them.
     retag: RefCell<Option<glib::SourceId>>,
     /// The pages that show it, in the order they were made.
     pages: RefCell<Vec<glib::WeakRef<EditorPage>>>,
-    /// The page whose caret and selection the buffer has (M7).
+    /// The page whose caret and selection the buffer has.
     caret_owner: glib::WeakRef<EditorPage>,
     /// Edits on their way into the buffer: where an insertion starts, and the range a deletion
     /// takes, seen before the change and counted after it (a handler may stop it).
@@ -399,17 +399,17 @@ mod imp {
         pub map: RefCell<Option<sourceview5::Map>>,
         pub body: OnceCell<gtk::Box>,
         pub document: OnceCell<Rc<Document>>,
-        /// This view's caret and selection while another view of the document is in front
-        /// (M7): GTK keeps one caret per buffer.
+        /// This view's caret and selection while another view of the document is in front:
+        /// GTK keeps one caret per buffer.
         pub selection: RefCell<Option<(gtk::TextMark, gtk::TextMark)>>,
-        /// A clone's own id in the session (M7).
+        /// A clone's own id in the session.
         pub clone_id: RefCell<Option<String>>,
         /// The restored first visible line, kept until the view is first shown and has a
-        /// scroll position of its own (M2).
+        /// scroll position of its own.
         pub top_line: Cell<Option<usize>>,
-        /// A restored tab's caret and scroll position, applied once its text is in (M2, M7).
+        /// A restored tab's caret and scroll position, applied once its text is in.
         pub pending: RefCell<Option<Box<TabRecord>>>,
-        /// Shown in a comparison: no word wrap, so the two views' lines line up (M7).
+        /// Shown in a comparison: no word wrap, so the two views' lines line up.
         pub compared: Cell<bool>,
         pub bookmark: OnceCell<sourceview5::MarkAttributes>,
     }
@@ -447,7 +447,7 @@ impl EditorPage {
         Self::with_document(&Document::new(state), scheme, settings)
     }
 
-    /// A second view of this page's document (Clone to Other View, M7): the same buffer,
+    /// A second view of this page's document (Clone to Other View): the same buffer,
     /// with a caret, scroll position and banners of its own.
     pub fn clone_view(
         &self,
@@ -501,7 +501,7 @@ impl EditorPage {
         document.pages.borrow_mut().push(page.downgrade());
         let _ = imp.document.set(document.clone());
 
-        // Bookmarks in the gutter, toggled by a click there (M7).
+        // Bookmarks in the gutter, toggled by a click there.
         let attributes = sourceview5::MarkAttributes::new();
         view.set_mark_attributes(crate::marks::BOOKMARK_CATEGORY, &attributes, 10);
         view.set_show_line_marks(true);
@@ -566,7 +566,7 @@ impl EditorPage {
         self.imp().document.get().expect("constructed")
     }
 
-    /// Whether `other` shows the same document (one is a clone of the other, M7).
+    /// Whether `other` shows the same document (one is a clone of the other).
     pub fn same_document(&self, other: &Self) -> bool {
         Rc::ptr_eq(self.document(), other.document())
     }
@@ -587,7 +587,7 @@ impl EditorPage {
         self.column_view().upcast_ref()
     }
 
-    /// The view with column mode (M6).
+    /// The view with column mode.
     pub fn column_view(&self) -> &StetView {
         self.imp().view.get().expect("constructed")
     }
@@ -615,8 +615,8 @@ impl EditorPage {
             || (canonical.is_some() && state.canonical.as_deref() == canonical)
     }
 
-    /// The file name; for an untitled document the name the user gave it (1.2), else its first
-    /// line with text (M8), else `Untitled N`; for a text a comparison opened, what it is (M7).
+    /// The file name; for an untitled document the name the user gave it, else its first line
+    /// with text, else `Untitled N`; for a text a comparison opened, what it is.
     /// A restored tab whose text isn't loaded yet keeps the name it had.
     pub fn name(&self) -> String {
         let document = self.document();
@@ -646,7 +646,7 @@ impl EditorPage {
         untitled_name(self.document().state.borrow().untitled.unwrap_or(1))
     }
 
-    /// The first line with text of an untitled document, cut for a tab (M8); read again only
+    /// The first line with text of an untitled document, cut for a tab; read again only
     /// when the text changed.
     fn first_line_name(&self) -> Option<String> {
         let document = self.document();
@@ -732,7 +732,7 @@ impl EditorPage {
         self.document().state.borrow().read_only
     }
 
-    /// Large-file mode (≥ 50 MiB). M4's highlight-all and smart highlight must stay off here.
+    /// Large-file mode (≥ 50 MiB). Highlight-all and smart highlight must stay off here.
     pub fn large_file_mode(&self) -> bool {
         self.document().state.borrow().large()
     }
@@ -754,12 +754,12 @@ impl EditorPage {
         self.document().revision.get()
     }
 
-    /// When the text last changed, for the backups' idle check (M2).
+    /// When the text last changed, for the backups' idle check.
     pub fn last_change(&self) -> Option<Instant> {
         self.document().last_change.get()
     }
 
-    /// The document's part in the session (M2).
+    /// The document's part in the session.
     pub fn session(&self) -> std::cell::Ref<'_, TabSession> {
         self.document().session.borrow()
     }
@@ -768,7 +768,7 @@ impl EditorPage {
         update(&mut self.document().session.borrow_mut())
     }
 
-    /// This tab's own id in the session when it is a clone, made on first use (M7).
+    /// This tab's own id in the session when it is a clone, made on first use.
     pub fn clone_id(&self) -> String {
         self.imp()
             .clone_id
@@ -781,7 +781,7 @@ impl EditorPage {
         self.imp().clone_id.replace(Some(id));
     }
 
-    /// The restored first visible line of this view, until it is first shown (M2).
+    /// The restored first visible line of this view, until it is first shown.
     pub fn top_line(&self) -> Option<usize> {
         self.imp().top_line.get()
     }
@@ -838,7 +838,7 @@ impl EditorPage {
         }
     }
 
-    // ----- this view's caret (M7) --------------------------------------------------------
+    // ----- this view's caret -------------------------------------------------------------
 
     /// Keeps the caret and selection the buffer has now as this view's, while another view of
     /// the document is in front.
@@ -951,7 +951,7 @@ impl EditorPage {
         quietly(&views, &|| buffer.select_range(&insert, &bound));
     }
 
-    // ----- bookmarks and marks (M7) ------------------------------------------------------
+    // ----- bookmarks and marks -----------------------------------------------------------
 
     pub fn bookmarks(&self) -> stet_domain::marks::Bookmarks {
         crate::marks::bookmarks(&self.buffer())
@@ -1087,7 +1087,7 @@ impl EditorPage {
         self.show_map(settings.map && !large);
     }
 
-    /// Whether the view is in a comparison, which keeps word wrap off (M7).
+    /// Whether the view is in a comparison, which keeps word wrap off.
     pub fn set_compared(&self, compared: bool) {
         self.imp().compared.set(compared);
         self.apply_settings(self.imp().settings.get());

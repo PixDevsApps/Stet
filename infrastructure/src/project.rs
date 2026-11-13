@@ -1,4 +1,4 @@
-//! A project's files, for quick open (M8): the project root of a folder, and a walk that lists
+//! A project's files, for quick open: the project root of a folder, and a walk that lists
 //! the files someone would open there (no hidden files, nothing `.gitignore` ignores, nothing
 //! that looks binary by its extension), streamed in batches and capped.
 

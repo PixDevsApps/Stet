@@ -1,8 +1,8 @@
-//! The tab strip's context menu (M5) and the File-menu commands behind it: copy the path, the
-//! name or the folder; open the folder or a terminal there; rename the file, or an untitled
-//! tab (1.2); move it to the trash; close the other tabs or those to the right; save. From the
-//! tab menu a command acts on the tab that was clicked, otherwise on the current one
-//! (INTEGRATIONS.md section 7). A double-click on a tab renames it too (1.1).
+//! The tab strip's context menu and the File-menu commands behind it: copy the path, the name
+//! or the folder; open the folder or a terminal there; rename the file, or an untitled tab;
+//! move it to the trash; close the other tabs or those to the right; save. From the tab menu a
+//! command acts on the tab that was clicked, otherwise on the current one (INTEGRATIONS.md
+//! section 7). A double-click on a tab renames it too.
 
 use super::Window;
 use super::dialogs::SaveChoice;
@@ -148,7 +148,7 @@ impl Window {
             && page
                 .as_ref()
                 .is_some_and(|page| page.state().temporary.is_none());
-        // The closing commands act within the tab's own view (M7).
+        // The closing commands act within the tab's own view.
         let (position, count) = page.as_ref().and_then(|page| self.locate(page)).map_or(
             (None, 0),
             |(view, tab_page)| {
@@ -205,7 +205,7 @@ impl Window {
                     })
                     .map(|(_, page)| page)
                     .collect();
-                // Pinned tabs stay, as with Close All (M8).
+                // Pinned tabs stay, as with Close All.
                 let closing = self.closable_by_bulk_commands(closing);
                 let window = self.clone();
                 self.spawn(async move { window.close_pages(closing, &page).await });
@@ -349,7 +349,7 @@ impl Window {
         (dialog, entry)
     }
 
-    /// An untitled document's tab gets the name typed, in place of its first line (1.2):
+    /// An untitled document's tab gets the name typed, in place of its first line:
     /// nothing is saved, and Save As… proposes the name. An empty name follows the first line
     /// again.
     async fn rename_tab(&self, page: &EditorPage) {

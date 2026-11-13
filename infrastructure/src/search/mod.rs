@@ -4,8 +4,9 @@
 //!
 //! Every replace runs here: [`Matcher::replace_all`] and [`Matcher::replace_one`] return
 //! [`stet_domain::text::TextEdit`]s in character offsets, which the app applies in one user
-//! action, or as one bulk edit above [`BULK_EDIT_THRESHOLD`] edits (ADR-003 amendment). The
-//! engine also counts, highlights and navigates the patterns GtkSourceView cannot
+//! action, or as one bulk edit above
+//! [`BULK_EDIT_THRESHOLD`](stet_domain::text::BULK_EDIT_THRESHOLD) edits (ADR-003 amendment).
+//! The engine also counts, highlights and navigates the patterns GtkSourceView cannot
 //! ([`Matcher::needs_own_matcher`]).
 //!
 //! Everything here works on `&str` snapshots and may run on any thread; long operations take

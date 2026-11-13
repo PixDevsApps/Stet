@@ -1,4 +1,4 @@
-//! Column (rectangular) mode, M6 (ADR-016): the editor's view, [`StetView`], keeps a rectangle
+//! Column (rectangular) mode (ADR-016): the editor's view, [`StetView`], keeps a rectangle
 //! of visual columns from an anchor to a cursor, paints it, and turns typing, Backspace, Delete,
 //! Tab and the clipboard into `domain::column` edits on every line of it. The Column Editor
 //! (Alt+C) writes text or numbers down a column.

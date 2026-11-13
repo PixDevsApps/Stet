@@ -1,19 +1,19 @@
-//! Navigation (M8): the Ctrl+Tab switcher in most-recently-used order, back and forward
+//! Navigation: the Ctrl+Tab switcher in most-recently-used order, back and forward
 //! through the places that jumps leave (Alt+Left and Alt+Right, the mouse's back and forward
 //! buttons), and untitled tabs named after their first line.
 //!
 //! **Ctrl+Tab.** `next-recent-tab` and `previous-recent-tab` own Ctrl+Tab and Ctrl+Shift+Tab as
-//! application accelerators (the registry), and AdwTabView's own shortcuts have been off since
-//! M1. GTK runs application accelerators in the window's capture phase, before the tab view or
-//! an editor's key handling, so nothing else sees those keys first. Each press steps through
-//! the tabs in most-recently-used order; a key controller on the window, also in the capture
-//! phase, sees Ctrl go up and switches to the selected tab, and Escape cancels. A press without
-//! Ctrl held (the palette, a menu, a quick tap's release already seen) switches at once, to
-//! the previous tab. The switcher shows after [`SWITCHER_DELAY`], so a tap never flashes it.
+//! application accelerators (the registry), and AdwTabView's own shortcuts are off. GTK runs
+//! application accelerators in the window's capture phase, before the tab view or an editor's
+//! key handling, so nothing else sees those keys first. Each press steps through the tabs in
+//! most-recently-used order; a key controller on the window, also in the capture phase, sees
+//! Ctrl go up and switches to the selected tab, and Escape cancels. A press without Ctrl held
+//! (the palette, a menu, a quick tap's release already seen) switches at once, to the
+//! previous tab. The switcher shows after [`SWITCHER_DELAY`], so a tap never flashes it.
 //!
 //! **Back and forward.** Jumps record the place they leave: a tab switch, Go to Line, Find
 //! Next and Previous, opening the find bar, the results panel and Next/Previous Search Result,
-//! quick open, opening a file at a line ([`Window::note_jump`], which M5's brace jump can call
+//! quick open, opening a file at a line ([`Window::note_jump`], which the brace jump can call
 //! too). Places near each other (10 lines) merge; edits move them along; closing a tab drops
 //! its places (`stet_domain::nav::History`). Alt+Left and Alt+Right are application
 //! accelerators as well, which takes them from GtkSourceView's `move-words`.
@@ -132,7 +132,7 @@ impl Switcher {
     }
 }
 
-/// The window's navigation state (M8): the switcher, the back and forward history, quick open,
+/// The window's navigation state: the switcher, the back and forward history, quick open,
 /// the clicked tab of the tab menu, and Replace in Files.
 pub struct Nav {
     mru: RefCell<Mru<EditorPage>>,

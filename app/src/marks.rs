@@ -1,4 +1,4 @@
-//! Bookmarks and marks in a document's buffer (M7).
+//! Bookmarks and marks in a document's buffer.
 //!
 //! - **Bookmarks** are GtkSourceView source marks of [`BOOKMARK_CATEGORY`] at line starts, so
 //!   the buffer moves them with the text, and the views draw them in their gutter. Stet's own
@@ -9,7 +9,7 @@
 //!   into a [`Footprint`]; when it is one of those steps, the bookmarks of its lines come back.
 //! - **Marks** (the Find Mark Style and the five token styles) are ranges in a [`Marks`]
 //!   model, moved through every edit, and shown with text tags in the scheme's colours around
-//!   the lines the views show, as the find bar's own matches are (M4). Stet's own steps keep
+//!   the lines the views show, as the find bar's own matches are. Stet's own steps keep
 //!   them from before and after too, as GTK's replay of such a step would drop them.
 
 use gtk4 as gtk;
@@ -277,7 +277,7 @@ impl DocMarks {
         }
     }
 
-    /// Runs a column edit (M6), which never adds or removes lines: the bookmarks of `lines`
+    /// Runs a column edit, which never adds or removes lines: the bookmarks of `lines`
     /// stay, and come back after Undo and Redo collapse them. `logical` are its edits in the
     /// buffer's offsets before it, for the marks.
     pub fn track_lines(

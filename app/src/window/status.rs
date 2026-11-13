@@ -2,7 +2,7 @@
 //! optional word count, the language (a button that opens the language picker), the line
 //! ending (a button with the line-ending menu), the encoding (a button that opens the
 //! encoding picker), the indentation (a button that opens its popover) and INS/OVR; while two
-//! documents are compared, the comparison's summary (M7).
+//! documents are compared, the comparison's summary.
 
 use gtk4 as gtk;
 use gtk4::gio;
@@ -157,7 +157,7 @@ impl StatusBar {
         self.words.is_visible()
     }
 
-    /// The comparison's summary, or nothing when there is none (M7).
+    /// The comparison's summary, or nothing when there is none.
     pub fn set_compare(&self, summary: Option<&str>) {
         self.compare.set_label(summary.unwrap_or_default());
         self.compare.set_visible(summary.is_some());
@@ -169,7 +169,7 @@ impl StatusBar {
         self.indentation.set_label(label);
     }
 
-    /// Column mode (M6): the cursor corner, virtual columns included, and the rectangle's
+    /// Column mode: the cursor corner, virtual columns included, and the rectangle's
     /// rows × columns (`Sel 3×4`).
     pub fn set_column_position(&self, line: usize, column: usize, rows: usize, columns: usize) {
         self.position

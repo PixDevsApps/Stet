@@ -1,4 +1,4 @@
-//! Compare (M7): two documents side by side in the split view, the one in front as the new
+//! Compare: two documents side by side in the split view, the one in front as the new
 //! version and the other as the old one. Lines only in the new one are added, lines only in
 //! the old one removed, pairs of versions of a line changed (with the characters that differ
 //! marked), and blocks that moved are moved; each side is padded where the other has lines it

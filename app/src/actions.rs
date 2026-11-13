@@ -58,7 +58,7 @@ pub fn install_app_actions(app: &adw::Application) {
     {
         let action = simple_action(id);
         match id {
-            // Closing the windows saves the session (M2); without one there is nothing to keep.
+            // Closing the windows saves the session; without one there is nothing to keep.
             ActionId::Quit => {
                 action.connect_activate(glib::clone!(
                     #[weak]
@@ -301,7 +301,7 @@ pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
         }
         root.append_submenu(Some(menu.label()), &submenu);
     }
-    // Below the submenus, the items of the first page itself (1.5).
+    // Below the submenus, the items of the first page itself.
     let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
     for id in ActionId::ALL.into_iter().filter(|id| available(*id)) {
         if let Some(place) = id.spec().menu.filter(|place| place.menu == Menu::Main) {

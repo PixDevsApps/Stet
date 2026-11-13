@@ -96,7 +96,7 @@ pub fn generate(kind: &str, bytes: usize) -> Result<String, String> {
             }
             out.push_str("</items>");
         }
-        // Two versions of a text for Compare (M7): `lines-new` is `lines-old` with lines
+        // Two versions of a text for Compare: `lines-new` is `lines-old` with lines
         // changed, removed and added, and a block of six lines moved further down.
         "lines-old" | "lines-new" => {
             let old = numbered_lines(bytes);

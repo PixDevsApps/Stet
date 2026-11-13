@@ -1,5 +1,5 @@
-//! The toolbox's two dialogs: Add Prefix/Suffix and Insert Numbers, the MVP's stand-ins for
-//! the Column Editor (M6). Compact alert dialogs: Tab moves between the fields, Enter applies,
+//! The toolbox's two dialogs: Add Prefix/Suffix and Insert Numbers, simpler forms of
+//! the Column Editor. Compact alert dialogs: Tab moves between the fields, Enter applies,
 //! Escape cancels, and the fields remember their last values.
 
 use super::Window;

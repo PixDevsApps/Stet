@@ -21,7 +21,7 @@ pub struct Applied {
     pub bulk: bool,
     /// Time spent changing the buffer, on the GTK thread.
     pub took: Duration,
-    /// What reached the buffer, for keeping bookmarks across Undo and Redo (M7).
+    /// What reached the buffer, for keeping bookmarks across Undo and Redo.
     pub footprint: Footprint,
 }
 

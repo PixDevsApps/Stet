@@ -133,7 +133,7 @@ impl Window {
             find.set_message("Choose a folder to search", Tone::Error);
             return;
         }
-        // Restored tabs whose unsaved text is still in their backup load it first (M2), as
+        // Restored tabs whose unsaved text is still in their backup load it first, as
         // documents with unsaved changes are searched from memory.
         if self
             .pages()

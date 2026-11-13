@@ -1,8 +1,8 @@
-//! Pinned tabs (M8): AdwTabView's pinned pages, which stay at the start of the strip as
+//! Pinned tabs: AdwTabView's pinned pages, which stay at the start of the strip as
 //! icon-only tabs. Close All skips them; closing a pinned tab itself still works and asks when
 //! it has unsaved changes. The session keeps them (`TabRecord::pinned`).
 //!
-//! The tab strip's context menu (M5's, `TAB_MENU`) starts with Pin Tab or Unpin Tab for the
+//! The tab strip's context menu (`TAB_MENU`) starts with Pin Tab or Unpin Tab for the
 //! clicked tab; only the one that applies shows. Close All, Close Others and Close to the Right
 //! skip pinned tabs ([`Window::closable_by_bulk_commands`]).
 

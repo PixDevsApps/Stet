@@ -29,12 +29,12 @@ pub const BURST_IDLE: Duration = Duration::from_millis(1000);
 /// The furthest column a cursor may reach, past the end of its line.
 const MAX_COLUMN: usize = 1 << 16;
 
-/// Keeps a document's bookmarks and marks across a large column edit (M7): called with the
+/// Keeps a document's bookmarks and marks across a large column edit: called with the
 /// edit's lines, its edits in the buffer's offsets before it, and what applies it, which
 /// returns the footprint of the replacements it made.
 pub type ColumnTracker = Rc<dyn Fn(Range<usize>, &[TextEdit], &mut dyn FnMut() -> Footprint)>;
 
-/// Blank space a comparison puts between lines so that equal lines face each other (M7).
+/// Blank space a comparison puts between lines so that equal lines face each other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pad {
     /// The view's top margin, above the first line.
@@ -75,15 +75,15 @@ mod imp {
         pub keys: OnceCell<gtk::EventControllerKey>,
         pub painted_rows: Cell<usize>,
         pub last_op: Cell<Option<edit::OpStats>>,
-        /// What this view shares with the other views of its buffer (M7).
+        /// What this view shares with the other views of its buffer.
         pub shared: OnceCell<Rc<edit::BufferShared>>,
-        /// The document's bookmarks and marks, for large column edits (M7).
+        /// The document's bookmarks and marks, for large column edits.
         pub tracker: RefCell<Option<ColumnTracker>>,
-        /// The padding a comparison put between lines, painted over (M7).
+        /// The padding a comparison put between lines, painted over.
         pub pads: RefCell<Vec<Pad>>,
         /// The empty lines a comparison colours, in order, with the scheme style of their
         /// background, painted here because GTK paints no paragraph background on a line
-        /// without characters (M7).
+        /// without characters.
         pub empty_lines: RefCell<Vec<(usize, &'static str)>>,
     }
 
@@ -359,7 +359,7 @@ impl StetView {
         self.imp().busy.get() > 0
     }
 
-    /// The padding to paint over, after a comparison set it (M7).
+    /// The padding to paint over, after a comparison set it.
     pub fn set_pads(&self, pads: Vec<Pad>) {
         self.imp().pads.replace(pads);
         self.queue_draw();
@@ -370,7 +370,7 @@ impl StetView {
     }
 
     /// The empty lines to paint in their scheme style's background, in order, after a
-    /// comparison set them (M7).
+    /// comparison set them.
     pub fn set_empty_lines(&self, lines: Vec<(usize, &'static str)>) {
         self.imp().empty_lines.replace(lines);
         self.queue_draw();
@@ -385,7 +385,7 @@ impl StetView {
     }
 
     /// Runs `f` with this view's buffer hooks letting caret moves and edits through, as
-    /// column mode's own do: another view of the document putting back its caret (M7).
+    /// column mode's own do: another view of the document putting back its caret.
     pub fn quietly<T>(&self, f: impl FnOnce() -> T) -> T {
         self.busy(f)
     }

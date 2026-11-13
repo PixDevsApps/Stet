@@ -1,4 +1,4 @@
-//! Check for Updates (1.5): the version GitHub names as Stet's latest release against the
+//! Check for Updates: the version GitHub names as Stet's latest release against the
 //! running one, and the command that installs it. The tag comes from the network and ends up in
 //! a command the user pastes into a terminal, so only `vX.Y.Z` with plain numbers is read, and
 //! the command is built from the numbers, never from the tag's text.

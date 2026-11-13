@@ -1,4 +1,4 @@
-//! Split view (M7): two views side by side, each a tab strip over its tabs, divided at the same
+//! Split view: two views side by side, each a tab strip over its tabs, divided at the same
 //! place. A view shows only while it has tabs, so a window without a second view looks as it
 //! did before; Move to Other View and Clone to Other View fill the second one, and closing its
 //! last tab collapses the split.

@@ -63,7 +63,7 @@ pub(super) fn paint(view: &StetView, rect: Rect, snapshot: &gtk::Snapshot) -> us
     rows
 }
 
-/// Paints the padding a comparison put between lines in the scheme's padding colour (M7), so
+/// Paints the padding a comparison put between lines in the scheme's padding colour, so
 /// it reads as no text rather than as an empty line.
 pub(super) fn pads(view: &StetView, pads: &[Pad], snapshot: &gtk::Snapshot) {
     let buffer = view.buffer();
@@ -98,7 +98,7 @@ pub(super) fn pads(view: &StetView, pads: &[Pad], snapshot: &gtk::Snapshot) {
 }
 
 /// Paints the background a comparison gives the visible ones of `lines` (empty lines, in
-/// order, with their scheme styles), as GTK paints a paragraph background (M7): GTK skips a
+/// order, with their scheme styles), as GTK paints a paragraph background: GTK skips a
 /// line without characters.
 pub(super) fn empty_lines(
     view: &StetView,

@@ -1,5 +1,6 @@
-//! The recent-files list M1 kept in `$XDG_STATE_HOME/stet/recent.json`. The session holds the
-//! recent files now; the file is only read, to move its list into the session once.
+//! The recent-files list older versions kept in `$XDG_STATE_HOME/stet/recent.json`. The
+//! session holds the recent files now; the file is only read, to move its list into the
+//! session once.
 
 use serde::Deserialize;
 use std::fs;

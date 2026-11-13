@@ -1,4 +1,4 @@
-//! Column (rectangular) mode for M6: visual-column math, the rectangle, and the column edits,
+//! Column (rectangular) mode: visual-column math, the rectangle, and the column edits,
 //! as pure functions over a text snapshot that return [`TextEdit`](crate::text::TextEdit)s in
 //! character offsets (ADR-003, ADR-016).
 //!

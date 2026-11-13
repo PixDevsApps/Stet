@@ -1,4 +1,4 @@
-//! Replace in Files (M8, ADR-005 amendment): the files row's other command. After a
+//! Replace in Files (ADR-005 amendment): the files row's other command. After a
 //! confirmation that names the folder, the filters and that files on disk can't be undone, a
 //! run on threads of its own (`stet_infrastructure::replace_in_files`) replaces in every file
 //! the walk reaches, keeping each file's encoding, byte-order mark and line endings, and

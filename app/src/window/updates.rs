@@ -1,4 +1,4 @@
-//! Check for Updates (1.5): only when the user runs it, a worker asks GitHub which release is the
+//! Check for Updates: only when the user runs it, a worker asks GitHub which release is the
 //! latest, and a dialog says whether this Stet is it. When a newer one is out, the dialog shows
 //! the command that installs it, with a button that copies it; Stet never installs anything
 //! itself.

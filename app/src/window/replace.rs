@@ -388,7 +388,7 @@ impl Window {
         };
         let find = &self.inner.find;
         find.remember(Field::Replace, &find.replace_entry.text());
-        // Restored tabs that were not shown yet load their text first (M2).
+        // Restored tabs that were not shown yet load their text first.
         self.load_stubs().await;
         let pages: Vec<EditorPage> = self
             .documents()
@@ -486,7 +486,7 @@ impl Window {
         let Some(compiled) = self.query_for_command() else {
             return;
         };
-        // Restored tabs that were not shown yet load their text first (M2).
+        // Restored tabs that were not shown yet load their text first.
         if all_documents && self.has_stubs() {
             let window = self.clone();
             self.spawn(async move {
@@ -827,7 +827,7 @@ fn search_match_color(scheme: &sourceview5::StyleScheme) -> Option<gdk::RGBA> {
 
 /// Drops the selection the bar opened with.
 /// Applies a Replace All computed on `text`, the document's text, through the document's
-/// bookmark and mark tracking (M7), so bookmarks come back with Undo and Redo.
+/// bookmark and mark tracking, so bookmarks come back with Undo and Redo.
 pub(super) fn apply_tracked(
     page: &EditorPage,
     result: &stet_infrastructure::search::ReplaceAll,

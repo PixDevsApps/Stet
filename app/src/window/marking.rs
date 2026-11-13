@@ -1,4 +1,4 @@
-//! Bookmarks, Mark and style tokens (M7): Search › Bookmark, the find bar's Mark row, and
+//! Bookmarks, Mark and style tokens: Search › Bookmark, the find bar's Mark row, and
 //! Search › Style All Occurrences of Token with the jumps between styled text.
 //!
 //! - **Bookmarks** are GtkSourceView marks in the gutter (`crate::marks`); a click in the gutter

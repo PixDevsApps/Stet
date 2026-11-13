@@ -37,11 +37,11 @@ pub fn config_home() -> PathBuf {
 /// Where Stet keeps its files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StetDirs {
-    /// Session, backups (M2) and the recent-files list.
+    /// Session, backups and the recent-files list.
     pub state: PathBuf,
     /// Generated style schemes.
     pub cache: PathBuf,
-    /// `config.toml` and `keys.toml` (M5).
+    /// `config.toml` and `keys.toml`.
     pub config: PathBuf,
 }
 

@@ -1,4 +1,4 @@
-//! Indentation (M5): every document's tab width and whether Tab inserts spaces. A new document
+//! Indentation: every document's tab width and whether Tab inserts spaces. A new document
 //! takes the settings for its language (`config.toml`, then Stet's defaults per language), an
 //! opened file the indentation it already uses, and the status bar's "Spaces: 4" item opens a
 //! popover to change it for the document. The exact tab stops of ADR-015 follow a width change

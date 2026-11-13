@@ -1,4 +1,4 @@
-//! Quick open (Ctrl+P, M8): a popup like the command palette that lists the open documents
+//! Quick open (Ctrl+P): a popup like the command palette that lists the open documents
 //! (most recently used first), then the recent files, then the files under the project root
 //! (the git root of the current document's folder, else that folder), ranked by
 //! `stet_domain::fuzzy` with the matched characters in bold. `name:line[:col]` opens at a
@@ -813,7 +813,7 @@ impl Window {
     /// The tabs, most recently used first.
     fn pages_by_recent_use(&self) -> Vec<EditorPage> {
         let mut order: Vec<EditorPage> = Vec::new();
-        // A document in both views (M7) is listed once.
+        // A document in both views is listed once.
         for page in self.recent_pages().into_iter().chain(self.pages()) {
             if !order.iter().any(|known| known.same_document(&page)) {
                 order.push(page);

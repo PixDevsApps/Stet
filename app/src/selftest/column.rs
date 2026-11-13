@@ -1,4 +1,4 @@
-//! Self-test commands for column mode (M6): rectangles, keys dispatched in GTK's order, typing
+//! Self-test commands for column mode: rectangles, keys dispatched in GTK's order, typing
 //! the way GtkTextView commits text, Alt+drag through the gesture's handlers, the rectangular
 //! clipboard, the Column Editor, undo steps and timings, and the accessibility override.
 

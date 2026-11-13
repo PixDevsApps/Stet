@@ -107,13 +107,13 @@ const CLOSED_LIMIT: usize = 20;
 pub struct Shared {
     pub config: AppConfig,
     pub appearance: Rc<Appearance>,
-    /// `config.toml` and `keys.toml` (M5).
+    /// `config.toml` and `keys.toml`.
     pub preferences: Rc<Preferences>,
     /// The editors' shortcuts, shared by every editor's controller (`actions`).
     pub editor_shortcuts: gio::ListStore,
     /// While the self-test asks for it, desktop commands are recorded instead of run.
     launches: RefCell<Option<Vec<Vec<OsString>>>>,
-    /// The recent files, kept in the session (M2; M1 wrote `recent.json`).
+    /// The recent files, kept in the session.
     recent: RefCell<RecentFiles>,
     recent_listeners: RefCell<Vec<Box<dyn Fn()>>>,
 }
@@ -201,21 +201,21 @@ pub struct Window {
     pub(crate) inner: Rc<Inner>,
 }
 
-/// One of the window's two views (M7): a tab strip over its tabs. The second view shows only
+/// One of the window's two views: a tab strip over its tabs. The second view shows only
 /// while the window is split, and either view hides when its last tab goes.
 pub struct ViewPane {
     pub tabs: adw::TabView,
     pub bar: adw::TabBar,
-    /// Opens a new tab in this view (1.4), right after the strip's last tab (1.5).
+    /// Opens a new tab in this view, right after the strip's last tab.
     pub new_tab: gtk::Button,
     /// The strip's end: the + and, on the last strip on screen outside Hyprland, the window
     /// controls at the far end.
     trail: gtk::Box,
-    /// The strip's tabs, as wide as they are, so that the + follows them (1.5). `None` if
+    /// The strip's tabs, as wide as they are, so that the + follows them. `None` if
     /// libadwaita's tab strip is built differently: the + then sits at the strip's far end.
     tab_scroller: Option<gtk::ScrolledWindow>,
     /// Takes a tab dropped on the + or the empty part of the strip after it, which libadwaita's
-    /// strip doesn't cover since the tabs are only as wide as they are (1.5.1).
+    /// strip doesn't cover since the tabs are only as wide as they are.
     tab_drop: gtk::DropTarget,
 }
 
@@ -293,7 +293,7 @@ fn tab_scroller(bar: &adw::TabBar) -> Option<gtk::ScrolledWindow> {
 pub struct Inner {
     pub shared: Rc<Shared>,
     pub window: adw::ApplicationWindow,
-    /// The main view and the second one (M7).
+    /// The main view and the second one.
     pub views: [ViewPane; 2],
     /// The view in front: where commands act, new tabs open, and what the status bar and the
     /// window title show.
@@ -302,7 +302,7 @@ pub struct Inner {
     /// [`Window::new`]).
     views_paned: gtk::Paned,
     /// The hamburger menu and, outside Hyprland, the window controls the decoration layout
-    /// puts first, at the start of the first strip on screen (1.3).
+    /// puts first, at the start of the first strip on screen.
     start: gtk::Box,
     /// The window controls outside Hyprland, at the end of the last strip on screen, after its
     /// + and filler.
@@ -323,7 +323,7 @@ pub struct Inner {
     pub languages: Rc<LanguagePicker>,
     pub encodings: Rc<EncodingPicker>,
     pub indentation: Rc<IndentPicker>,
-    /// The text toolbox's dialogs' values and last statistics (M5).
+    /// The text toolbox's dialogs' values and last statistics.
     pub tools: toolbox::ToolState,
     /// The tab whose context menu is open.
     menu_page: RefCell<Option<adw::TabPage>>,
@@ -349,15 +349,15 @@ pub struct Inner {
     last_focus_check: Cell<Option<Instant>>,
     last_toast: RefCell<String>,
     session: session::WindowSession,
-    /// Navigation, pinned tabs, quick open and Replace in Files (M8).
+    /// Navigation, pinned tabs, quick open and Replace in Files.
     pub(crate) nav: nav::Nav,
-    /// Split view's synchronised scrolling (M7).
+    /// Split view's synchronised scrolling.
     pub(crate) split: split::SplitState,
-    /// The comparison on screen (M7).
+    /// The comparison on screen.
     pub(crate) comparing: compare::CompareState,
-    /// Mark's options and the last Mark's statistics (M7).
+    /// Mark's options and the last Mark's statistics.
     pub(crate) marking: marking::MarkState,
-    /// Check for Updates (1.5).
+    /// Check for Updates.
     updates: updates::UpdateState,
 }
 
@@ -381,7 +381,7 @@ impl Window {
         start.append(&menu_button);
         views[0].bar.set_start_action_widget(Some(&start));
         views[0].trail.append(&end);
-        // The strips sit side by side over the views, divided where the views are (M7).
+        // The strips sit side by side over the views, divided where the views are.
         let split_paned = |start: &gtk::Widget, end: &gtk::Widget| {
             gtk::Paned::builder()
                 .orientation(gtk::Orientation::Horizontal)
@@ -448,7 +448,7 @@ impl Window {
             .build();
         toolbar.add_top_bar(&top);
         toolbar.add_bottom_bar(&status.root);
-        // The Ctrl+Tab switcher floats over everything but the toasts (M8).
+        // The Ctrl+Tab switcher floats over everything but the toasts.
         let nav = nav::Nav::new();
         let overlay = gtk::Overlay::builder().child(&toolbar).build();
         overlay.add_overlay(&nav.switcher.root);
@@ -666,7 +666,7 @@ impl Window {
                 }
             }
         ));
-        // File systems without change events (network mounts) are checked on focus (M3).
+        // File systems without change events (network mounts) are checked on focus.
         inner.window.connect_is_active_notify(glib::clone!(
             #[weak(rename_to = inner)]
             self.inner,
@@ -738,7 +738,7 @@ impl Window {
                 }
             }
         ));
-        // Through the actions, so their enablement applies (M3).
+        // Through the actions, so their enablement applies.
         inner.encodings.connect_chosen(glib::clone!(
             #[weak(rename_to = inner)]
             self.inner,
@@ -762,7 +762,7 @@ impl Window {
 
     // ----- pages -------------------------------------------------------------------------
 
-    /// Every tab: the main view's, then the second view's (M7).
+    /// Every tab: the main view's, then the second view's.
     pub fn pages(&self) -> Vec<EditorPage> {
         self.inner
             .views
@@ -773,7 +773,7 @@ impl Window {
 
     /// One tab per open document, in tab order: the current tab for its document, else the
     /// first that shows it. Operations on documents (saving, searching every document) use
-    /// it, so a document in both views (M7) counts once.
+    /// it, so a document in both views counts once.
     pub fn documents(&self) -> Vec<EditorPage> {
         let current = self.current_page();
         let mut documents: Vec<EditorPage> = Vec::new();
@@ -880,7 +880,7 @@ impl Window {
         page
     }
 
-    /// Appends `page`, a new tab or a clone (M7), to `view`, with the window's hooks.
+    /// Appends `page`, a new tab or a clone, to `view`, with the window's hooks.
     pub(super) fn attach_page(&self, view: usize, page: &EditorPage, select: bool) {
         self.install_page(page);
         self.on_nav_page_attached(page);
@@ -982,7 +982,7 @@ impl Window {
     }
 
     /// Updates the tab label, tooltip, and the window title and status when it is current; for
-    /// every tab of the document (M7).
+    /// every tab of the document.
     fn refresh_page(&self, page: &EditorPage) {
         for page in page.document_pages() {
             let Some(tab_page) = self.tab_page(&page) else {
@@ -1012,7 +1012,7 @@ impl Window {
         if self.inner.moving.get() {
             return;
         }
-        // A restored tab loads its text when it is first shown, in either view (M2).
+        // A restored tab loads its text when it is first shown, in either view.
         if let Some(page) = self.inner.views[index].tabs.selected_page() {
             self.session_page_selected(&page_of(&page));
         }
@@ -1030,7 +1030,7 @@ impl Window {
     /// results panel, a popover or a dialog; switching with Ctrl+Tab from the find field keeps
     /// it.
     fn current_changed(&self, take_focus: bool) {
-        // A document in both views has one caret in its buffer: the current view's (M7).
+        // A document in both views has one caret in its buffer: the current view's.
         if let Some(page) = self.current_page() {
             page.take_caret();
         }
@@ -1202,7 +1202,7 @@ impl Window {
     fn on_close_page(&self, tabs: &adw::TabView, tab_page: &adw::TabPage) {
         let page = page_of(tab_page);
         let tabs = tabs.clone();
-        // A clone closes alone: its document stays open in the other view (M7).
+        // A clone closes alone: its document stays open in the other view.
         if self.other_page(&page).is_some() {
             self.finish_close(&tabs, tab_page, true);
             return;
@@ -1247,14 +1247,14 @@ impl Window {
         }
     }
 
-    /// Closes every tab of `page`'s document without asking (M7).
+    /// Closes every tab of `page`'s document without asking.
     fn close_document(&self, page: &EditorPage) {
         for view_page in page.document_pages() {
             self.close_without_prompt(&view_page);
         }
     }
 
-    /// Another tab that shows `page`'s document, in either view (M7).
+    /// Another tab that shows `page`'s document, in either view.
     pub(super) fn other_page(&self, page: &EditorPage) -> Option<EditorPage> {
         page.document_pages()
             .into_iter()
@@ -1376,7 +1376,7 @@ impl Window {
     }
 
     /// Closing the window. With the session on it never asks, except about documents in
-    /// large-file mode (M2); without one it asks about every document with unsaved changes.
+    /// large-file mode; without one it asks about every document with unsaved changes.
     fn on_close_request(&self) -> glib::Propagation {
         if self.inner.closing_window.get() {
             return glib::Propagation::Proceed;
@@ -1427,7 +1427,7 @@ impl Window {
     )]
     pub fn run_action(&self, id: ActionId, param: Option<String>) {
         let page = self.current_page();
-        // Column mode (M6) closes its typing burst first, and ends for actions that don't know
+        // Column mode closes its typing burst first, and ends for actions that don't know
         // about columns.
         if let Some(page) = &page
             && crate::column::before_action(page.column_view(), id)
@@ -1840,7 +1840,7 @@ impl Window {
         &self.inner.menu_button
     }
 
-    /// The + after view `index`'s last tab, which opens a new tab there (1.4, 1.5).
+    /// The + after view `index`'s last tab, which opens a new tab there.
     pub fn new_tab_button(&self, index: usize) -> &gtk::Button {
         &self.inner.views[index].new_tab
     }
@@ -1881,10 +1881,10 @@ impl Window {
                 .popover()
                 .and_then(|popover| popover.downcast::<gtk::PopoverMenu>().ok())
             {
-                // From the button's left edge into the window (1.3.1): centred on the button at
-                // the window's left end, half the menu hung outside the window.
+                // From the button's left edge into the window: centred on the button at the
+                // window's left end, half the menu would hang outside the window.
                 popover.set_halign(gtk::Align::Start);
-                // Submenus open beside the menu when the pointer rests on their item (1.5),
+                // Submenus open beside the menu when the pointer rests on their item,
                 // each as wide as its own items, rather than in its place on a click.
                 popover.set_flags(gtk::PopoverMenuFlags::NESTED);
                 for menu in menus_in(popover.upcast_ref()) {
@@ -1898,7 +1898,7 @@ impl Window {
         }
     }
 
-    /// Keeps the menu and its submenus above the window's bottom edge (1.3.2): one taller than
+    /// Keeps the menu and its submenus above the window's bottom edge: one taller than
     /// the room below its button or item scrolls.
     fn fit_menu(&self, popover: &gtk::Popover) {
         let window = self.inner.window.upcast_ref::<gtk::Widget>();
@@ -1933,7 +1933,7 @@ impl Window {
 
     fn palette_items(&self) -> Vec<palette::Item> {
         let keymap = self.keymap();
-        // Pin Tab and Unpin Tab: only the one that applies (M8).
+        // Pin Tab and Unpin Tab: only the one that applies.
         let applies = |id: ActionId| {
             !matches!(id, ActionId::PinTab | ActionId::UnpinTab)
                 || self.action(id).is_some_and(|action| action.is_enabled())

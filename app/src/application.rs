@@ -1,6 +1,6 @@
 //! The GApplication: single instance, the command line of every launch (a second `stet a.rs
 //! b.txt:40` is handled by the running primary instance), D-Bus activation's `open` and
-//! `activate`, startup and the first frame. The first window restores the session (M2) before
+//! `activate`, startup and the first frame. The first window restores the session before
 //! it opens a command line's files and before it is shown. A `--wait` command line is held
 //! until its tabs close (ADR-011). SIGTERM, SIGHUP and SIGINT save the session and quit.
 

@@ -20,7 +20,7 @@ impl ActionScope {
     }
 }
 
-/// Where an action's keys work (ADR-009 amendment of M5).
+/// Where an action's keys work (ADR-009 amendment on text-tool keys).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyScope {
     /// Application accelerators: anywhere in the window, before the focused widget.
@@ -42,7 +42,7 @@ pub enum Menu {
     Settings,
     Tools,
     Help,
-    /// The menu's first page itself, below its submenus (1.5): not one of [`Menu::ALL`].
+    /// The menu's first page itself, below its submenus: not one of [`Menu::ALL`].
     Main,
 }
 
@@ -205,7 +205,7 @@ pub struct ActionSpec {
 pub enum ActionId {
     NewTab,
     Open,
-    // Navigation (M8).
+    // Navigation.
     QuickOpen,
     OpenRecent,
     ClearRecent,
@@ -215,7 +215,7 @@ pub enum ActionId {
     CloseTab,
     CloseAll,
     RestoreClosedTab,
-    // Sessions (M2).
+    // Sessions.
     ForgetDrafts,
     Quit,
     Undo,
@@ -237,7 +237,7 @@ pub enum ActionId {
     FindAllInDocument,
     FindAllInOpenDocuments,
     StopFindInFiles,
-    // Replace in Files (M8).
+    // Replace in Files.
     ReplaceInFiles,
     SearchResults,
     NextSearchResult,
@@ -246,7 +246,7 @@ pub enum ActionId {
     ClearSearchResults,
     CloseSearchResults,
     GoToLine,
-    // Back and forward (M8).
+    // Back and forward.
     GoBack,
     GoForward,
     WordWrap,
@@ -257,18 +257,18 @@ pub enum ActionId {
     FullScreen,
     NextTab,
     PreviousTab,
-    // The MRU switcher (M8).
+    // The MRU switcher.
     NextRecentTab,
     PreviousRecentTab,
     MoveTabForward,
     MoveTabBackward,
-    // Pinned tabs (M8).
+    // Pinned tabs.
     PinTab,
     UnpinTab,
     CommandPalette,
     ChooseLanguage,
     SetLanguage,
-    // Files, encodings and line endings (M3).
+    // Files, encodings and line endings.
     ReloadFromDisk,
     EolCrLf,
     EolLf,
@@ -285,7 +285,7 @@ pub enum ActionId {
     ConvertToUtf16LeBom,
     ConvertEncoding,
     ChooseEncoding,
-    // Text toolbox and chrome (M5).
+    // Text toolbox and chrome.
     RenameFile,
     MoveToTrash,
     OpenContainingFolder,
@@ -359,7 +359,7 @@ pub enum ActionId {
     KeyboardShortcuts,
     About,
     CheckForUpdates,
-    // Column mode (M6).
+    // Column mode.
     ColumnSelectLeft,
     ColumnSelectRight,
     ColumnSelectUp,
@@ -370,7 +370,7 @@ pub enum ActionId {
     ColumnSelectPageDown,
     ColumnBeginEndSelect,
     ColumnEditor,
-    // Bookmarks (M7): Search › Bookmark.
+    // Bookmarks: Search › Bookmark.
     ToggleBookmark,
     NextBookmark,
     PreviousBookmark,
@@ -381,7 +381,7 @@ pub enum ActionId {
     RemoveBookmarkedLines,
     RemoveUnbookmarkedLines,
     InverseBookmarks,
-    // Mark and style tokens (M7).
+    // Mark and style tokens.
     Mark,
     MarkAll,
     ClearMarks,
@@ -409,13 +409,13 @@ pub enum ActionId {
     JumpDown4,
     JumpDown5,
     JumpDownMark,
-    // Split view (M7).
+    // Split view.
     MoveToOtherView,
     CloneToOtherView,
     SwitchView,
     SyncVerticalScrolling,
     SyncHorizontalScrolling,
-    // Compare (M7): Tools › Compare.
+    // Compare: Tools › Compare.
     Compare,
     CompareWithFile,
     CompareWithClipboard,
@@ -455,17 +455,17 @@ pub const BLANK_SUBMENU: &str = "Blank Operations";
 pub const JSON_SUBMENU: &str = "JSON";
 pub const XML_SUBMENU: &str = "XML";
 
-/// Tools › Compare: the comparison commands (M7).
+/// Tools › Compare: the comparison commands.
 pub const COMPARE_SUBMENU: &str = "Compare";
 
-/// Search › Style All Occurrences of Token, Clear Style, Jump Up, Jump Down and Bookmark (M7).
+/// Search › Style All Occurrences of Token, Clear Style, Jump Up, Jump Down and Bookmark.
 pub const STYLE_TOKEN_SUBMENU: &str = "Style All Occurrences of Token";
 pub const CLEAR_STYLE_SUBMENU: &str = "Clear Style";
 pub const JUMP_UP_SUBMENU: &str = "Jump Up";
 pub const JUMP_DOWN_SUBMENU: &str = "Jump Down";
 pub const BOOKMARK_SUBMENU: &str = "Bookmark";
 
-/// View › Move/Clone Current Document (M7).
+/// View › Move/Clone Current Document.
 pub const MOVE_CLONE_SUBMENU: &str = "Move/Clone Current Document";
 
 /// Nested submenus in the order a section lists them.
@@ -499,7 +499,7 @@ pub fn submenu_rank(submenu: &str) -> usize {
 
 /// The tab strip's context menu, by section; each action acts on the tab that was clicked.
 pub const TAB_MENU: &[&[ActionId]] = &[
-    // Only the one that applies shows (M8).
+    // Only the one that applies shows.
     &[ActionId::PinTab, ActionId::UnpinTab],
     &[
         ActionId::CloseTab,
@@ -537,12 +537,12 @@ pub const EDITOR_MENU: &[&[EditorMenuItem]] = &[
     ],
 ];
 
-/// GtkSourceView and GtkTextView key bindings that clash with Stet's keymap or with keys
-/// later milestones need (ADR-009): `change-number` (and GtkTextView's unselect-all
-/// on Ctrl+Shift+A), `move-lines`, `move-words` (M8's back and forward), `move-viewport` (M6's
-/// column selection), and GtkTextView's select-all and unselect-all on Ctrl+/ and Ctrl+\. An
-/// editor-scoped controller in the capture phase takes these keys before the view, so they do
-/// nothing unless the keymap gives them to an action. The keypad variants are GtkSourceView's.
+/// GtkSourceView and GtkTextView key bindings that clash with Stet's keymap (ADR-009):
+/// `change-number` (and GtkTextView's unselect-all on Ctrl+Shift+A), `move-lines`,
+/// `move-words` (back and forward), `move-viewport` (column selection), and GtkTextView's
+/// select-all and unselect-all on Ctrl+/ and Ctrl+\. An editor-scoped controller in the
+/// capture phase takes these keys before the view, so they do nothing unless the keymap gives
+/// them to an action. The keypad variants are GtkSourceView's.
 pub const OVERRIDDEN_BUILTINS: &[&str] = &[
     "<Control><Shift>x",
     "<Control><Shift>a",
@@ -618,7 +618,7 @@ const fn sort(name: &'static str, label: &'static str) -> ActionSpec {
     )
 }
 
-/// A command in one of the Search menu's marking submenus (M7).
+/// A command in one of the Search menu's marking submenus.
 const fn in_search(
     name: &'static str,
     label: &'static str,
@@ -634,7 +634,7 @@ const fn in_search(
     )
 }
 
-/// A Jump Up or Jump Down command (M7). It moves the editor's selection, so its keys work in
+/// A Jump Up or Jump Down command. It moves the editor's selection, so its keys work in
 /// the editor, as the text tools' do, and never take a dialog's mnemonic (Alt+M).
 const fn jump(
     name: &'static str,
@@ -649,7 +649,7 @@ const fn jump(
     }
 }
 
-/// A command in Tools › Compare (M7).
+/// A command in Tools › Compare.
 const fn in_compare(
     name: &'static str,
     label: &'static str,
@@ -906,8 +906,8 @@ impl ActionId {
                 MenuPlace::at(File, 0),
                 Keys::app(&["<Control>o"]),
             ),
-            // Ctrl+P is quick open, as in VS Code and Sublime Text, not Print, which is 1.x
-            // (ADR-009 amendment, M8).
+            // Ctrl+P is quick open, as in VS Code and Sublime Text, not Print, which Stet doesn't
+            // have (ADR-009 amendment on navigation keys).
             Self::QuickOpen => command(
                 "quick-open",
                 "Quick Open…",
@@ -973,7 +973,7 @@ impl ActionId {
                 MenuPlace::at(File, 3),
                 Keys::NONE,
             ),
-            // Ctrl+Q stays free for Toggle Single Line Comment (M5).
+            // Ctrl+Q stays free for Toggle Single Line Comment.
             Self::Quit => ActionSpec {
                 scope: ActionScope::App,
                 ..command(
@@ -1085,7 +1085,7 @@ impl ActionId {
             Self::ReplaceInFiles => {
                 command("replace-in-files", "Replace in Files", None, Keys::NONE)
             }
-            // F7, F4 and Shift+F4 after an F-key-free key (ADR-009 amendment of 2026-10-01, M4).
+            // F7, F4 and Shift+F4 after an F-key-free key (ADR-009 amendment on search keys).
             Self::SearchResults => command(
                 "search-results",
                 "Search Results Window",
@@ -1128,7 +1128,7 @@ impl ActionId {
                 MenuPlace::at(Search, 2),
                 Keys::app(&["<Control>g"]),
             ),
-            // Back and forward through the places jumps left (M8): the browsers' Alt+Left and
+            // Back and forward through the places jumps left: the browsers' Alt+Left and
             // Alt+Right, which GtkSourceView would use to move words (ADR-009 amendment).
             Self::GoBack => command(
                 "go-back",
@@ -1183,7 +1183,7 @@ impl ActionId {
                 Keys::app(&["<Control>Page_Up"]),
             ),
             // Most recently used order while Ctrl is held; a tap goes to the previous tab
-            // (M8, ADR-009 amendment).
+            // (ADR-009 amendment on navigation keys).
             Self::NextRecentTab => command(
                 "next-recent-tab",
                 "Next Recent Tab",
@@ -1208,7 +1208,7 @@ impl ActionId {
                 MenuPlace::at(View, 3),
                 Keys::app(&["<Control><Shift>Page_Up"]),
             ),
-            // The tab menu's pin entries; only the one that applies is enabled (M8).
+            // The tab menu's pin entries; only the one that applies is enabled.
             Self::PinTab => command("pin-tab", "Pin Tab", MenuPlace::at(View, 3), Keys::NONE),
             Self::UnpinTab => command("unpin-tab", "Unpin Tab", MenuPlace::at(View, 3), Keys::NONE),
             Self::CommandPalette => command(
@@ -1369,7 +1369,7 @@ impl ActionId {
                 Keys::NONE,
             ),
             // fcitx5 takes Ctrl+Shift+U and Ctrl+Alt+Shift+U, so UPPERCASE is Alt+Shift+U and
-            // the blend variants have no key (ADR-009 amendment of M5).
+            // the blend variants have no key (ADR-009 amendment on text-tool keys).
             Self::Uppercase => editing(
                 "uppercase",
                 "UPPERCASE",
@@ -1607,7 +1607,7 @@ impl ActionId {
                 MenuPlace::nested_in(Edit, 3, BLANK_SUBMENU, 1),
                 Keys::NONE,
             ),
-            // The MVP's stand-ins for the Column Editor (M6).
+            // Simpler forms of the Column Editor.
             Self::AddPrefixSuffix => editing(
                 "add-prefix-suffix",
                 "Add Prefix/Suffix…",
@@ -1782,7 +1782,7 @@ impl ActionId {
                 Keys::app(&["<Alt>c"]),
             ),
             // Search › Bookmark. Ctrl+F2, F2 and Shift+F2 come after the F-key-free keys of
-            // VS Code's Bookmarks extension (ADR-009 amendment, M7).
+            // VS Code's Bookmarks extension (ADR-009 amendment on marking keys).
             Self::ToggleBookmark => in_search(
                 "toggle-bookmark",
                 "Toggle Bookmark",
@@ -1853,7 +1853,7 @@ impl ActionId {
                 1,
                 Keys::NONE,
             ),
-            // The find bar's Mark row (M7).
+            // The find bar's Mark row.
             Self::Mark => command(
                 "mark",
                 "Mark…",
@@ -1952,7 +1952,7 @@ impl ActionId {
             ),
             // Ctrl+1–5 jump down and Ctrl+Alt+1–5 up: Ctrl+Shift+1–5 can't be matched on every
             // layout (Shift turns the digit into a symbol). Ctrl+0 is Reset Zoom, so the Find
-            // Mark Style jumps are Alt+M and Alt+Shift+M (ADR-009 amendment, M7).
+            // Mark Style jumps are Alt+M and Alt+Shift+M (ADR-009 amendment on marking keys).
             Self::JumpUp1 => jump(
                 "jump-up-1",
                 "1st Style",
@@ -2566,7 +2566,7 @@ mod tests {
         assert!(keys(ActionId::NextSearchResult).contains(&"F4"));
         assert!(keys(ActionId::PreviousSearchResult).contains(&"<Shift>F4"));
         assert!(keys(ActionId::Redo).contains(&"<Control>y"));
-        // M5's text tools.
+        // The text tools.
         assert_eq!(keys(ActionId::DuplicateLine), ["<Control>d"]);
         assert_eq!(keys(ActionId::CutLine), ["<Control>l"]);
         assert_eq!(keys(ActionId::CopyLine), ["<Control><Shift>x"]);
@@ -2591,7 +2591,7 @@ mod tests {
         assert_eq!(keys(ActionId::SelectToMatchingBrace), ["<Control><Alt>b"]);
         assert!(keys(ActionId::SelectAndFindNext).contains(&"<Control>F3"));
         assert!(keys(ActionId::SelectAndFindPrevious).contains(&"<Control><Shift>F3"));
-        // fcitx5 takes Ctrl+Shift+U (ADR-009 amendment of M5).
+        // fcitx5 takes Ctrl+Shift+U (ADR-009 amendment on text-tool keys).
         assert_eq!(keys(ActionId::Uppercase), ["<Alt><Shift>u"]);
         assert_eq!(keys(ActionId::ColumnEditor), ["<Alt>c"]);
         assert_eq!(keys(ActionId::ColumnBeginEndSelect), ["<Alt><Shift>b"]);

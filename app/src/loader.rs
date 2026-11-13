@@ -1,4 +1,4 @@
-//! The worker side of opening a file (M3): read and decode it, look for lines too long to
+//! The worker side of opening a file: read and decode it, look for lines too long to
 //! show, format or break them when asked, and stream the text to the GTK thread in pieces of
 //! about 4 MiB that the editor inserts one per 16 ms (S1: an idle is starved by GtkTextView's
 //! validation; one `set_text` blocks for a second at 100 MB). Nothing here touches GTK.

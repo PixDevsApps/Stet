@@ -1,4 +1,4 @@
-//! A comparison as one document shows it (M7): a background on added, removed, changed and
+//! A comparison as one document shows it: a background on added, removed, changed and
 //! moved lines (`paragraph-background`, the whole width of the line), a stronger one on the
 //! characters that differ inside changed lines, and padding wherever the other side has lines
 //! this one lacks, so that equal lines face each other in the two views: `pixels-below-lines`

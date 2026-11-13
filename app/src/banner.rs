@@ -14,7 +14,7 @@ use std::rc::Rc;
 pub enum BannerKind {
     Loading,
     Disk,
-    /// What restoring the session found (M2): a file changed since its backup, or unsaved
+    /// What restoring the session found: a file changed since its backup, or unsaved
     /// changes that could not be restored.
     Restore,
     ReadOnly,

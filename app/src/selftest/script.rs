@@ -106,7 +106,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("assert-menu-contains", 1, 1),
     ("assert-undo-levels", 1, 1),
     ("assert-closed", 1, 1),
-    // Files, encodings and large files (M3).
+    // Files, encodings and large files.
     ("symlink", 2, 2),
     ("write-generated", 3, 3),
     ("set-mtime", 2, 2),
@@ -135,7 +135,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("type-burst", 3, 3),
     ("pick-encoding", 2, 2),
     ("report-memory", 1, 1),
-    // Search (M4).
+    // Search.
     ("find-mode", 1, 1),
     ("find-option", 2, 2),
     ("replace-text", 1, 1),
@@ -179,7 +179,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("assert-replace-hint", 1, 1),
     ("assert-clipboard-contains", 1, 1),
     ("assert-search-highlight", 1, 1),
-    // Keyboard focus (Wave A).
+    // Keyboard focus.
     ("open-start", 1, usize::MAX),
     ("choose-file", 1, 1),
     ("assert-chooser-name", 1, 1),
@@ -187,7 +187,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("popup", 1, 1),
     ("popdown", 1, 1),
     ("assert-focus", 1, 1),
-    // Sessions, --wait and D-Bus activation (M2).
+    // Sessions, --wait and D-Bus activation.
     ("quit", 0, 2),
     ("session-commit", 0, 0),
     ("session-flush", 0, 0),
@@ -225,7 +225,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("assert-file-contains", 2, 2),
     ("set-window-size", 2, 2),
     ("assert-window-size", 2, 2),
-    // Column mode (M6).
+    // Column mode.
     ("column-select", 4, 4),
     ("column-key", 1, 1),
     ("column-type", 1, 1),
@@ -251,7 +251,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("assert-visible-line", 1, 1),
     ("assert-hit-test", 1, 1),
     ("assert-source-marks", 1, 1),
-    // Navigation, pinned tabs, first-line names and Replace in Files (M8).
+    // Navigation, pinned tabs, first-line names and Replace in Files.
     ("quick-open", 0, 1),
     ("quick-open-in", 1, 2),
     ("quick-open-type", 1, 1),

@@ -1,9 +1,9 @@
-//! The text toolbox (M5): the line, case, comment and blank operations, prefix/suffix
+//! The text toolbox: the line, case, comment and blank operations, prefix/suffix
 //! and numbers, the JSON and XML tools, brace jumps and Select and Find, through the pure
 //! operations in `stet_domain::ops`. An operation runs on a snapshot of the text, on a worker
 //! when the document is large, and its result is applied in one user action (ADR-003): one
 //! bulk edit above 2,000 edits, and a large result inserted in pieces so the window keeps
-//! painting (ADR-003 amendment of M5).
+//! painting (ADR-003 amendment on text tools).
 
 use super::Window;
 use crate::editor::{EditorPage, read_only_message};
@@ -359,7 +359,7 @@ impl Window {
             }
             match (result, bulk) {
                 (Ok(change), Some(edit)) if edit.insert.len() > PIECE_BYTES => {
-                    // The bookmarks need the old text's lines (M7); the text itself can go.
+                    // The bookmarks need the old text's lines; the text itself can go.
                     let index = page.has_bookmarks().then(|| LineIndex::new(&text));
                     drop(text);
                     window
@@ -398,7 +398,7 @@ impl Window {
         }
         let buffer = page.buffer();
         page.clear_current_match();
-        // Bookmarks and marks follow the edits, and come back with Undo and Redo (M7).
+        // Bookmarks and marks follow the edits, and come back with Undo and Redo.
         let mut applied = None;
         page.track_edit(text, &change.edits, None, || {
             let result = edits::apply_change(&buffer, &change, text);
@@ -669,7 +669,7 @@ impl Window {
                     #[upgrade_or]
                     None,
                     move |_| {
-                        // A selection, or a column-mode rectangle (M6), is copied as it is.
+                        // A selection, or a column-mode rectangle, is copied as it is.
                         if page.buffer().has_selection() || page.column_view().rect().is_some() {
                             return None;
                         }

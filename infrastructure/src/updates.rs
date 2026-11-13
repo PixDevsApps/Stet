@@ -1,4 +1,4 @@
-//! Check for Updates (1.5): one GET of GitHub's answer for Stet's latest release, made by
+//! Check for Updates: one GET of GitHub's answer for Stet's latest release, made by
 //! `curl` only when the user runs the command. It carries nothing about the user: the User-Agent
 //! `Stet`, no cookies, no Referer, no proxy, and no `~/.curlrc`. Blocking: run it on a worker.
 

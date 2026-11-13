@@ -1,4 +1,4 @@
-//! Names for untitled documents (M8): the tab shows the first line that has text, and Save As
+//! Names for untitled documents: the tab shows the first line that has text, and Save As
 //! proposes a file name made from it.
 
 /// How many characters of the first line a tab shows before an ellipsis.

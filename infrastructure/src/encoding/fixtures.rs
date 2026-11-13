@@ -1,4 +1,4 @@
-//! The M3 fixture corpus, built in code rather than committed as binaries.
+//! The encoding fixture corpus, built in code rather than committed as binaries.
 
 use encoding_rs::{
     BIG5, EUC_KR, Encoding, GB18030, GBK, ISO_2022_JP, ISO_8859_15, SHIFT_JIS, UTF_8, UTF_16BE,

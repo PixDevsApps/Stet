@@ -133,7 +133,7 @@ fn gitignore_can_be_respected_or_not() {
 }
 
 /// `ignore` lets whitelisted paths override the hidden-file and `.gitignore` rules; filters
-/// must never bring those files back (found in M4's self-test with the default `*.*`).
+/// must never bring those files back (found by the search self-test with the default `*.*`).
 #[test]
 fn filters_never_bring_back_hidden_or_ignored_files() {
     let dir = tempfile::tempdir().unwrap();

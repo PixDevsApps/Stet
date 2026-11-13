@@ -1,4 +1,4 @@
-//! Self-test commands for M7: bookmarks and the gutter, Mark and the style tokens, the split
+//! Self-test commands for bookmarks and the gutter, Mark and the style tokens, the split
 //! view and Compare (docs/TESTING.md). Views are numbered as the user sees them: 1 is the main
 //! view, 2 the second one.
 
@@ -41,7 +41,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
     ("assert-menu-at", 1, 1),
     ("click-new-tab", 1, 1),
     ("assert-new-tab-at", 1, 1),
-    // Check for Updates (1.5).
+    // Check for Updates.
     ("release-server", 1, 2),
     ("click-dialog-button", 1, 1),
     ("assert-menu-within", 0, 0),
@@ -68,7 +68,7 @@ pub const COMMANDS: &[(&str, usize, usize)] = &[
 ];
 
 impl Harness {
-    /// Runs an M7 command; `None` when `step` is not one.
+    /// Runs one of these commands; `None` when `step` is not one.
     pub(super) async fn views_step(&self, step: &Step) -> Option<StepResult> {
         let arg = |index: usize| step.args[index].as_str();
         Some(match step.command.as_str() {
@@ -285,7 +285,7 @@ impl Harness {
         })
     }
 
-    /// Checks an M7 assertion; `None` when `assertion` is not one.
+    /// Checks one of these assertions; `None` when `assertion` is not one.
     pub(super) fn views_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
         let arg = |index: usize| args[index].as_str();
         Some(match assertion {
@@ -675,7 +675,7 @@ fn mark_style(word: &str) -> Result<MarkStyle, String> {
 }
 
 impl Harness {
-    /// The menu is at the start of view `index`'s tab strip (1.3), left of its first tab, once
+    /// The menu is at the start of view `index`'s tab strip, left of its first tab, once
     /// the strip has been laid out.
     async fn check_menu_at(&self, index: usize) -> StepResult {
         self.wait_frames(2).await?;
@@ -712,7 +712,7 @@ impl Harness {
         }
     }
 
-    /// View `index`'s + follows its last tab (1.5), or, once the tabs scroll, the end of the
+    /// View `index`'s + follows its last tab, or, once the tabs scroll, the end of the
     /// tabs on screen, and lies within the strip.
     async fn check_new_tab_at(&self, index: usize) -> StepResult {
         self.wait_frames(2).await?;
@@ -748,17 +748,16 @@ impl Harness {
 }
 
 impl Harness {
-    /// The open menu lies within the window (1.3.1): it opens from the button's left edge
-    /// rather than centred on it, half outside the window; and since 1.3.2 above its bottom
-    /// edge.
+    /// The open menu lies within the window: it opens from the button's left edge rather than
+    /// centred on it, half outside the window, and above its bottom edge.
     async fn check_menu_within(&self) -> StepResult {
         self.wait_frames(2).await?;
         self.menu_within(&self.open_menu()?)
     }
 
-    /// The open menu opens its submenus beside it, as resting the pointer on their items does
-    /// (1.5), and each lies within the window, one taller than the room below its item
-    /// scrolling (1.3.2): every submenu of the first page, and the tallest of the others.
+    /// The open menu opens its submenus beside it, as resting the pointer on their items does,
+    /// and each lies within the window, one taller than the room below its item scrolling:
+    /// every submenu of the first page, and the tallest of the others.
     async fn check_menu_submenus(&self) -> StepResult {
         let popover = self.open_menu()?;
         let menu = popover
@@ -824,7 +823,7 @@ impl Harness {
         Ok(())
     }
 
-    /// Opens the open menu's submenu `name`, as resting the pointer on its item does (1.5).
+    /// Opens the open menu's submenu `name`, as resting the pointer on its item does.
     async fn popup_submenu(&self, name: &str) -> StepResult {
         let popover = self.open_menu()?;
         let submenu = crate::window::menus_in(popover.upcast_ref())

@@ -1,4 +1,4 @@
-//! Replace in Files without a toolkit (M8, ADR-005 amendment).
+//! Replace in Files without a toolkit (ADR-005 amendment).
 //!
 //! A file is searched as an open document would be: its decoded text normalized to LF
 //! (ADR-008), so `\r\n` in an Extended query, `\R` and `$` mean what they mean in the editor.

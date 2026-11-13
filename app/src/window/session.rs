@@ -1,4 +1,4 @@
-//! The session in the window (ADR-006, M2).
+//! The session in the window (ADR-006).
 //!
 //! - **Backups:** every `backup_interval` seconds of config.toml (7 by default) the tabs, the
 //!   window and the histories are committed to the store, with the text of every dirty or
@@ -14,7 +14,7 @@
 //!   documents in large-file mode with unsaved changes, which have no backups.
 //! - **`--wait`** command lines are answered when the tabs they opened close, with status 1
 //!   when one closed with unsaved changes. Their tabs stay out of the session.
-//! - **Split view** (M7): each tab records its view; a document's first tab is its record, and
+//! - **Split view**: each tab records its view; a document's first tab is its record, and
 //!   a clone in the other view a record of its own that names it (`clone_of`), with its own
 //!   caret and scroll position. The divider's position, the other view's tab and the bookmarks
 //!   come back too. Texts a comparison opened stay out.
@@ -85,7 +85,7 @@ pub struct WindowSession {
     quitting: Cell<bool>,
     stats: Cell<SnapshotStats>,
     restore: Cell<Option<RestoreStats>>,
-    /// M1's `recent.json`, deleted once a commit holds the list it was migrated from.
+    /// The old `recent.json`, deleted once a commit holds the list it was migrated from.
     migrated_recent: RefCell<Option<PathBuf>>,
 }
 
@@ -155,7 +155,7 @@ impl Window {
             let opened = worker::run(move || {
                 let store = open_store(&state_dir)?;
                 let restored = store.load()?;
-                // M1 kept the recent files in recent.json; the session holds them now.
+                // Older versions kept the recent files in recent.json; the session holds them now.
                 let recent = (restored.session.recent_files.is_empty() && recent_file.exists())
                     .then(|| (recent_store::load(&recent_file), recent_file));
                 Ok::<_, StoreError>((store, restored, recent))
@@ -247,7 +247,7 @@ impl Window {
 
         let initial = self.pages();
         let missing: BTreeSet<&str> = missing_backups.iter().map(String::as_str).collect();
-        // A document's record comes before its clones' (M7).
+        // A document's record comes before its clones'.
         let mut pages: Vec<Option<EditorPage>> = Vec::with_capacity(session.tabs.len());
         for record in &session.tabs {
             let page = match &record.clone_of {
@@ -351,7 +351,7 @@ impl Window {
         page
     }
 
-    /// A clone of `source`'s document for `record`, in its view (M7).
+    /// A clone of `source`'s document for `record`, in its view.
     fn add_clone_stub(&self, source: &EditorPage, record: &TabRecord) -> EditorPage {
         let clone = source.clone_view(
             self.inner.shared.appearance.scheme().as_ref(),
@@ -872,7 +872,7 @@ impl Window {
                 "backed up"
             );
         }
-        // M1's recent.json goes once a commit with the list it gave is on disk.
+        // The old recent.json goes once a commit with the list it gave is on disk.
         if let Some(file) = session.migrated_recent.take() {
             let window = self.clone();
             self.spawn(async move {
@@ -906,7 +906,7 @@ impl Window {
         let mut adopted = Vec::new();
         let mut active_tab = None;
         let mut other_tab = None;
-        // The documents recorded so far, by a tab of each and its record's id (M7).
+        // The documents recorded so far, by a tab of each and its record's id.
         let mut recorded: Vec<(EditorPage, String)> = Vec::new();
         for page in self.pages() {
             if !page.session().waits.is_empty() || page.state().temporary.is_some() {
@@ -925,8 +925,7 @@ impl Window {
             }
             let stub = page.session().stub.clone();
             let record = match stub {
-                // A stub keeps its record, with the tab's pinned state, view and name now (M8,
-                // M7, 1.2).
+                // A stub keeps its record, with the tab's pinned state, view and name now.
                 Some(record) => TabRecord {
                     pinned: self.is_pinned(&page),
                     view,
@@ -1098,7 +1097,7 @@ impl Window {
         }
     }
 
-    /// A clone in `view` of the document recorded as `of`: its own place only (M7).
+    /// A clone in `view` of the document recorded as `of`: its own place only.
     fn clone_record(&self, page: &EditorPage, of: String, view: u8) -> TabRecord {
         let (caret, selection) = if page.is_loading() {
             (0, None)

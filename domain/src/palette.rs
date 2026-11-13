@@ -1,6 +1,6 @@
 //! Command-palette matching. A query matches a text when its characters appear in it in
 //! order, ignoring case; whole-substring matches, word starts and runs of consecutive
-//! characters score higher. Deliberately small: quick open (M8) brings a real fuzzy matcher.
+//! characters score higher. Deliberately small: quick open uses the real fuzzy matcher (`fuzzy`).
 
 use crate::text::fold_char as fold;
 /// How well `query` matches `text`; `None` when it does not. An empty query matches

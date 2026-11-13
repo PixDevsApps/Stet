@@ -9,10 +9,10 @@
 //! Without a service file (a development build) a `--wait` command line starts
 //! `stet --gapplication-service` itself, detached in its own process group with the same
 //! application id, and waits until it owns the name. Any other command line then simply
-//! becomes the primary, as before M2; so does every command line when there is no session
-//! bus or activation fails. A Flatpak has no such fallback: a process it started would end
-//! with the sandbox of the command line that started it, so there `--wait` without the
-//! exported service waits for the whole editor.
+//! becomes the primary; so does every command line when there is no session bus or
+//! activation fails. A Flatpak has no such fallback: a process it started would end with the
+//! sandbox of the command line that started it, so there `--wait` without the exported
+//! service waits for the whole editor.
 //!
 //! Everything here runs before GTK starts, on the main thread, and blocks only that process.
 

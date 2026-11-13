@@ -1,4 +1,4 @@
-//! Self-test commands for M8: quick open, the Ctrl+Tab switcher (Ctrl held and released
+//! Self-test commands for quick open, the Ctrl+Tab switcher (Ctrl held and released
 //! through the window's key controller), back and forward (and the mouse's buttons), pinned
 //! tabs and the tab menu, first-line names, and Replace in Files.
 
@@ -38,7 +38,7 @@ fn ms(duration: Option<Duration>) -> String {
 }
 
 impl Harness {
-    /// Runs an M8 command; `None` when `step` is not one.
+    /// Runs one of these commands; `None` when `step` is not one.
     pub(super) async fn nav_step(&self, step: &Step) -> Option<StepResult> {
         if !STEPS.contains(&step.command.as_str()) {
             return None;
@@ -208,7 +208,7 @@ impl Harness {
         }
     }
 
-    /// Runs an M8 assertion; `None` when `assertion` is not one.
+    /// Runs one of these assertions; `None` when `assertion` is not one.
     pub(super) fn nav_check(&self, assertion: &str, args: &[String]) -> Option<StepResult> {
         let arg = |index: usize| args[index].as_str();
         let quick_open = &self.window.inner.nav.quick_open;

@@ -1,6 +1,6 @@
 //! A tab's banners (DESIGN.md "Window layout"): what the document's state says needs
 //! attention, most urgent on top, with the buttons that act on it. Loading progress is shown
-//! by the editor itself. Every tab of a document (a clone in the other view, M7) shows them.
+//! by the editor itself. Every tab of a document (a clone in the other view) shows them.
 
 use super::Window;
 use crate::banner::{BannerButton, BannerKind};
@@ -99,8 +99,8 @@ impl Window {
                 page.hide_banner(BannerKind::Disk);
             }
             DiskState::Changed => {
-                // A restored backup whose file changed while Stet was closed (M2) says so.
-                // Compare shows the unsaved text beside the file on disk (M7).
+                // A restored backup whose file changed while Stet was closed says so.
+                // Compare shows the unsaved text beside the file on disk.
                 let restored = page.session().conflict;
                 let reload_label = if restored {
                     "Load Disk Version"

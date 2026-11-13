@@ -1,4 +1,4 @@
-//! The text toolbox (M5): pure operations over an LF-normalized `&str` snapshot that return
+//! The text toolbox: pure operations over an LF-normalized `&str` snapshot that return
 //! [`TextEdit`]s in character offsets (ADR-003). The UI applies a [`Change`] as one user action,
 //! and replaces the affected range once when it has more than [`BULK_EDIT_THRESHOLD`] edits.
 

@@ -65,7 +65,7 @@ pub struct Session {
     /// Find in Files' filters, most recent first.
     #[serde(deserialize_with = "codec::lenient_seq")]
     pub filter_history: Vec<String>,
-    /// Index into `tabs` of the tab the other view shows, when the window is split (M7).
+    /// Index into `tabs` of the tab the other view shows, when the window is split.
     #[serde(deserialize_with = "codec::lenient")]
     pub other_tab: Option<usize>,
 }
@@ -159,7 +159,7 @@ pub struct TabRecord {
     /// The tab label, such as the file name or "new 3".
     #[serde(deserialize_with = "codec::lenient")]
     pub display_name: String,
-    /// The name the user gave an untitled tab with Rename… (1.2), in place of its first line.
+    /// The name the user gave an untitled tab with Rename…, in place of its first line.
     #[serde(
         deserialize_with = "codec::lenient",
         skip_serializing_if = "Option::is_none"
@@ -200,18 +200,18 @@ pub struct TabRecord {
     /// The topmost visible line, zero-based, to restore the scroll position.
     #[serde(deserialize_with = "codec::lenient")]
     pub first_visible_line: usize,
-    /// A pinned tab (M8).
+    /// A pinned tab.
     #[serde(deserialize_with = "codec::lenient")]
     pub pinned: bool,
-    /// The view the tab is in (M7): 0 is the main view, 1 the second view of a split window.
+    /// The view the tab is in: 0 is the main view, 1 the second view of a split window.
     #[serde(deserialize_with = "codec::lenient")]
     pub view: u8,
-    /// A clone (M7): the id of the tab whose document this tab shows too. Its record keeps its
+    /// A clone: the id of the tab whose document this tab shows too. Its record keeps its
     /// own place in its view (caret, selection, first visible line, pinned); the document's
     /// state is the other record's.
     #[serde(deserialize_with = "codec::lenient")]
     pub clone_of: Option<String>,
-    /// Bookmarked lines, zero-based (M7).
+    /// Bookmarked lines, zero-based.
     #[serde(deserialize_with = "codec::lenient_seq")]
     pub bookmarks: Vec<usize>,
     /// The file as it was when the buffer was last loaded from or saved to it. Restore compares
@@ -257,7 +257,7 @@ pub struct WindowState {
     pub maximized: bool,
     /// The editor zoom in points over the base font size, as `stet_domain::view::Zoom` has it.
     pub zoom: i32,
-    /// Where the divider between the two views was (M7), in logical pixels from the left; 0
+    /// Where the divider between the two views was, in logical pixels from the left; 0
     /// means in the middle.
     pub split_position: i32,
 }
