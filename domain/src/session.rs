@@ -126,6 +126,7 @@ impl Session {
 
     /// This session without unsaved work, for "Forget unsaved drafts": untitled tabs are
     /// dropped, and file tabs lose their backup and dirty flag so they reopen from disk.
+    #[must_use]
     pub fn without_drafts(&self) -> Self {
         let id_of = |index: Option<usize>| {
             index
@@ -446,6 +447,7 @@ mod codec {
     pub mod opt_path {
         use super::*;
 
+        #[expect(clippy::ref_option, reason = "serde's `serialize_with` signature")]
         pub fn serialize<S: Serializer>(
             path: &Option<PathBuf>,
             serializer: S,
@@ -482,6 +484,11 @@ mod codec {
     pub mod opt_eol {
         use super::*;
 
+        #[expect(
+            clippy::ref_option,
+            clippy::trivially_copy_pass_by_ref,
+            reason = "serde's `serialize_with` signature"
+        )]
         pub fn serialize<S: Serializer>(
             eol: &Option<Eol>,
             serializer: S,

@@ -6,6 +6,7 @@ use super::{Harness, StepResult, WAIT_TIMEOUT, equal};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
+use std::fmt::Write as _;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -121,7 +122,7 @@ impl Harness {
     /// Whether the window's focus widget is `target`, or inside it, and on screen.
     pub(super) fn check_focus(&self, target: &str) -> StepResult {
         let inner = &self.window.inner;
-        let focus = gtk::prelude::RootExt::focus(self.window.window());
+        let focus = RootExt::focus(self.window.window());
         let within = |widget: &gtk::Widget| {
             focus
                 .as_ref()
@@ -168,7 +169,7 @@ async fn open_chooser() -> Result<gtk::FileChooserDialog, String> {
         let open = gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<gtk::FileChooserDialog>().ok())
-            .find(|dialog| dialog.is_visible());
+            .find(WidgetExt::is_visible);
         if let Some(chooser) = open {
             return Ok(chooser);
         }
@@ -198,14 +199,10 @@ fn describe(widget: Option<&gtk::Widget>) -> String {
         }
         let label = widget
             .downcast_ref::<gtk::Button>()
-            .and_then(|button| button.label())
-            .or_else(|| {
-                widget
-                    .downcast_ref::<gtk::Label>()
-                    .map(|label| label.label())
-            });
+            .and_then(ButtonExt::label)
+            .or_else(|| widget.downcast_ref::<gtk::Label>().map(gtk4::Label::label));
         if let Some(label) = label.filter(|label| !label.is_empty()) {
-            part.push_str(&format!(" “{label}”"));
+            let _ = write!(part, " “{label}”");
         }
         parts.push(part);
         current = widget.parent();

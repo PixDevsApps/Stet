@@ -123,6 +123,9 @@ pub fn extension_from_globs<'a>(globs: impl IntoIterator<Item = &'a str>) -> Opt
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
+    use std::path::Path;
+
     use super::*;
     use proptest::prelude::*;
 
@@ -211,7 +214,7 @@ mod tests {
         let long = "é".repeat(300);
         let proposed = save_file_name(&long, None).unwrap();
         assert!(proposed.len() <= MAX_FILE_NAME_BYTES, "{}", proposed.len());
-        assert!(proposed.ends_with(".txt"));
+        assert_eq!(Path::new(&proposed).extension(), Some(OsStr::new("txt")));
     }
 
     #[test]
@@ -234,7 +237,7 @@ mod tests {
             if let Some(name) = name(&text) {
                 prop_assert!(!name.is_empty());
                 prop_assert!(name.chars().count() <= FIRST_LINE_CHARS + 1);
-                prop_assert!(!name.chars().any(|c| c.is_control()));
+                prop_assert!(!name.chars().any(char::is_control));
                 prop_assert_eq!(name.trim(), name.as_str());
                 prop_assert!(!name.contains("  "));
             } else {

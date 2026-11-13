@@ -20,6 +20,7 @@ pub const OWN_MATCH_TAG: &str = "stet-search-match";
 const TAG_MARGIN_LINES: i32 = 100;
 
 /// A query compiled once for every tab.
+#[derive(Debug)]
 pub struct Compiled {
     /// Changes whenever the query or its options change.
     pub id: u64,
@@ -39,6 +40,7 @@ impl Compiled {
 }
 
 /// Our matcher's matches for one query in one revision of a tab's text.
+#[derive(Debug)]
 pub struct OwnMatches {
     pub query: u64,
     pub revision: u64,
@@ -47,6 +49,7 @@ pub struct OwnMatches {
     pub truncated: bool,
 }
 
+#[derive(Debug)]
 pub struct PageSearch {
     settings: sourceview5::SearchSettings,
     context: RefCell<Option<sourceview5::SearchContext>>,
@@ -247,7 +250,7 @@ impl PageSearch {
             .map_or(0, |iter| iter.offset());
         let end = buffer
             .iter_at_line(last_line)
-            .map_or(buffer.char_count(), |iter| iter.offset());
+            .map_or_else(|| buffer.char_count(), |iter| iter.offset());
         let matches = &own.matches;
         let from = matches.partition_point(|found| (found.end as i32) < start);
         let Some(tag) = buffer.tag_table().lookup(OWN_MATCH_TAG) else {

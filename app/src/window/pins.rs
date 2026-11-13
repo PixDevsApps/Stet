@@ -72,7 +72,7 @@ impl Window {
             tab_page.set_icon(None::<&gio::Icon>);
             return;
         }
-        let icon = if self.has_unsaved_changes(page) {
+        let icon = if Self::has_unsaved_changes(page) {
             gio::ThemedIcon::new(DIRTY_ICON).upcast::<gio::Icon>()
         } else {
             let name = page

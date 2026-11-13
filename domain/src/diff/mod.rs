@@ -79,6 +79,7 @@ pub enum Side {
 }
 
 impl Side {
+    #[must_use]
     pub const fn other(self) -> Self {
         match self {
             Self::Left => Self::Right,
@@ -306,8 +307,8 @@ pub fn compare(left: &str, right: &str, options: &CompareOptions) -> Comparison 
     let right_lines: Vec<&str> = right.split('\n').collect();
     let mut interner = Interner::new(left_lines.len() + right_lines.len());
     let mut samples = Vec::new();
-    let left = Sequence::new(left_lines, options, &mut interner, &mut samples);
-    let right = Sequence::new(right_lines, options, &mut interner, &mut samples);
+    let left = Sequence::new(left_lines, *options, &mut interner, &mut samples);
+    let right = Sequence::new(right_lines, *options, &mut interner, &mut samples);
 
     let mut diff = Diff::default();
     diff.compute_with(
@@ -381,7 +382,7 @@ struct Sequence<'a> {
 impl<'a> Sequence<'a> {
     fn new(
         lines: Vec<&'a str>,
-        options: &CompareOptions,
+        options: CompareOptions,
         interner: &mut Interner<Cow<'a, str>>,
         samples: &mut Vec<&'a str>,
     ) -> Self {

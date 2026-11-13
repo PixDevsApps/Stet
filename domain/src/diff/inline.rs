@@ -75,13 +75,13 @@ impl<'a> InlineDiffer<'a> {
         }
         self.interner.clear();
         for (side, line) in [left, right].into_iter().enumerate() {
-            compared_pieces(line, &options, &mut self.pieces[side]);
+            compared_pieces(line, options, &mut self.pieces[side]);
             let interner = &mut self.interner;
             self.tokens[side].clear();
             self.tokens[side].extend(
                 self.pieces[side]
                     .iter()
-                    .map(|piece| interner.intern(piece_key(piece, &options))),
+                    .map(|piece| interner.intern(piece_key(piece, options))),
             );
         }
         let [left_tokens, right_tokens] = &self.tokens;
@@ -119,7 +119,7 @@ impl<'a> InlineDiffer<'a> {
     }
 }
 
-fn compared_pieces<'a>(line: &'a str, options: &CompareOptions, pieces: &mut Vec<Piece<'a>>) {
+fn compared_pieces<'a>(line: &'a str, options: CompareOptions, pieces: &mut Vec<Piece<'a>>) {
     let by_char = options.ignore_whitespace == IgnoreWhitespace::All;
     split_pieces(line, by_char, pieces);
     match options.ignore_whitespace {
@@ -163,7 +163,7 @@ fn split_pieces<'a>(line: &'a str, by_char: bool, pieces: &mut Vec<Piece<'a>>) {
     }
 }
 
-fn piece_key<'a>(piece: &Piece<'a>, options: &CompareOptions) -> Cow<'a, str> {
+fn piece_key<'a>(piece: &Piece<'a>, options: CompareOptions) -> Cow<'a, str> {
     if piece.kind == Kind::Space && options.ignore_whitespace == IgnoreWhitespace::Changes {
         return Cow::Borrowed(" ");
     }

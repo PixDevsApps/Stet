@@ -96,7 +96,7 @@ impl Marks {
         loop {
             let next = match (old.peek(), new.peek()) {
                 (Some(a), Some(b)) if (a.start, a.end) <= (b.start, b.end) => old.next(),
-                (Some(_), Some(_)) | (None, Some(_)) => new.next(),
+                (Some(_) | None, Some(_)) => new.next(),
                 (Some(_), None) => old.next(),
                 (None, None) => break,
             };
@@ -127,7 +127,7 @@ impl Marks {
     pub fn next(&self, style: MarkStyle, offset: usize) -> Option<Range<usize>> {
         let ranges = self.ranges(style);
         let index = ranges.partition_point(|range| range.start <= offset);
-        ranges.get(index).or(ranges.first()).cloned()
+        ranges.get(index).or_else(|| ranges.first()).cloned()
     }
 
     /// Jump Up: the last mark of `style` that starts before `offset`, wrapping to the last.
@@ -137,7 +137,7 @@ impl Marks {
         index
             .checked_sub(1)
             .map(|index| ranges[index].clone())
-            .or(ranges.last().cloned())
+            .or_else(|| ranges.last().cloned())
     }
 
     /// Moves marks through `edits` (sorted and non-overlapping). Text inserted inside a mark

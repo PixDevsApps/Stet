@@ -151,6 +151,7 @@ pub fn toggle_bookmark(buffer: &sourceview5::Buffer, line: usize) -> bool {
 
 /// What one of Stet's own operations found before it changed the buffer
 /// ([`DocMarks::begin`]).
+#[derive(Debug)]
 pub struct Begun {
     bookmarks: Bookmarks,
     marks: Marks,
@@ -159,7 +160,7 @@ pub struct Begun {
 
 /// The bookmarks and marks of one document, and the steps that keep bookmarks across Undo
 /// and Redo.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct DocMarks {
     history: RefCell<BookmarkHistory>,
     /// GTK is replaying an undo (`true`) or a redo, and what it changed so far.
@@ -456,7 +457,7 @@ fn windows(buffer: &sourceview5::Buffer, views: &[sourceview5::View]) -> Vec<Ran
                 .map_or(0, |iter| iter.offset());
             let end = buffer
                 .iter_at_line(bottom.saturating_add(TAG_MARGIN_LINES))
-                .map_or(buffer.char_count(), |iter| iter.offset());
+                .map_or_else(|| buffer.char_count(), |iter| iter.offset());
             start..end
         })
         .collect();

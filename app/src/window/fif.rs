@@ -12,6 +12,7 @@ use crate::worker;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
@@ -137,7 +138,7 @@ impl Window {
         if self
             .pages()
             .iter()
-            .any(|page| self.is_stub(page) && self.has_unsaved_changes(page))
+            .any(|page| Self::is_stub(page) && Self::has_unsaved_changes(page))
         {
             let window = self.clone();
             self.spawn(async move {
@@ -310,14 +311,17 @@ impl Window {
         if summary.cancelled {
             status.push_str(" — stopped");
         } else if summary.truncated {
-            status.push_str(&format!(" — stopped at {} hits", summary.hits));
+            let _ = write!(status, " — stopped at {} hits", summary.hits);
         }
-        if !summary.errors.is_empty() {
+        if summary.errors.is_empty() {
+            results.status.set_tooltip_text(None);
+        } else {
             let count = summary.errors.len();
-            status.push_str(&format!(
+            let _ = write!(
+                status,
                 " — {count} {} could not be read",
                 if count == 1 { "file" } else { "files" }
-            ));
+            );
             let details: Vec<String> = summary
                 .errors
                 .iter()
@@ -325,8 +329,6 @@ impl Window {
                 .map(|error| format!("{}: {}", error.path.display(), error.message))
                 .collect();
             results.status.set_tooltip_text(Some(&details.join("\n")));
-        } else {
-            results.status.set_tooltip_text(None);
         }
         results.status.set_label(&status);
         results.stop.set_visible(false);

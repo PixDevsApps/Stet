@@ -42,10 +42,12 @@ impl Zoom {
         self.0
     }
 
+    #[must_use]
     pub const fn zoom_in(self) -> Self {
         Self::new(self.0 + 1)
     }
 
+    #[must_use]
     pub const fn zoom_out(self) -> Self {
         Self::new(self.0 - 1)
     }

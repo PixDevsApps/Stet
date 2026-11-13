@@ -139,7 +139,7 @@ impl Shared {
     }
 
     /// The list the session restored, with files opened meanwhile in front.
-    pub fn set_recent(&self, restored: RecentFiles) {
+    pub fn set_recent(&self, restored: &RecentFiles) {
         let merged = RecentFiles::new(
             self.recent
                 .borrow()
@@ -405,7 +405,7 @@ impl Window {
             .sync_create()
             .build();
         let top: gtk::Widget = if tiling {
-            top_paned.clone().upcast()
+            top_paned.upcast()
         } else {
             gtk::WindowHandle::builder()
                 .child(&top_paned)
@@ -535,6 +535,10 @@ impl Window {
         &self.inner.shared
     }
 
+    #[expect(
+        clippy::unused_self,
+        reason = "the window's one way to run its futures, called as `window.spawn` throughout"
+    )]
     pub fn spawn(&self, future: impl Future<Output = ()> + 'static) {
         glib::spawn_future_local(future);
     }
@@ -617,7 +621,10 @@ impl Window {
             #[weak(rename_to = inner)]
             self.inner,
             move |stage, tab_page, _| {
-                let index = inner.dropped_on.take().unwrap_or(inner.active.get());
+                let index = inner
+                    .dropped_on
+                    .take()
+                    .unwrap_or_else(|| inner.active.get());
                 let (stage, tab_page) = (stage.clone(), tab_page.clone());
                 // Once libadwaita has finished attaching it here.
                 glib::spawn_future_local(async move {
@@ -1183,7 +1190,7 @@ impl Window {
 
     async fn save_all(&self) {
         for page in self.documents() {
-            if self.has_unsaved_changes(&page) {
+            if Self::has_unsaved_changes(&page) {
                 self.select(&page);
                 self.save(&page).await;
             }
@@ -1200,7 +1207,7 @@ impl Window {
             self.finish_close(&tabs, tab_page, true);
             return;
         }
-        let unsaved = self.has_unsaved_changes(&page);
+        let unsaved = Self::has_unsaved_changes(&page);
         if !unsaved || self.inner.closing_without_prompt.get() {
             self.remember_closed(&page);
             self.tab_closed(&page, unsaved || page.is_loading());
@@ -1289,7 +1296,7 @@ impl Window {
                     text,
                     position,
                     language: page.language().map(|language| language.id().to_string()),
-                    name: page.state().custom_name.clone(),
+                    name: page.state().custom_name,
                 }
             }
         };
@@ -1306,7 +1313,7 @@ impl Window {
         let dirty: Vec<EditorPage> = self
             .closing_documents(&closing)
             .into_iter()
-            .filter(|page| self.has_unsaved_changes(page))
+            .filter(Self::has_unsaved_changes)
             .collect();
         if !dirty.is_empty() {
             let names: Vec<String> = dirty.iter().map(EditorPage::name).collect();
@@ -1382,7 +1389,7 @@ impl Window {
         let dirty: Vec<EditorPage> = self
             .documents()
             .into_iter()
-            .filter(|page| self.has_unsaved_changes(page))
+            .filter(Self::has_unsaved_changes)
             .collect();
         if dirty.is_empty() {
             self.answer_waits();
@@ -1414,6 +1421,10 @@ impl Window {
     // ----- actions ---------------------------------------------------------------------------
 
     /// Runs a window action. `param` is the string parameter of `WithString` actions.
+    #[expect(
+        clippy::match_same_arms,
+        reason = "the arms follow the menus; actions with the same runner stay in their menu's group"
+    )]
     pub fn run_action(&self, id: ActionId, param: Option<String>) {
         let page = self.current_page();
         // Column mode (M6) closes its typing burst first, and ends for actions that don't know
@@ -1560,7 +1571,7 @@ impl Window {
             | ActionId::ConvertToUtf16BeBom
             | ActionId::ConvertToUtf16LeBom
             | ActionId::ConvertEncoding
-            | ActionId::ChooseEncoding => self.run_encoding_action(id, param),
+            | ActionId::ChooseEncoding => self.run_encoding_action(id, param.as_deref()),
             ActionId::About => self.show_about(),
             ActionId::CheckForUpdates => self.check_for_updates(),
             ActionId::CloseOthers
@@ -1929,7 +1940,7 @@ impl Window {
         };
         let mut items: Vec<palette::Item> = ActionId::ALL
             .into_iter()
-            .filter(|id| id.spec().palette && applies(*id) && crate::actions::available(*id))
+            .filter(|id| id.spec().palette && applies(*id) && actions::available(*id))
             .map(|id| {
                 let on = id.kind() == ActionKind::Toggle
                     && self

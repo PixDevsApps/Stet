@@ -166,7 +166,7 @@ impl QuickOpen {
         let (replies, reply_receiver) = async_channel::unbounded::<RankReply>();
         let spawned = std::thread::Builder::new()
             .name("stet-quick-open-rank".into())
-            .spawn(move || rank_loop(receiver, replies));
+            .spawn(move || rank_loop(&receiver, &replies));
         if let Err(error) = spawned {
             tracing::error!(%error, "could not start the quick open ranking thread");
         }
@@ -706,7 +706,7 @@ fn highlighted(text: &str, positions: &[usize]) -> String {
 }
 
 /// The ranking thread: always ranks the newest request waiting, so typing never queues work.
-fn rank_loop(requests: mpsc::Receiver<RankRequest>, replies: async_channel::Sender<RankReply>) {
+fn rank_loop(requests: &mpsc::Receiver<RankRequest>, replies: &async_channel::Sender<RankReply>) {
     while let Ok(mut request) = requests.recv() {
         while let Ok(newer) = requests.try_recv() {
             request = newer;
@@ -791,7 +791,7 @@ impl Window {
             current
                 .iter()
                 .chain(order.iter())
-                .find_map(|page| page.path())
+                .find_map(EditorPage::path)
                 .or_else(|| self.inner.shared.recent().paths().first().cloned())
                 .and_then(|path| path.parent().map(Path::to_path_buf))
         });

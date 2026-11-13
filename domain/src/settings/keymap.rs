@@ -3,6 +3,7 @@
 //! may belong to one action only, GtkTextView's own editing keys included.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::ops::Range;
 
 use toml::de::DeValue;
@@ -103,7 +104,7 @@ impl Keymap {
                 continue;
             };
             let mut keys: Vec<WrittenKey> = Vec::new();
-            for item in array.iter() {
+            for item in array {
                 let span = item.span();
                 let error = |message: String| FileError::at(text, span.start, message);
                 let DeValue::String(written) = item.get_ref() else {
@@ -271,7 +272,7 @@ pub fn default_keys_file() -> String {
         }
     }
     for (path, ids) in groups {
-        out.push_str(&format!("\n# {path}\n"));
+        let _ = writeln!(out, "\n# {path}");
         for id in ids {
             let keys: Vec<String> = id
                 .keys()
@@ -280,7 +281,7 @@ pub fn default_keys_file() -> String {
                 .map(|key| format!("\"{key}\""))
                 .collect();
             let setting = format!("{} = [{}]", id.name(), keys.join(", "));
-            out.push_str(&format!("# {setting:<50} # {}\n", id.label()));
+            let _ = writeln!(out, "# {setting:<50} # {}", id.label());
         }
     }
     out
@@ -331,10 +332,11 @@ pub fn markdown_table() -> String {
         } else {
             "—".to_owned()
         };
-        out.push_str(&format!(
-            "| {place} | {} | {keys} | {scope} | {name} |\n",
+        let _ = writeln!(
+            out,
+            "| {place} | {} | {keys} | {scope} | {name} |",
             id.label()
-        ));
+        );
     }
     out
 }
@@ -482,7 +484,7 @@ mod tests {
             .lines()
             .filter_map(|line| line.strip_prefix("# "))
             .filter(|line| !line.starts_with(' ') && line.contains(" = ["))
-            .map(|line| format!("{line}\n"))
+            .flat_map(|line| [line, "\n"])
             .collect();
         let keymap = parse(&uncommented).unwrap();
         let spelled = |keys: Vec<String>| -> Vec<String> {

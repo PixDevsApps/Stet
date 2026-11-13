@@ -123,7 +123,7 @@ impl BackupWriter {
 
     /// Serves requests until `Shutdown` or until every sender is gone, then writes what is
     /// still queued. Commits already queued behind one are folded into a single write.
-    pub(super) fn run(mut self, requests: mpsc::Receiver<Request>) {
+    pub(super) fn run(mut self, requests: &mpsc::Receiver<Request>) {
         let mut next = None;
         while let Some(request) = next.take().or_else(|| requests.recv().ok()) {
             match request {
@@ -375,6 +375,14 @@ impl BackupWriter {
         Ok(())
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::unused_self,
+            clippy::unnecessary_wraps,
+            reason = "tests hook a failure into each write phase"
+        )
+    )]
     fn checkpoint(&self, phase: Phase) -> Result<(), StoreError> {
         #[cfg(test)]
         if let Some(hook) = &self.hook {

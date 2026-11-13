@@ -10,11 +10,11 @@ use crate::editor::{EditorPage, read_only_message};
 use crate::edits;
 use crate::page_search::Compiled;
 use crate::worker;
-use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib};
 use libadwaita as adw;
 use libadwaita::prelude::*;
+use std::fmt::Write as _;
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
@@ -137,7 +137,7 @@ impl Window {
 
     /// Remembers a selection the bar opened with, so that In selection still has it after the
     /// incremental search moves the caret.
-    pub(super) fn remember_search_scope(&self, page: &EditorPage) {
+    pub(super) fn remember_search_scope(page: &EditorPage) {
         let buffer = page.buffer();
         match buffer.selection_bounds() {
             Some((start, end)) => {
@@ -151,9 +151,8 @@ impl Window {
     /// Where Count and Replace All work (the scope table, [`SearchOptions::scope`]), and
     /// how to describe it. In selection uses the selection, or the one the bar opened with.
     pub(super) fn command_scope(
-        &self,
         page: &EditorPage,
-        options: &SearchOptions,
+        options: SearchOptions,
     ) -> (Range<usize>, ScopeKind) {
         let buffer = page.buffer();
         let caret = buffer.iter_at_mark(&buffer.get_insert()).offset() as usize;
@@ -193,7 +192,7 @@ impl Window {
             self.show_find();
         }
         let options = find.options();
-        let (range, scope) = self.command_scope(&page, &options);
+        let (range, scope) = Self::command_scope(&page, options);
         let text = page.text();
         let matcher = Arc::clone(&compiled.matcher);
         find.set_message("Counting…", Tone::Info);
@@ -305,7 +304,7 @@ impl Window {
         }
         let started = Instant::now();
         let options = find.options();
-        let (range, scope) = self.command_scope(&page, &options);
+        let (range, scope) = Self::command_scope(&page, options);
         let text = page.text();
         let snapshot = started.elapsed();
         let revision = page.revision();
@@ -447,12 +446,13 @@ impl Window {
         }
         let mut message = replace_in_documents_message(total, documents);
         if changed_meanwhile > 0 {
-            message.push_str(&format!(
+            let _ = write!(
+                message,
                 "; {changed_meanwhile} changed while replacing and were left alone"
-            ));
+            );
         }
         if !failed.is_empty() {
-            message.push_str(&format!("; not replaced in {}", failed.join(", ")));
+            let _ = write!(message, "; not replaced in {}", failed.join(", "));
         }
         let tone = if failed.is_empty() {
             Tone::Info
@@ -670,7 +670,7 @@ impl Window {
 
     /// Whether the focus is inside the results panel.
     pub fn results_focused(&self) -> bool {
-        gtk::prelude::RootExt::focus(&self.inner.window)
+        RootExt::focus(&self.inner.window)
             .is_some_and(|focus| focus.is_ancestor(&self.inner.results.root))
     }
 
@@ -727,8 +727,8 @@ impl Window {
             return;
         }
         let path = match &jump.target {
-            FileTarget::Path(path) => path.clone(),
-            FileTarget::Page {
+            FileTarget::Path(path)
+            | FileTarget::Page {
                 path: Some(path), ..
             } => path.clone(),
             FileTarget::Page { path: None, .. } => {

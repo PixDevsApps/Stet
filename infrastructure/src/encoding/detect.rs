@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn little_endian_integers_are_binary_not_utf16() {
-        let bytes: Vec<u8> = (0u16..600).flat_map(|value| value.to_le_bytes()).collect();
+        let bytes: Vec<u8> = (0u16..600).flat_map(u16::to_le_bytes).collect();
         assert!(detect(&bytes).binary);
     }
 

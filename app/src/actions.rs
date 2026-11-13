@@ -42,7 +42,7 @@ pub fn install_window_actions(window: &Window) {
             #[weak(rename_to = inner)]
             window.inner,
             move |_, parameter| {
-                let parameter = parameter.and_then(|value| value.get::<String>());
+                let parameter = parameter.and_then(glib::Variant::get::<String>);
                 Window { inner }.run_action(id, parameter);
             }
         ));
@@ -323,12 +323,13 @@ mod tests {
 
     /// GTK's own accelerator parser, called through the C API: it needs no display, unlike
     /// the Rust wrapper, which asserts that GTK is initialised.
+    #[expect(unsafe_code, reason = "GTK's parser without a display")]
     fn gtk_parses(accel: &str) -> Option<(u32, u32)> {
         let text = std::ffi::CString::new(accel).ok()?;
         let (mut key, mut mods) = (0, 0);
         // SAFETY: a NUL-terminated string and two out-parameters; no display is used.
         let parsed =
-            unsafe { gtk4::ffi::gtk_accelerator_parse(text.as_ptr(), &mut key, &mut mods) };
+            unsafe { gtk4::ffi::gtk_accelerator_parse(text.as_ptr(), &raw mut key, &raw mut mods) };
         (parsed != 0 && key != 0).then_some((key, mods))
     }
 

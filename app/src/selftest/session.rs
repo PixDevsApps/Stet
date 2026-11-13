@@ -7,7 +7,7 @@
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
 use crate::config::APP_ID_ENV;
-use crate::window::{Location, SessionPhase};
+use crate::window::{Location, SessionPhase, Window};
 use crate::worker;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
@@ -205,7 +205,7 @@ impl Harness {
                 let page = pages
                     .get(index.saturating_sub(1))
                     .ok_or_else(|| format!("there is no tab {index}"))?;
-                equal("stub", self.window.is_stub(page), boolean(arg(1))?)
+                equal("stub", Window::is_stub(page), boolean(arg(1))?)
             }),
             "assert-backed-up" => boolean(arg(0)).and_then(|wanted| {
                 equal(
@@ -659,7 +659,7 @@ impl Harness {
         worker::run(move || -> StepResult {
             let connection = connect(&address)?;
             let parameters: Vec<glib::Variant> =
-                parameter.iter().map(|value| value.to_variant()).collect();
+                parameter.iter().map(ToVariant::to_variant).collect();
             let platform: HashMap<String, glib::Variant> = HashMap::new();
             connection
                 .call_sync(
@@ -735,8 +735,8 @@ impl Harness {
     /// test bus.
     pub(super) async fn stop_processes(&self) {
         let mut processes = std::mem::take(&mut *self.processes.borrow_mut());
-        for (name, child) in processes.iter_mut() {
-            if let Ok(None) = child.try_wait() {
+        for (name, child) in &mut processes {
+            if matches!(child.try_wait(), Ok(None)) {
                 println!("  # stopping {name}, which still runs");
                 let _ = child.kill();
                 let _ = child.wait();
@@ -835,7 +835,7 @@ impl Harness {
         if self
             .window
             .current_page()
-            .is_some_and(|page| self.window.is_stub(&page))
+            .is_some_and(|page| Window::is_stub(&page))
         {
             return Err("the active tab was still a stub".to_owned());
         }

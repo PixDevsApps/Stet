@@ -254,7 +254,7 @@ impl TempRoot {
                 keep: true,
             });
         }
-        let nanos = std::time::SystemTime::now()
+        let nanos = SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.subsec_nanos());
         let path =
@@ -629,7 +629,7 @@ impl Harness {
                     .page()
                     .ok()
                     .and_then(|page| tools::context_popover(page.view().upcast_ref()))
-                    .map(|menu| menu.upcast::<gtk::Popover>());
+                    .map(Cast::upcast::<gtk::Popover>);
                 let mut popovers = vec![
                     &self.window.palette().popover,
                     &self.window.inner.languages.popover,
@@ -645,7 +645,7 @@ impl Harness {
                     .map(|menu| crate::window::menus_in(menu.upcast_ref()))
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|menu| menu.upcast())
+                    .map(Cast::upcast)
                     .collect();
                 popovers.extend(menus.iter());
                 screenshot::capture(self.window.window(), &popovers, Path::new(arg(0)))
@@ -719,7 +719,7 @@ impl Harness {
 
     fn activate(&self, name: &str, parameter: Option<&str>) -> StepResult {
         let id = ActionId::from_name(name).ok_or_else(|| format!("no action {name}"))?;
-        let parameter = parameter.map(|value| value.to_variant());
+        let parameter = parameter.map(ToVariant::to_variant);
         match id.scope() {
             stet_domain::actions::ActionScope::App => {
                 self.app.activate_action(id.name(), parameter.as_ref());
@@ -755,7 +755,7 @@ impl Harness {
         };
         let (keyval, modifiers) =
             gtk::accelerator_parse(key).ok_or_else(|| format!("bad key {key}"))?;
-        let values: [&dyn glib::value::ToValue; 3] = [&keyval.into_glib(), &0u32, &modifiers];
+        let values: [&dyn ToValue; 3] = [&keyval.into_glib(), &0u32, &modifiers];
         controller.emit_by_name::<bool>("key-pressed", &values);
         Ok(())
     }
@@ -1366,14 +1366,13 @@ echo "$name" > theme.name
         let page = self.page()?;
         let view = page.view();
         let buffer = page.buffer();
-        let advance = tabstops::space_advance(view) as f64 / gtk::pango::SCALE as f64;
+        let advance = f64::from(tabstops::space_advance(view)) / f64::from(gtk::pango::SCALE);
         let tab_width = view.tab_width() as usize;
         let expected_stop = tabstops::stop_for(view);
         let stop = tabstops::current_stop(view);
         if stop != Some(expected_stop) {
             return Err(format!(
-                "tab stop {stop:?} Pango units, expected {expected_stop} ({tab_width} × {:.3} px)",
-                advance
+                "tab stop {stop:?} Pango units, expected {expected_stop} ({tab_width} × {advance:.3} px)"
             ));
         }
         let mut worst = 0.0f64;
@@ -1382,7 +1381,7 @@ echo "$name" > theme.name
             let Some(mut iter) = buffer.iter_at_line(line) else {
                 continue;
             };
-            let origin = view.iter_location(&iter).x() as f64;
+            let origin = f64::from(view.iter_location(&iter).x());
             let mut column = 0usize;
             while !iter.ends_line() {
                 let character = iter.char();
@@ -1394,7 +1393,7 @@ echo "$name" > theme.name
                 } else {
                     column + 1
                 };
-                let x = view.iter_location(&iter).x() as f64;
+                let x = f64::from(view.iter_location(&iter).x());
                 let expected = origin + column as f64 * advance;
                 worst = worst.max((x - expected).abs());
                 checked += 1;
@@ -1594,10 +1593,7 @@ fn step_timeout() -> Duration {
 
 /// Runs `future` until it finishes or `limit` passes; `None` when it timed out (the future is
 /// dropped).
-async fn with_timeout<T>(
-    future: impl std::future::Future<Output = T>,
-    limit: Duration,
-) -> Option<T> {
+async fn with_timeout<T>(future: impl Future<Output = T>, limit: Duration) -> Option<T> {
     let mut future = std::pin::pin!(future);
     let mut timeout = std::pin::pin!(glib::timeout_future(limit));
     std::future::poll_fn(|context| {
@@ -1613,8 +1609,8 @@ async fn with_timeout<T>(
 }
 
 async fn futures_select(
-    frame: impl std::future::Future<Output = Result<(), async_channel::RecvError>>,
-    timeout: impl std::future::Future<Output = ()>,
+    frame: impl Future<Output = Result<(), async_channel::RecvError>>,
+    timeout: impl Future<Output = ()>,
     result: &mut StepResult,
 ) {
     let mut frame = std::pin::pin!(frame);
@@ -1707,6 +1703,10 @@ fn action_id(name: &str) -> Result<ActionId, String> {
     ActionId::from_name(name).ok_or_else(|| format!("no action {name}"))
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the steps build the values in place; borrowing would add `&` to over a hundred calls"
+)]
 fn equal<T: PartialEq + std::fmt::Debug>(what: &str, actual: T, wanted: T) -> StepResult {
     if actual == wanted {
         Ok(())

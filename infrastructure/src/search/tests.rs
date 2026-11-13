@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
@@ -7,13 +8,13 @@ use stet_domain::text::{TextEdit, apply};
 
 use super::*;
 
-fn matcher(query: Query) -> Matcher {
-    Matcher::new(&query).unwrap()
+fn matcher(query: &Query) -> Matcher {
+    Matcher::new(query).unwrap()
 }
 
 fn regex(pattern: &str) -> Matcher {
     matcher(
-        Query::regex(pattern)
+        &Query::regex(pattern)
             .with_options(SearchOptions::new(SearchMode::Regex).with_match_case(true)),
     )
 }
@@ -271,7 +272,7 @@ fn prefix_suffix_and_last_group() {
 fn case_insensitive_matching_is_unicode_aware() {
     let query = Query::regex("straße|ÉTÉ");
     assert_eq!(
-        spans(&matcher(query), "STRASSE Straße été"),
+        spans(&matcher(&query), "STRASSE Straße été"),
         [(8, 14), (15, 18)]
     );
 }
@@ -300,7 +301,7 @@ fn a_single_bulk_edit_covers_the_first_to_the_last_change() {
     let edit = result.as_single_edit(text).unwrap();
     assert_eq!(edit, TextEdit::new(1..7, "#b##c#"));
     assert_eq!(result.apply(text), "a#b##c#d");
-    let mut changed = result.clone();
+    let mut changed = result;
     changed.edits.pop();
     assert_eq!(changed.apply(text), "a#b##c3d");
     assert_eq!(ReplaceAll::default().as_single_edit(text), None);
@@ -410,7 +411,7 @@ proptest! {
         needle in "[ab.*é\n]{1,4}",
     ) {
         let options = SearchOptions::new(SearchMode::Normal).with_match_case(true);
-        let matcher = matcher(Query::new(needle.clone(), options));
+        let matcher = matcher(&Query::new(needle.clone(), options));
         prop_assert_eq!(spans(&matcher, &text), naive_find(&text, &needle, false));
     }
 
@@ -419,7 +420,7 @@ proptest! {
         text in "[aAbB. ]{0,40}",
         needle in "[aAbB]{1,3}",
     ) {
-        let matcher = matcher(Query::normal(needle.clone()));
+        let matcher = matcher(&Query::normal(needle.clone()));
         prop_assert_eq!(spans(&matcher, &text), naive_find(&text, &needle, true));
     }
 
@@ -433,7 +434,7 @@ proptest! {
         let query = Query::new(needle.clone(), options);
         let result = replace_all(&text, &query, &Template::literal(&replacement), None, &AtomicBool::new(false)).unwrap();
         let expected = text.replace(&needle, &replacement);
-        prop_assert_eq!(apply(&text, result.edits.clone()).unwrap(), expected.clone());
+        prop_assert_eq!(apply(&text, result.edits.clone()).unwrap(), expected.as_str());
         prop_assert_eq!(result.apply(&text), expected);
     }
 
@@ -511,8 +512,9 @@ fn generate_log(lines: usize) -> String {
     for _ in 0..lines {
         millis += next(40);
         let level = LEVELS[next(5) as usize];
-        text.push_str(&format!(
-            "2026-09-30T{:02}:{:02}:{:02}.{:03}Z {level} [worker-{:02}] GET /api/v1/{}/{} status=200 duration_ms={}.{} ip=10.{}.{}.{} user={} msg=\"{} {}\"\n",
+        let _ = writeln!(
+            text,
+            "2026-09-30T{:02}:{:02}:{:02}.{:03}Z {level} [worker-{:02}] GET /api/v1/{}/{} status=200 duration_ms={}.{} ip=10.{}.{}.{} user={} msg=\"{} {}\"",
             millis / 3_600_000 % 24,
             millis / 60_000 % 60,
             millis / 1000 % 60,
@@ -528,7 +530,7 @@ fn generate_log(lines: usize) -> String {
             NAMES[next(14) as usize],
             WORDS[next(8) as usize],
             WORDS[next(8) as usize],
-        ));
+        );
     }
     text
 }

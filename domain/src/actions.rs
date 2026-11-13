@@ -101,6 +101,10 @@ pub struct MenuPlace {
 }
 
 impl MenuPlace {
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "constructors for the `Option<MenuPlace>` column of the action table"
+    )]
     const fn at(menu: Menu, section: u8) -> Option<Self> {
         Some(Self {
             menu,
@@ -114,6 +118,10 @@ impl MenuPlace {
         Self::nested_in(menu, 0, submenu, section)
     }
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "constructors for the `Option<MenuPlace>` column of the action table"
+    )]
     const fn nested_in(
         menu: Menu,
         parent_section: u8,
@@ -883,7 +891,7 @@ impl ActionId {
     ];
 
     pub const fn spec(self) -> ActionSpec {
-        use Menu::*;
+        use Menu::{Edit, Encoding, File, Help, Language, Main, Search, Settings, Tools, View};
         match self {
             Self::NewTab => command(
                 "new-tab",

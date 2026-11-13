@@ -133,6 +133,8 @@ fn read_number(chars: &[char], digits: usize, radix: u32) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
     use proptest::prelude::*;
 
@@ -193,8 +195,10 @@ mod tests {
                     let mut units = [0; 2];
                     c.encode_utf16(&mut units)
                         .iter()
-                        .map(|unit| format!(r"\u{unit:04X}"))
-                        .collect()
+                        .fold(String::new(), |mut out, unit| {
+                            let _ = write!(out, r"\u{unit:04X}");
+                            out
+                        })
                 }
                 c if !c.is_ascii() => format!(r"\u{:04X}", u32::from(c)),
                 c => c.to_string(),

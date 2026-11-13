@@ -241,7 +241,7 @@ impl SessionStore {
         let (requests, receiver) = mpsc::channel();
         let writer = thread::Builder::new()
             .name("stet-session".into())
-            .spawn(move || writer.run(receiver))
+            .spawn(move || writer.run(&receiver))
             .map_err(|error| StoreError::io("start the writer for", layout.root(), error))?;
         Ok(Self {
             layout,

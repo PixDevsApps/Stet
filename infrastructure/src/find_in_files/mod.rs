@@ -32,7 +32,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -146,6 +146,7 @@ impl std::fmt::Display for FifError {
 impl std::error::Error for FifError {}
 
 /// A running search. Dropping it cancels the search.
+#[derive(Debug)]
 pub struct FifHandle {
     stop: Arc<AtomicBool>,
     cancelled: Arc<AtomicBool>,
@@ -313,12 +314,7 @@ where
         }
         Err(error) => shared.error(Path::new(""), format!("results thread: {error}")),
     }
-    let errors = std::mem::take(
-        &mut *shared
-            .errors
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner()),
-    );
+    let errors = std::mem::take(&mut *shared.errors.lock().unwrap_or_else(PoisonError::into_inner));
     FifSummary {
         files_searched: shared.files_searched.load(Ordering::SeqCst),
         files_matched: shared.files_matched.load(Ordering::SeqCst),
@@ -499,10 +495,7 @@ impl Shared {
     }
 
     fn error(&self, path: &Path, message: String) {
-        let mut errors = self
-            .errors
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
+        let mut errors = self.errors.lock().unwrap_or_else(PoisonError::into_inner);
         if errors.len() < MAX_ERRORS {
             errors.push(FifFileError {
                 path: path.to_path_buf(),

@@ -157,7 +157,7 @@ fn set_aside_manifest(layout: &Layout) {
 
 /// Moves `path` into `orphaned/` under its own name, or `<stem>.<n>.<ext>` if that is taken.
 fn move_to_orphans(layout: &Layout, path: &Path) -> io::Result<PathBuf> {
-    let name = path.file_name().unwrap_or(OsStr::new("orphan"));
+    let name = path.file_name().unwrap_or_else(|| OsStr::new("orphan"));
     let mut target = layout.orphans().join(name);
     let mut number = 0;
     while fs::symlink_metadata(&target).is_ok() {

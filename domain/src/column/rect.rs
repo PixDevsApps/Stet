@@ -71,12 +71,14 @@ impl Rect {
     }
 
     /// A column caret at `column` on the same lines.
+    #[must_use]
     pub fn with_column(self, column: usize) -> Self {
         Self::new((self.anchor.line, column), (self.cursor.line, column))
     }
 
     /// The same rectangle `delta` lines down (up when negative), stopping at line 0. It moves a
     /// rectangle into and out of a snapshot of some of the document's lines.
+    #[must_use]
     pub fn shift_lines(self, delta: isize) -> Self {
         Self::new(
             (

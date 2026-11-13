@@ -239,7 +239,7 @@ mod tests {
         if lines[last].is_empty() {
             (0..last)
                 .filter(|&line| kept(line))
-                .map(|line| format!("{}\n", lines[line]))
+                .flat_map(|line| [lines[line], "\n"])
                 .collect()
         } else {
             (0..=last)

@@ -43,7 +43,7 @@ pub(super) unsafe fn override_accessible_text(type_: glib::Type) {
         gobject_ffi::g_type_add_interface_static(
             type_.into_glib(),
             ffi::gtk_accessible_text_get_type(),
-            &info,
+            &raw const info,
         );
     }
 }
@@ -54,7 +54,7 @@ unsafe extern "C" fn interface_init(iface: glib_ffi::gpointer, _data: glib_ffi::
     unsafe {
         let parent = gobject_ffi::g_type_interface_peek_parent(iface)
             as *const ffi::GtkAccessibleTextInterface;
-        let iface = &mut *(iface as *mut ffi::GtkAccessibleTextInterface);
+        let iface = &mut *iface.cast::<ffi::GtkAccessibleTextInterface>();
         let chained = if parent.is_null() {
             iface.get_selection
         } else {
@@ -78,7 +78,7 @@ unsafe extern "C" fn get_selection(
         let mut count = 0usize;
         let mut found: *mut ffi::GtkAccessibleTextRange = std::ptr::null_mut();
         let selected = match PARENT.get() {
-            Some(parent) => parent(text, &mut count, &mut found),
+            Some(parent) => parent(text, &raw mut count, &raw mut found),
             None => glib_ffi::GFALSE,
         };
         if selected == glib_ffi::GFALSE {
@@ -118,9 +118,9 @@ pub fn probe_selection(
         let mut count = usize::MAX;
         let mut found: *mut ffi::GtkAccessibleTextRange = std::ptr::null_mut();
         let selected = if with_ranges {
-            function(text, &mut count, &mut found)
+            function(text, &raw mut count, &raw mut found)
         } else {
-            function(text, &mut count, std::ptr::null_mut())
+            function(text, &raw mut count, std::ptr::null_mut())
         };
         let mut ranges = Vec::new();
         if !found.is_null() {

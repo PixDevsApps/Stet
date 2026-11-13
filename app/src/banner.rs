@@ -6,6 +6,7 @@
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use std::cell::RefCell;
+use std::fmt;
 use std::rc::Rc;
 
 /// What a banner is about. Banners stack in this order, the most urgent on top.
@@ -32,6 +33,14 @@ pub struct BannerButton {
     pub on_click: Rc<dyn Fn()>,
 }
 
+impl fmt::Debug for BannerButton {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BannerButton")
+            .field("label", &self.label)
+            .finish_non_exhaustive()
+    }
+}
+
 impl BannerButton {
     pub fn new(label: impl Into<String>, on_click: impl Fn() + 'static) -> Self {
         Self {
@@ -41,6 +50,7 @@ impl BannerButton {
     }
 }
 
+#[derive(Debug)]
 pub struct Banner {
     root: gtk::Box,
     revealer: gtk::Revealer,

@@ -8,12 +8,21 @@
 //! Begin/End Select, and left with Escape, a plain arrow, a click, or anything that edits or
 //! moves the caret without knowing about columns.
 
+#[expect(
+    unsafe_code,
+    reason = "overrides GtkAccessibleText through GObject's C API"
+)]
 pub mod a11y;
 pub mod clipboard;
 pub mod dialog;
+#[expect(
+    unsafe_code,
+    reason = "GtkSourceView and GtkTextBuffer calls the bindings lack"
+)]
 pub mod edit;
 pub mod keys;
 mod paint;
+#[expect(unsafe_code, reason = "chains up to a GtkTextView virtual method")]
 mod view;
 
 pub use view::{Collapse, Pad, StetView};

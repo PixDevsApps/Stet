@@ -174,7 +174,7 @@ fn from_emacs_modeline(line: &str) -> Option<&'static str> {
                 .eq_ignore_ascii_case("mode")
                 .then(|| value.trim())
         })
-        .unwrap_or(if inner.contains(':') { "" } else { inner });
+        .unwrap_or_else(|| if inner.contains(':') { "" } else { inner });
     lookup(MODELINES, &mode.to_ascii_lowercase())
 }
 

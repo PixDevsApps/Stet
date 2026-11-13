@@ -1061,7 +1061,7 @@ impl Window {
                 Some((start, end)) => {
                     let selected = buffer.text(&start, &end, false);
                     if selected.contains('\n') {
-                        self.remember_search_scope(&page);
+                        Self::remember_search_scope(&page);
                     } else {
                         super::replace::forget_search_scope(&page);
                         find.entry.set_text(&selected);

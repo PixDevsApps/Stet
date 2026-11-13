@@ -667,6 +667,10 @@ fn shortcut_texts(widget: &gtk::Widget) -> Vec<String> {
 /// Points the app's home and XDG directories at `root/home`, for a script that starts with
 /// `sandbox-home`: trashing, `xdg-mime` and anything else that writes there stay inside the
 /// run's scratch directory. Called before GTK starts, while this is the only thread.
+#[expect(
+    unsafe_code,
+    reason = "sets the environment before any other thread starts"
+)]
 pub fn sandbox_home(root: &Path) -> std::io::Result<()> {
     let home = root.join("home");
     let dirs = [

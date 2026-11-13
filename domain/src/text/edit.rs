@@ -190,7 +190,7 @@ pub fn minimal_edit(old: &str, new: &str) -> Option<TextEdit> {
         .iter()
         .zip(new_bytes)
         .position(|(a, b)| a != b)
-        .unwrap_or(old.len().min(new.len()));
+        .unwrap_or_else(|| old.len().min(new.len()));
     // Equal bytes have equal character boundaries, so one check covers both texts.
     let prefix = old.floor_char_boundary(mismatch);
     let room = (old.len() - prefix).min(new.len() - prefix);

@@ -95,6 +95,7 @@ impl Rgb {
     }
 
     /// Blends toward `other` by `percent`, rounding exactly like `omarchy-theme-color`'s `mix_color`.
+    #[must_use]
     pub fn mix(self, other: Self, percent: u8) -> Self {
         let amount = f64::from(percent.min(100)) / 100.0;
         let channel = |start: u8, end: u8| {

@@ -461,7 +461,7 @@ impl Window {
     /// Whether Ctrl is down: as the window's key controller saw it, or as the keyboard says.
     fn ctrl_held(&self) -> bool {
         self.inner.nav.ctrl_held.get()
-            || gtk::prelude::WidgetExt::display(&self.inner.window)
+            || WidgetExt::display(&self.inner.window)
                 .default_seat()
                 .and_then(|seat| seat.keyboard())
                 .is_some_and(|keyboard| {
@@ -558,7 +558,7 @@ impl Window {
 
     /// The file name Save As proposes: an untitled document's name (its first line) made safe
     /// for a file name, with the language's extension or `.txt`; a file's own name otherwise.
-    pub fn save_as_name(&self, page: &EditorPage) -> String {
+    pub fn save_as_name(page: &EditorPage) -> String {
         if let Some(name) = page.path().and_then(|path| {
             path.file_name()
                 .map(|name| name.to_string_lossy().into_owned())
@@ -567,7 +567,7 @@ impl Window {
         }
         let extension = page.language().and_then(|language| {
             let globs = language.globs();
-            extension_from_globs(globs.iter().map(|glob| glob.as_str()))
+            extension_from_globs(globs.iter().map(glib::GString::as_str))
         });
         save_file_name(&page.name(), extension.as_deref())
             .or_else(|| save_file_name(&page.untitled_label(), extension.as_deref()))

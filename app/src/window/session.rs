@@ -221,7 +221,7 @@ impl Window {
             }
             None => RecentFiles::new(session.recent_files.iter().cloned()),
         };
-        self.inner.shared.set_recent(recent_files);
+        self.inner.shared.set_recent(&recent_files);
         let history = |entries: &[String]| History::from_entries(entries.to_vec(), HISTORY_LIMIT);
         self.set_search_history(SearchHistory {
             find: history(&session.find_history),
@@ -273,8 +273,8 @@ impl Window {
         let tab =
             |index: Option<usize>| index.and_then(|index| pages.get(index).cloned().flatten());
         let active = tab(session.active_tab)
-            .or(restored_pages.first().cloned())
-            .or(orphan_pages.first().cloned());
+            .or_else(|| restored_pages.first().cloned())
+            .or_else(|| orphan_pages.first().cloned());
         if let Some(active) = active {
             // Selected before the start's empty tab goes, so no other stub loads meanwhile.
             self.select(&active);
@@ -407,18 +407,18 @@ impl Window {
     // ----- loading restored tabs -----------------------------------------------------------
 
     /// A restored tab that has not loaded its text yet.
-    pub fn is_stub(&self, page: &EditorPage) -> bool {
+    pub fn is_stub(page: &EditorPage) -> bool {
         page.session().stub.is_some()
     }
 
     /// Whether any tab still waits to load its text.
     pub(super) fn has_stubs(&self) -> bool {
-        self.pages().iter().any(|page| self.is_stub(page))
+        self.pages().iter().any(Self::is_stub)
     }
 
     /// A tab is shown: a stub loads its text.
     pub(super) fn session_page_selected(&self, page: &EditorPage) {
-        if self.is_stub(page) && !page.is_loading() {
+        if Self::is_stub(page) && !page.is_loading() {
             let window = self.clone();
             let page = page.clone();
             self.spawn(async move { window.load_stub(&page).await });
@@ -428,7 +428,7 @@ impl Window {
     /// Loads `page` if it is a stub and waits until its text is in. False when it closed.
     pub(super) async fn ensure_loaded(&self, page: &EditorPage) -> bool {
         self.session_page_selected(page);
-        while self.is_stub(page) {
+        while Self::is_stub(page) {
             if self.tab_page(page).is_none() {
                 return false;
             }
@@ -440,14 +440,14 @@ impl Window {
     /// Loads every stub, for operations over all open documents.
     pub async fn load_stubs(&self) {
         for page in self.documents() {
-            if self.is_stub(&page) {
+            if Self::is_stub(&page) {
                 self.ensure_loaded(&page).await;
             }
         }
     }
 
     /// Unsaved changes, also in a stub that has not loaded them from its backup yet.
-    pub(super) fn has_unsaved_changes(&self, page: &EditorPage) -> bool {
+    pub(super) fn has_unsaved_changes(page: &EditorPage) -> bool {
         page.is_dirty()
             || page
                 .session()
@@ -614,7 +614,7 @@ impl Window {
             session.backup_revision = Some(page.revision());
             session.backed_up_at = Some(Instant::now());
         });
-        self.restore_places(page);
+        Self::restore_places(page);
         if record.path.is_some() {
             self.watch_file(page);
         }
@@ -636,7 +636,7 @@ impl Window {
         if !page.feed(loader::stream(text), total).await {
             return;
         }
-        let language = language.or_else(|| self.guess_language(page, &head));
+        let language = language.or_else(|| Self::guess_language(page, &head));
         let large = page.large_file_mode();
         let limited = !self.settings().highlight_by_default(total, lines);
         page.update_state(|state| state.highlight_limited = limited && !large);
@@ -680,7 +680,7 @@ impl Window {
                 {
                     page.set_language(Some(&language));
                 }
-                self.restore_places(page);
+                Self::restore_places(page);
                 true
             }
             Some(Err(LoadError::NotFound { .. })) if page.session().lost_changes => {
@@ -712,16 +712,16 @@ impl Window {
 
     /// Every tab of `page`'s document takes the caret and scroll position it was restored
     /// with, now that the text is in.
-    fn restore_places(&self, page: &EditorPage) {
+    fn restore_places(page: &EditorPage) {
         for view_page in page.document_pages() {
             if let Some(record) = view_page.take_pending_record() {
-                self.restore_position(&view_page, &record);
+                Self::restore_position(&view_page, &record);
             }
         }
     }
 
     /// The caret, the selection with its direction, and the first visible line.
-    fn restore_position(&self, page: &EditorPage, record: &TabRecord) {
+    fn restore_position(page: &EditorPage, record: &TabRecord) {
         let buffer = page.buffer();
         let len = usize::try_from(buffer.char_count()).unwrap_or(0);
         let (anchor, caret) = record.anchor_and_caret(len);
@@ -936,7 +936,7 @@ impl Window {
                     custom_name: record
                         .path
                         .is_none()
-                        .then(|| page.state().custom_name.clone())
+                        .then(|| page.state().custom_name)
                         .flatten(),
                     ..*record
                 },
@@ -1095,7 +1095,7 @@ impl Window {
             chosen_encoding: state
                 .chosen
                 .and_then(|choice| entry_for(choice.encoding, choice.bom))
-                .map(|entry| entry.id()),
+                .map(stet_infrastructure::encoding::EncodingEntry::id),
             lossy: state.lossy(),
         }
     }
@@ -1189,7 +1189,7 @@ impl Window {
 
     /// Moves the `--wait` command lines of `from`, a tab about to close in favour of `to`
     /// (the same file through another path), to `to`.
-    pub(super) fn transfer_waits(&self, from: &EditorPage, to: &EditorPage) {
+    pub(super) fn transfer_waits(from: &EditorPage, to: &EditorPage) {
         let waits = from.update_session(|session| std::mem::take(&mut session.waits));
         to.update_session(|session| session.waits.extend(waits));
     }
@@ -1201,7 +1201,7 @@ impl Window {
         for group in groups {
             let unsaved = group.unsaved
                 || self.pages().iter().any(|page| {
-                    page.session().waits.contains(&group.id) && self.has_unsaved_changes(page)
+                    page.session().waits.contains(&group.id) && Self::has_unsaved_changes(page)
                 });
             group.answer(unsaved);
         }

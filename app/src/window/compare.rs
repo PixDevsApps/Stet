@@ -444,7 +444,7 @@ impl Window {
             window.note_painted(generation, started);
             if runs == 1 {
                 window.toast(&summary);
-                window.show_first_difference(&new, &comparison);
+                Self::show_first_difference(&new, &comparison);
             }
             window.level_views();
             window.update_compare_actions();
@@ -480,7 +480,7 @@ impl Window {
     }
 
     /// The first run puts the new document's caret on the first difference.
-    fn show_first_difference(&self, new: &EditorPage, comparison: &Comparison) {
+    fn show_first_difference(new: &EditorPage, comparison: &Comparison) {
         let Some(hunk) = comparison.hunks.first() else {
             return;
         };

@@ -9,6 +9,7 @@ use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, gio, glib, pango};
 use std::cell::{Cell, RefCell};
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::rc::Rc;
 use stet_infrastructure::search::Hit;
@@ -68,7 +69,10 @@ impl FileNode {
 
     fn jump(&self, hit: usize, range: usize) -> Option<Jump> {
         let hit = self.hits.get(hit)?;
-        let found = hit.match_ranges.get(range).or(hit.match_ranges.first());
+        let found = hit
+            .match_ranges
+            .get(range)
+            .or_else(|| hit.match_ranges.first());
         let (column, length) = found.map_or((hit.line_offset, 0), |found| {
             let before = hit.line_text.get(..found.start).unwrap_or_default();
             let text = hit.line_text.get(found.clone()).unwrap_or_default();
@@ -409,6 +413,10 @@ impl ResultsPanel {
     /// Adds files after the others in `search`, in one change of the list. (Inserting Find in
     /// Files' files one by one to keep them sorted blocked the main loop for 0.43 s per drain
     /// with 13,000 files.)
+    #[expect(
+        clippy::unused_self,
+        reason = "one of the panel's methods for filling a search, called on the panel like `begin`"
+    )]
     pub fn add_files(&self, search: &Rc<SearchNode>, files: Vec<FileNode>) {
         if files.is_empty() {
             return;
@@ -614,12 +622,9 @@ impl ResultsPanel {
             out.push_str(&search.heading());
             out.push('\n');
             for file in search.nodes.borrow().iter() {
-                out.push_str(&format!("  {}\n", file.row_text()));
+                let _ = writeln!(out, "  {}", file.row_text());
                 for hit in &file.hits {
-                    out.push_str(&format!(
-                        "    Line {}: {}\n",
-                        hit.line_number, hit.line_text
-                    ));
+                    let _ = writeln!(out, "    Line {}: {}", hit.line_number, hit.line_text);
                 }
             }
         }
@@ -637,7 +642,7 @@ impl ResultsPanel {
         let file_text = |file: &FileNode| {
             let mut out = format!("{}\n", file.label);
             for hit in &file.hits {
-                out.push_str(&format!("  Line {}: {}\n", hit.line_number, hit.line_text));
+                let _ = writeln!(out, "  Line {}: {}", hit.line_number, hit.line_text);
             }
             out
         };

@@ -23,7 +23,7 @@ fn open(dir: &Path) -> SessionStore {
         match SessionStore::open(dir) {
             Ok(store) => return store,
             Err(StoreError::Locked { .. }) if started.elapsed() < WAIT => {
-                std::thread::sleep(Duration::from_millis(1));
+                thread::sleep(Duration::from_millis(1));
             }
             Err(error) => panic!("{error}"),
         }
@@ -132,6 +132,12 @@ fn file_names(dir: &Path) -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+fn has_extension(name: &str, extension: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
 }
 
 fn mode(path: &Path) -> u32 {

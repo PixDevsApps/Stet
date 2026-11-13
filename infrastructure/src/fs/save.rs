@@ -155,7 +155,7 @@ pub(crate) fn save_with_hook(
         rustix::fs::access(&target, Access::WRITE_OK)
             .map_err(|errno| SaveError::io(&target, errno.into()))?;
     }
-    let dir = target.parent().unwrap_or(Path::new("/"));
+    let dir = target.parent().unwrap_or_else(|| Path::new("/"));
     let dir_writable = rustix::fs::access(dir, Access::WRITE_OK | Access::EXEC_OK);
     let Some(metadata) = existing else {
         dir_writable.map_err(|errno| SaveError::io(&target, errno.into()))?;
@@ -197,14 +197,17 @@ fn resolve_target(path: &Path) -> io::Result<PathBuf> {
         match fs::symlink_metadata(&current) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
                 let link = fs::read_link(&current)?;
-                current = current.parent().unwrap_or(Path::new("/")).join(link);
+                current = current
+                    .parent()
+                    .unwrap_or_else(|| Path::new("/"))
+                    .join(link);
             }
             Ok(_) => return fs::canonicalize(&current),
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 let name = current
                     .file_name()
                     .ok_or_else(|| io::Error::new(ErrorKind::InvalidInput, "no file name"))?;
-                let parent = current.parent().unwrap_or(Path::new("/"));
+                let parent = current.parent().unwrap_or_else(|| Path::new("/"));
                 return Ok(fs::canonicalize(parent)?.join(name));
             }
             Err(error) => return Err(error),
@@ -322,7 +325,7 @@ fn read_xattr(
                 buffer.truncate(len);
                 return Ok(buffer);
             }
-            Err(Errno::RANGE) => continue,
+            Err(Errno::RANGE) => {}
             Err(errno) => return Err(errno),
         }
     }
@@ -469,7 +472,12 @@ mod tests {
                 .unwrap()
                 .chain(fs::read_dir(&self.options.backup_dir).into_iter().flatten())
                 .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-                .filter(|name| name.ends_with(".stet-tmp") || name.ends_with(".bak"))
+                .filter(|name| {
+                    name.ends_with(".stet-tmp")
+                        || Path::new(name)
+                            .extension()
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("bak"))
+                })
                 .collect();
             names.sort();
             names

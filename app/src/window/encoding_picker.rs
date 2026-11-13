@@ -236,7 +236,7 @@ impl EncodingPicker {
             .rows
             .iter()
             .find(|row| current.is_some_and(|entry| std::ptr::eq(row.entry, entry)))
-            .or(self.rows.first());
+            .or_else(|| self.rows.first());
         if let Some(row) = row {
             self.list.select_row(Some(&row.row));
             self.scroll_to(&row.row);

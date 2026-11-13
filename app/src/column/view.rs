@@ -11,6 +11,7 @@ use gtk4::subclass::prelude::*;
 use sourceview5::prelude::*;
 use sourceview5::subclass::prelude::*;
 use std::cell::{Cell, OnceCell, RefCell};
+use std::fmt;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::OnceLock;
@@ -84,6 +85,17 @@ mod imp {
         /// background, painted here because GTK paints no paragraph background on a line
         /// without characters (M7).
         pub empty_lines: RefCell<Vec<(usize, &'static str)>>,
+    }
+
+    impl fmt::Debug for StetView {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("StetView")
+                .field("rect", &self.rect)
+                .field("busy", &self.busy)
+                .field("burst", &self.burst)
+                .field("dragging", &self.dragging)
+                .finish_non_exhaustive()
+        }
     }
 
     #[glib::object_subclass]
@@ -195,6 +207,14 @@ glib::wrapper! {
 pub struct StetViewBuilder {
     buffer: Option<(sourceview5::Buffer, Rc<edit::BufferShared>)>,
     builder: glib::object::ObjectBuilder<'static, StetView>,
+}
+
+impl fmt::Debug for StetViewBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StetViewBuilder")
+            .field("buffer", &self.buffer)
+            .finish_non_exhaustive()
+    }
 }
 
 impl StetViewBuilder {

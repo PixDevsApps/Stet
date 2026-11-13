@@ -81,17 +81,17 @@ impl Window {
             return;
         };
         let tab_width = page.indentation().tab_width as usize;
-        let simple = |op: fn(&str, Target) -> Change| -> Operation {
-            Box::new(move |text, target| Ok(op(text, target)))
+        let simple = |op: fn(&str, &Target) -> Change| -> Operation {
+            Box::new(move |text, target| Ok(op(text, &target)))
         };
         let (reach, operation): (Reach, Operation) = match id {
-            ActionId::Uppercase => self.case_tool(Case::Upper),
-            ActionId::Lowercase => self.case_tool(Case::Lower),
-            ActionId::ProperCase => self.case_tool(Case::Proper),
-            ActionId::ProperCaseBlend => self.case_tool(Case::ProperBlend),
-            ActionId::SentenceCase => self.case_tool(Case::Sentence),
-            ActionId::SentenceCaseBlend => self.case_tool(Case::SentenceBlend),
-            ActionId::InvertCase => self.case_tool(Case::Invert),
+            ActionId::Uppercase => Self::case_tool(Case::Upper),
+            ActionId::Lowercase => Self::case_tool(Case::Lower),
+            ActionId::ProperCase => Self::case_tool(Case::Proper),
+            ActionId::ProperCaseBlend => Self::case_tool(Case::ProperBlend),
+            ActionId::SentenceCase => Self::case_tool(Case::Sentence),
+            ActionId::SentenceCaseBlend => Self::case_tool(Case::SentenceBlend),
+            ActionId::InvertCase => Self::case_tool(Case::Invert),
             ActionId::DuplicateLine => (Reach::Caret, simple(lines::duplicate)),
             ActionId::DeleteLine => (Reach::Caret, simple(lines::delete)),
             ActionId::MoveLineUp => (Reach::Caret, simple(lines::move_up)),
@@ -99,22 +99,22 @@ impl Window {
             ActionId::JoinLines => (Reach::Caret, simple(lines::join)),
             ActionId::BlankLineAbove => (Reach::Caret, simple(lines::insert_blank_above)),
             ActionId::BlankLineBelow => (Reach::Caret, simple(lines::insert_blank_below)),
-            ActionId::TransposeLine => (Reach::Caret, Box::new(transpose)),
+            ActionId::TransposeLine => (Reach::Caret, simple(transpose)),
             ActionId::CutLine => {
-                if self.copy_lines(&page) {
+                if Self::copy_lines(&page) {
                     (Reach::Caret, simple(lines::delete))
                 } else {
                     return;
                 }
             }
             ActionId::CopyLine => {
-                self.copy_lines(&page);
+                Self::copy_lines(&page);
                 return;
             }
             ActionId::RemoveDuplicateLines => (
                 Reach::Document,
                 Box::new(|text, target| {
-                    Ok(lines::remove_duplicates(text, target, Duplicates::All))
+                    Ok(lines::remove_duplicates(text, &target, Duplicates::All))
                 }),
             ),
             ActionId::RemoveConsecutiveDuplicateLines => (
@@ -122,18 +122,18 @@ impl Window {
                 Box::new(|text, target| {
                     Ok(lines::remove_duplicates(
                         text,
-                        target,
+                        &target,
                         Duplicates::Consecutive,
                     ))
                 }),
             ),
             ActionId::RemoveEmptyLines => (
                 Reach::Document,
-                Box::new(|text, target| Ok(lines::remove_empty(text, target, EmptyLines::Empty))),
+                Box::new(|text, target| Ok(lines::remove_empty(text, &target, EmptyLines::Empty))),
             ),
             ActionId::RemoveBlankLines => (
                 Reach::Document,
-                Box::new(|text, target| Ok(lines::remove_empty(text, target, EmptyLines::Blank))),
+                Box::new(|text, target| Ok(lines::remove_empty(text, &target, EmptyLines::Blank))),
             ),
             ActionId::ReverseLines => (Reach::Document, simple(lines::reverse)),
             ActionId::SortLexicalAscending => sort(SortKey::Lexical, Order::Ascending),
@@ -159,10 +159,12 @@ impl Window {
                 };
                 let operation: Operation = Box::new(move |text, target| {
                     Ok(match id {
-                        ActionId::ToggleComment => comment::toggle_line(text, target, &tokens),
-                        ActionId::CommentLines => comment::comment_lines(text, target, &tokens),
-                        ActionId::UncommentLines => comment::uncomment_lines(text, target, &tokens),
-                        _ => comment::toggle_block(text, target, &tokens),
+                        ActionId::ToggleComment => comment::toggle_line(text, &target, &tokens),
+                        ActionId::CommentLines => comment::comment_lines(text, &target, &tokens),
+                        ActionId::UncommentLines => {
+                            comment::uncomment_lines(text, &target, &tokens)
+                        }
+                        _ => comment::toggle_block(text, &target, &tokens),
                     })
                 });
                 (Reach::Caret, operation)
@@ -173,7 +175,12 @@ impl Window {
             ActionId::TabsToSpaces => (
                 Reach::Document,
                 Box::new(move |text, target| {
-                    Ok(lines::tabs_to_spaces(text, target, tab_width, Columns::All))
+                    Ok(lines::tabs_to_spaces(
+                        text,
+                        &target,
+                        tab_width,
+                        Columns::All,
+                    ))
                 }),
             ),
             ActionId::SpacesToTabs | ActionId::SpacesToTabsLeading => {
@@ -185,7 +192,7 @@ impl Window {
                 (
                     Reach::Document,
                     Box::new(move |text, target| {
-                        Ok(lines::spaces_to_tabs(text, target, tab_width, scope))
+                        Ok(lines::spaces_to_tabs(text, &target, tab_width, scope))
                     }),
                 )
             }
@@ -228,15 +235,18 @@ impl Window {
                 let indent = indent_unit(page.indentation());
                 (
                     Reach::Document,
-                    Box::new(move |text, target| json::format_target(text, target, indent)),
+                    Box::new(move |text, target| json::format_target(text, &target, indent)),
                 )
             }
-            ActionId::MinifyJson => (Reach::Document, Box::new(json::minify_target)),
+            ActionId::MinifyJson => (
+                Reach::Document,
+                Box::new(|text, target| json::minify_target(text, &target)),
+            ),
             ActionId::FormatXml => {
                 let indent = indent_unit(page.indentation());
                 (
                     Reach::Document,
-                    Box::new(move |text, target| xml::format_target(text, target, indent)),
+                    Box::new(move |text, target| xml::format_target(text, &target, indent)),
                 )
             }
             ActionId::ValidateJson | ActionId::ValidateXml => {
@@ -251,10 +261,10 @@ impl Window {
         self.run_tool(&page, reach, operation, describe(id));
     }
 
-    fn case_tool(&self, case: Case) -> (Reach, Operation) {
+    fn case_tool(case: Case) -> (Reach, Operation) {
         (
             Reach::Caret,
-            Box::new(move |text, target| Ok(case::convert(text, target, case))),
+            Box::new(move |text, target| Ok(case::convert(text, &target, case))),
         )
     }
 
@@ -537,7 +547,7 @@ impl Window {
                     "Well-formed XML"
                 }),
                 Some(Err(error)) => {
-                    window.show_syntax_error(&page, &format!("Invalid {what}"), &error)
+                    window.show_syntax_error(&page, &format!("Invalid {what}"), &error);
                 }
                 None => window.toast(&format!("Validate {what} failed")),
             }
@@ -578,7 +588,7 @@ impl Window {
 
     /// Copy Current Line: the lines of the selection, or the caret's line, with a line
     /// break after the last. Returns false when there is nothing.
-    pub(super) fn copy_lines(&self, page: &EditorPage) -> bool {
+    pub(super) fn copy_lines(page: &EditorPage) -> bool {
         let buffer = page.buffer();
         let (selected, _) = edits::selection(&buffer);
         let first = buffer.iter_at_offset(selected.start as i32);
@@ -667,7 +677,7 @@ impl Window {
                         if cut {
                             window.run_text_tool(ActionId::CutLine);
                         } else {
-                            window.copy_lines(&page);
+                            Self::copy_lines(&page);
                         }
                         page.view().stop_signal_emission_by_name(signal);
                         None
@@ -682,33 +692,33 @@ impl Window {
 fn sort(key: SortKey, order: Order) -> (Reach, Operation) {
     (
         Reach::Document,
-        Box::new(move |text, target| Ok(lines::sort(text, target, key, order))),
+        Box::new(move |text, target| Ok(lines::sort(text, &target, key, order))),
     )
 }
 
 fn trim(which: Trim) -> (Reach, Operation) {
     (
         Reach::Document,
-        Box::new(move |text, target| Ok(lines::trim(text, target, which))),
+        Box::new(move |text, target| Ok(lines::trim(text, &target, which))),
     )
 }
 
 /// Transpose Current Line (Scintilla's line transpose): the caret's line swaps with the line
 /// above, and the caret goes to the start of its line.
-fn transpose(text: &str, target: Target) -> Result<Change, SyntaxError> {
+fn transpose(text: &str, target: &Target) -> Change {
     let Target::Selection(range) = target else {
-        return Ok(Change::default());
+        return Change::default();
     };
     let index = LineIndex::new(text);
     let line = index.line_of_char(range.start.min(range.end));
     if line == 0 {
-        return Ok(Change::default());
+        return Change::default();
     }
-    let mut change = lines::move_down(text, Target::Lines(line - 1..line));
+    let mut change = lines::move_down(text, &Target::Lines(line - 1..line));
     let length = index.line_chars(line).len();
     let caret = index.line_chars(line - 1).start + length + 1;
     change.selection = (!change.is_empty()).then_some(caret..caret);
-    Ok(change)
+    change
 }
 
 /// The formatters' indentation: the document's.
@@ -778,10 +788,10 @@ mod tests {
     #[test]
     fn transpose_swaps_with_the_line_above() {
         let text = "one\ntwo\nthree";
-        let change = transpose(text, Target::caret(5)).unwrap();
+        let change = transpose(text, &Target::caret(5));
         let result = stet_domain::text::apply(text, change.edits.clone()).unwrap();
         assert_eq!(result, "two\none\nthree");
         assert_eq!(change.selection, Some(4..4));
-        assert!(transpose(text, Target::caret(1)).unwrap().is_empty());
+        assert!(transpose(text, &Target::caret(1)).is_empty());
     }
 }

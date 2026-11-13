@@ -10,8 +10,8 @@ use crate::edits;
 use gtk4 as gtk;
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use stet_domain::ops::Target;
 use stet_domain::ops::prefix::{self, Base, Numbering, Padding};
+use stet_domain::ops::{Change, Target};
 use stet_domain::text::LineIndex;
 
 /// The response that applies a tool dialog.
@@ -119,7 +119,7 @@ impl Window {
         self.run_tool(
             page,
             Reach::Document,
-            Box::new(move |text, target| Ok(prefix::add(text, target, &prefix, &suffix))),
+            Box::new(move |text, target| Ok(prefix::add(text, &target, &prefix, &suffix))),
             "Add Prefix/Suffix",
         );
     }
@@ -200,7 +200,7 @@ impl Window {
             Box::new(move |text, target| {
                 let index = LineIndex::new(text);
                 let Target::Selection(range) = target else {
-                    return Ok(Default::default());
+                    return Ok(Change::default());
                 };
                 let line = index.line_of_char(range.start);
                 let column = range.start - index.line_chars(line).start;
@@ -209,7 +209,7 @@ impl Window {
                 } else {
                     Target::Selection(range)
                 };
-                Ok(prefix::insert_numbers(text, target, column, &numbering))
+                Ok(prefix::insert_numbers(text, &target, column, &numbering))
             }),
             "Insert Numbers",
         );

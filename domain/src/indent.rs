@@ -30,6 +30,7 @@ impl Indentation {
 
     /// These settings with what a text's own indentation says; a text indented with tabs
     /// keeps the tab width.
+    #[must_use]
     pub fn with_detected(self, detected: Detected) -> Self {
         Self {
             tab_width: detected.width.unwrap_or(self.tab_width),
@@ -122,11 +123,11 @@ pub fn sample(text: &str) -> &str {
 mod tests {
     use super::*;
 
-    fn spaces(width: u32) -> Option<Detected> {
-        Some(Detected {
+    fn spaces(width: u32) -> Detected {
+        Detected {
             insert_spaces: true,
             width: Some(width),
-        })
+        }
     }
 
     const TABS: Option<Detected> = Some(Detected {
@@ -137,11 +138,11 @@ mod tests {
     #[test]
     fn finds_the_step_between_levels() {
         let python = "def f():\n    if x:\n        return 1\n    return 2\n";
-        assert_eq!(detect(python), spaces(4));
+        assert_eq!(detect(python), Some(spaces(4)));
         let yaml = "a:\n  b:\n    c: 1\n  d: 2\ne: 3\n";
-        assert_eq!(detect(yaml), spaces(2));
+        assert_eq!(detect(yaml), Some(spaces(2)));
         let three = "a\n   b\n      c\n";
-        assert_eq!(detect(three), spaces(3));
+        assert_eq!(detect(three), Some(spaces(3)));
     }
 
     #[test]
@@ -165,19 +166,19 @@ mod tests {
         assert_eq!(detect(""), None);
         assert_eq!(detect("one\ntwo\n\n   \nthree\n"), None);
         // Blank lines don't reset the previous level.
-        assert_eq!(detect("a:\n\n  b: 1\n\n  c: 2\n"), spaces(2));
+        assert_eq!(detect("a:\n\n  b: 1\n\n  c: 2\n"), Some(spaces(2)));
     }
 
     #[test]
     fn a_dedent_of_two_levels_counts_less_than_single_steps() {
         let rust = "fn f() {\n    if x {\n        y();\n    }\n}\nfn g() {\n    if z {\n        w();\n}\n}\n";
-        assert_eq!(detect(rust), spaces(4));
+        assert_eq!(detect(rust), Some(spaces(4)));
     }
 
     #[test]
     fn ties_prefer_four() {
-        assert_eq!(detect("a\n    b\n  c\n"), spaces(4));
-        assert_eq!(detect("a\n  b\n        c\n"), spaces(2));
+        assert_eq!(detect("a\n    b\n  c\n"), Some(spaces(4)));
+        assert_eq!(detect("a\n  b\n        c\n"), Some(spaces(2)));
     }
 
     #[test]
@@ -189,7 +190,7 @@ mod tests {
         assert_eq!(spaces4.label(), "Spaces: 4");
         assert_eq!(Indentation::DEFAULT.label(), "Tab Width: 4");
         assert_eq!(
-            Indentation::DEFAULT.with_detected(spaces(2).unwrap()),
+            Indentation::DEFAULT.with_detected(spaces(2)),
             Indentation {
                 tab_width: 2,
                 insert_spaces: true

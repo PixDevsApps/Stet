@@ -162,6 +162,14 @@ pub struct RifHandle {
     thread: Option<JoinHandle<RifSummary>>,
 }
 
+impl std::fmt::Debug for RifHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RifHandle")
+            .field("thread", &self.thread)
+            .finish_non_exhaustive()
+    }
+}
+
 impl RifHandle {
     /// Stops the run: no file is written after this. A file being written when it stops is
     /// written whole and still reported, so every change on disk reaches the sink.
@@ -235,7 +243,7 @@ where
     let run_shared = Arc::clone(&shared);
     let thread = thread::Builder::new()
         .name("stet-replace-in-files".to_owned())
-        .spawn(move || run(&request, walks, run_shared, sink, started))
+        .spawn(move || run(&request, walks, &run_shared, sink, started))
         .map_err(|error| RifError::Thread(error.to_string()))?;
     Ok(RifHandle {
         shared,
@@ -302,7 +310,7 @@ impl Shared {
 fn run<S>(
     request: &RifRequest,
     walks: Vec<(PathBuf, Filters)>,
-    shared: Arc<Shared>,
+    shared: &Arc<Shared>,
     mut sink: S,
     started: Instant,
 ) -> RifSummary
@@ -322,7 +330,7 @@ where
         if shared.stop.load(Ordering::Relaxed) {
             break;
         }
-        walk(request, &root, &filters, &shared, &sender);
+        walk(request, &root, &filters, shared, &sender);
     }
     drop(sender);
     if let Ok(dispatcher) = dispatcher {

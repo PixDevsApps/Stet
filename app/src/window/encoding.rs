@@ -29,14 +29,12 @@ fn fixed_entry(id: ActionId) -> Option<&'static EncodingEntry> {
 
 impl Window {
     /// Runs an Encoding-menu or line-ending action; `param` is an encoding id.
-    pub(super) fn run_encoding_action(&self, id: ActionId, param: Option<String>) {
+    pub(super) fn run_encoding_action(&self, id: ActionId, param: Option<&str>) {
         let Some(page) = self.current_page() else {
             return;
         };
         let entry = match id {
-            ActionId::Reinterpret | ActionId::ConvertEncoding => {
-                param.as_deref().and_then(entry_for_id)
-            }
+            ActionId::Reinterpret | ActionId::ConvertEncoding => param.and_then(entry_for_id),
             _ => fixed_entry(id),
         };
         match id {

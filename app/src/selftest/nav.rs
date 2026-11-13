@@ -4,6 +4,7 @@
 
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number};
+use crate::window::Window;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::glib::translate::IntoGlib;
@@ -198,7 +199,7 @@ impl Harness {
         } else {
             gtk::gdk::ModifierType::empty()
         };
-        let values: [&dyn glib::value::ToValue; 3] = [&keyval.into_glib(), &0u32, &state];
+        let values: [&dyn ToValue; 3] = [&keyval.into_glib(), &0u32, &state];
         let keys = &self.window.inner.nav.keys;
         if signal == "key-pressed" {
             keys.emit_by_name::<bool>(signal, &values);
@@ -315,7 +316,7 @@ impl Harness {
             }),
             "assert-save-name" => self
                 .page()
-                .map(|page| self.window.save_as_name(&page))
+                .map(|page| Window::save_as_name(&page))
                 .and_then(|name| equal("Save As name", name, arg(0).to_owned())),
             "assert-rif" => {
                 let stats = self
@@ -347,8 +348,8 @@ impl Harness {
 }
 
 /// A themed icon's first name.
-fn icon_name(icon: &gtk::gio::Icon) -> String {
-    icon.downcast_ref::<gtk::gio::ThemedIcon>()
-        .and_then(|themed| themed.names().first().map(|name| name.to_string()))
+fn icon_name(icon: &gio::Icon) -> String {
+    icon.downcast_ref::<gio::ThemedIcon>()
+        .and_then(|themed| themed.names().first().map(ToString::to_string))
         .unwrap_or_else(|| "other".to_owned())
 }

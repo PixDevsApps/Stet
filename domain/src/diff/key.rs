@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use super::{CompareOptions, IgnoreWhitespace};
 
-pub(super) fn line_key<'a>(line: &'a str, options: &CompareOptions) -> Cow<'a, str> {
+pub(super) fn line_key<'a>(line: &'a str, options: CompareOptions) -> Cow<'a, str> {
     let key = match options.ignore_whitespace {
         IgnoreWhitespace::None => Cow::Borrowed(line),
         IgnoreWhitespace::Trailing => Cow::Borrowed(line.trim_end()),
@@ -81,7 +81,7 @@ mod tests {
             ignore_case,
             ..CompareOptions::default()
         };
-        line_key(line, &options).into_owned()
+        line_key(line, options).into_owned()
     }
 
     #[test]
@@ -104,7 +104,7 @@ mod tests {
         assert!(matches!(
             line_key(
                 "plain",
-                &CompareOptions {
+                CompareOptions {
                     ignore_case: true,
                     ..CompareOptions::default()
                 }

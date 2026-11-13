@@ -7,6 +7,7 @@
 
 use super::Window;
 use crate::worker;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use stet_domain::document::tilde;
 use stet_infrastructure::desktop::{self, COMMAND, DESKTOP_ID};
@@ -71,16 +72,18 @@ impl Window {
             before.plain_text.as_deref().unwrap_or("none"),
         );
         if !before.on_path {
-            body.push_str(&format!(
+            let _ = write!(
+                body,
                 "\n\n“{COMMAND}” is not on PATH, so omarchy-launch-editor would fall back to \
                  nvim until Stet is installed."
-            ));
+            );
         }
         if before.desktop_file.is_none() {
-            body.push_str(&format!(
+            let _ = write!(
+                body,
                 "\n\n{DESKTOP_ID} is not installed, so double-clicked files can't open in Stet \
                  until it is."
-            ));
+            );
         }
         body.push_str(
             "\n\nTo undo: omarchy-default-editor nvim, and xdg-mime default nvim.desktop \

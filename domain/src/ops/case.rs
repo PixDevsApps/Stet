@@ -32,7 +32,7 @@ pub enum Case {
 /// Converts the selection, or with a caret the word at the caret ([`word_at`]); `Lines` and
 /// `Document` convert whole lines and the whole text. A selection is kept on the converted
 /// text, and a caret stays where it was.
-pub fn convert(text: &str, target: Target, case: Case) -> Change {
+pub fn convert(text: &str, target: &Target, case: Case) -> Change {
     let doc = Doc::new(text);
     let (range, caret) = match &target {
         Target::Selection(selection) => {
@@ -46,7 +46,7 @@ pub fn convert(text: &str, target: Target, case: Case) -> Change {
             }
         }
         Target::Lines(_) => {
-            let lines = doc.lines(&target);
+            let lines = doc.lines(target);
             if lines.is_empty() {
                 return Change::default();
             }
@@ -431,17 +431,17 @@ mod tests {
     fn a_caret_converts_the_word_at_it_and_stays() {
         let text = "say hello world";
         for caret in [4, 6, 9] {
-            let change = convert(text, Target::caret(caret), Case::Upper);
+            let change = convert(text, &Target::caret(caret), Case::Upper);
             assert_eq!(change.selection, Some(caret..caret));
             assert_eq!(applied(text, &change), "say HELLO world");
         }
         assert_eq!(
-            applied(text, &convert(text, Target::caret(3), Case::Upper)),
+            applied(text, &convert(text, &Target::caret(3), Case::Upper)),
             "SAY hello world"
         );
-        assert!(convert("a  b", Target::caret(2), Case::Upper).is_empty());
-        assert!(convert("", Target::caret(0), Case::Upper).is_empty());
-        let change = convert("maß x", Target::caret(3), Case::Upper);
+        assert!(convert("a  b", &Target::caret(2), Case::Upper).is_empty());
+        assert!(convert("", &Target::caret(0), Case::Upper).is_empty());
+        let change = convert("maß x", &Target::caret(3), Case::Upper);
         assert_eq!(change.selection, Some(4..4));
         assert_eq!(applied("maß x", &change), "MASS x");
     }
@@ -458,15 +458,15 @@ mod tests {
 
     #[test]
     fn a_selection_stays_on_the_converted_text() {
-        let change = convert("a straße b", Target::Selection(2..8), Case::Upper);
+        let change = convert("a straße b", &Target::Selection(2..8), Case::Upper);
         assert_eq!(change.selection, Some(2..9));
         assert_eq!(applied("a straße b", &change), "a STRASSE b");
-        assert!(convert("ABC", Target::Selection(0..3), Case::Upper).is_empty());
+        assert!(convert("ABC", &Target::Selection(0..3), Case::Upper).is_empty());
     }
 
     #[test]
     fn equal_length_conversions_edit_only_changed_runs() {
-        let change = convert("Hello World", Target::Document, Case::Upper);
+        let change = convert("Hello World", &Target::Document, Case::Upper);
         assert_eq!(
             change.edits,
             vec![TextEdit::new(1..5, "ELLO"), TextEdit::new(7..11, "ORLD")]
@@ -477,7 +477,7 @@ mod tests {
     #[test]
     fn more_changed_runs_than_the_bulk_threshold_make_one_edit() {
         let text = "a ".repeat(BULK_EDIT_THRESHOLD + 1);
-        let change = convert(&text, Target::Document, Case::Upper);
+        let change = convert(&text, &Target::Document, Case::Upper);
         assert_eq!(change.edits.len(), 1);
         assert_eq!(change.edits[0].range(), 0..text.len() - 1);
         assert_eq!(
@@ -485,7 +485,7 @@ mod tests {
             "A ".repeat(BULK_EDIT_THRESHOLD + 1)
         );
         let text = "a ".repeat(BULK_EDIT_THRESHOLD);
-        let change = convert(&text, Target::Document, Case::Upper);
+        let change = convert(&text, &Target::Document, Case::Upper);
         assert_eq!(change.edits.len(), BULK_EDIT_THRESHOLD);
     }
 
@@ -548,7 +548,7 @@ mod tests {
                 }
                 None => text.clone(),
             };
-            prop_assert_eq!(applied(&text, &convert(&text, target, case)), expected);
+            prop_assert_eq!(applied(&text, &convert(&text, &target, case)), expected);
         }
     }
 }

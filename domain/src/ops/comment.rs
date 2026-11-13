@@ -44,17 +44,17 @@ impl CommentTokens {
 }
 
 /// Comments or uncomments the lines of the target (Ctrl+Q).
-pub fn toggle_line(text: &str, target: Target, tokens: &CommentTokens) -> Change {
+pub fn toggle_line(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     line_comments(text, target, tokens, Mode::Toggle)
 }
 
 /// Comments the lines of the target (Ctrl+K).
-pub fn comment_lines(text: &str, target: Target, tokens: &CommentTokens) -> Change {
+pub fn comment_lines(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     line_comments(text, target, tokens, Mode::Comment)
 }
 
 /// Uncomments the lines of the target that are commented (Ctrl+Shift+K).
-pub fn uncomment_lines(text: &str, target: Target, tokens: &CommentTokens) -> Change {
+pub fn uncomment_lines(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     line_comments(text, target, tokens, Mode::Uncomment)
 }
 
@@ -62,7 +62,7 @@ pub fn uncomment_lines(text: &str, target: Target, tokens: &CommentTokens) -> Ch
 /// otherwise wraps the selection, or with a caret the line without its indentation and
 /// trailing blanks, in the block tokens (Ctrl+Shift+Q). A wrapped selection is selected with
 /// its tokens, so toggling again unwraps it. Does nothing without block tokens.
-pub fn toggle_block(text: &str, target: Target, tokens: &CommentTokens) -> Change {
+pub fn toggle_block(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     let Some((open, close)) = tokens.block_tokens() else {
         return Change::default();
     };
@@ -72,14 +72,14 @@ pub fn toggle_block(text: &str, target: Target, tokens: &CommentTokens) -> Chang
             let selection = doc.clamp(selection);
             if selection.is_empty() {
                 let line = doc.index.line_of_char(selection.start);
-                let content = line_content(&doc, line).unwrap_or(selection.clone());
+                let content = line_content(&doc, line).unwrap_or_else(|| selection.clone());
                 (content, Some(selection.start))
             } else {
                 (selection, None)
             }
         }
         Target::Lines(_) => {
-            let lines = doc.lines(&target);
+            let lines = doc.lines(target);
             let first = lines.clone().find_map(|line| line_content(&doc, line));
             let last = lines.rev().find_map(|line| line_content(&doc, line));
             match first.zip(last) {
@@ -153,12 +153,12 @@ enum Style<'a> {
     Wrap(&'a str, &'a str),
 }
 
-fn line_comments(text: &str, target: Target, tokens: &CommentTokens, mode: Mode) -> Change {
+fn line_comments(text: &str, target: &Target, tokens: &CommentTokens, mode: Mode) -> Change {
     let Some(style) = tokens.style() else {
         return Change::default();
     };
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     let mut chosen: Vec<usize> = lines
         .clone()
         .filter(|&line| !is_blank(doc.line(line)))
@@ -347,11 +347,11 @@ mod tests {
     #[test]
     fn toggle_comments_at_the_smallest_indentation_and_back() {
         let text = "fn a() {\n    x();\n\n      y();\n}";
-        let commented = applied(text, &toggle_line(text, Target::Lines(1..4), &rust()));
+        let commented = applied(text, &toggle_line(text, &Target::Lines(1..4), &rust()));
         assert_eq!(commented, "fn a() {\n    // x();\n\n    //   y();\n}");
         let restored = applied(
             &commented,
-            &toggle_line(&commented, Target::Lines(1..4), &rust()),
+            &toggle_line(&commented, &Target::Lines(1..4), &rust()),
         );
         assert_eq!(restored, text);
     }
@@ -360,7 +360,7 @@ mod tests {
     fn toggle_comments_everything_when_some_lines_are_not_commented() {
         let text = "// a\nb";
         assert_eq!(
-            applied(text, &toggle_line(text, Target::Document, &rust())),
+            applied(text, &toggle_line(text, &Target::Document, &rust())),
             "// // a\n// b"
         );
     }
@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn a_selection_ending_at_column_zero_leaves_that_line_alone() {
         let text = "a\nb\nc";
-        let change = toggle_line(text, Target::Selection(0..4), &rust());
+        let change = toggle_line(text, &Target::Selection(0..4), &rust());
         assert_eq!(applied(text, &change), "// a\n// b\nc");
         assert_eq!(change.selection_after(0..4), 0..10);
     }
@@ -377,44 +377,44 @@ mod tests {
     fn uncomment_removes_the_token_and_one_space() {
         let text = "  //a\n  //  b\nc\n//";
         assert_eq!(
-            applied(text, &uncomment_lines(text, Target::Document, &rust())),
+            applied(text, &uncomment_lines(text, &Target::Document, &rust())),
             "  a\n   b\nc\n"
         );
-        assert!(uncomment_lines("plain", Target::Document, &rust()).is_empty());
+        assert!(uncomment_lines("plain", &Target::Document, &rust()).is_empty());
     }
 
     #[test]
     fn line_tokens_match_ignoring_ascii_case() {
         let text = "rem hello\nREMark";
         assert_eq!(
-            applied(text, &uncomment_lines(text, Target::Document, &batch())),
+            applied(text, &uncomment_lines(text, &Target::Document, &batch())),
             "hello\nark"
         );
         assert_eq!(
-            applied("echo", &comment_lines("echo", Target::Document, &batch())),
+            applied("echo", &comment_lines("echo", &Target::Document, &batch())),
             "REM echo"
         );
     }
 
     #[test]
     fn a_blank_line_alone_gets_a_comment() {
-        let change = toggle_line("a\n\nb", Target::caret(2), &rust());
+        let change = toggle_line("a\n\nb", &Target::caret(2), &rust());
         assert_eq!(applied("a\n\nb", &change), "a\n// \nb");
-        let change = toggle_line("a\n// \nb", Target::caret(3), &rust());
+        let change = toggle_line("a\n// \nb", &Target::caret(3), &rust());
         assert_eq!(applied("a\n// \nb", &change), "a\n\nb");
     }
 
     #[test]
     fn languages_without_line_comments_wrap_each_line() {
         let text = "  <p>x</p>  \n\n    <b/>";
-        let wrapped = applied(text, &toggle_line(text, Target::Document, &html()));
+        let wrapped = applied(text, &toggle_line(text, &Target::Document, &html()));
         assert_eq!(wrapped, "  <!-- <p>x</p> -->  \n\n  <!--   <b/> -->");
-        let restored = applied(&wrapped, &toggle_line(&wrapped, Target::Document, &html()));
+        let restored = applied(&wrapped, &toggle_line(&wrapped, &Target::Document, &html()));
         assert_eq!(restored, text);
         assert_eq!(
             applied(
                 "<!---->",
-                &uncomment_lines("<!---->", Target::Document, &html())
+                &uncomment_lines("<!---->", &Target::Document, &html())
             ),
             ""
         );
@@ -423,19 +423,19 @@ mod tests {
     #[test]
     fn no_tokens_means_no_change() {
         let none = CommentTokens::default();
-        assert!(toggle_line("a", Target::Document, &none).is_empty());
-        assert!(toggle_block("a", Target::Document, &none).is_empty());
-        assert!(toggle_block("a", Target::Document, &batch()).is_empty());
+        assert!(toggle_line("a", &Target::Document, &none).is_empty());
+        assert!(toggle_block("a", &Target::Document, &none).is_empty());
+        assert!(toggle_block("a", &Target::Document, &batch()).is_empty());
     }
 
     #[test]
     fn toggle_block_wraps_a_selection_and_unwraps_it_again() {
         let text = "let x = 1 + 2;";
-        let change = toggle_block(text, Target::Selection(8..13), &rust());
+        let change = toggle_block(text, &Target::Selection(8..13), &rust());
         assert_eq!(change.selection, Some(8..19));
         let wrapped = applied(text, &change);
         assert_eq!(wrapped, "let x = /* 1 + 2 */;");
-        let change = toggle_block(&wrapped, Target::Selection(8..19), &rust());
+        let change = toggle_block(&wrapped, &Target::Selection(8..19), &rust());
         assert_eq!(applied(&wrapped, &change), text);
     }
 
@@ -443,19 +443,19 @@ mod tests {
     fn toggle_block_unwraps_the_comment_around_the_caret_or_selection() {
         let text = "int x; /* note */ y";
         assert_eq!(
-            applied(text, &toggle_block(text, Target::caret(11), &rust())),
+            applied(text, &toggle_block(text, &Target::caret(11), &rust())),
             "int x; note y"
         );
         assert_eq!(
             applied(
                 text,
-                &toggle_block(text, Target::Selection(10..12), &rust())
+                &toggle_block(text, &Target::Selection(10..12), &rust())
             ),
             "int x; note y"
         );
         let text = "/*\n  a\n  b\n*/";
         assert_eq!(
-            applied(text, &toggle_block(text, Target::caret(5), &rust())),
+            applied(text, &toggle_block(text, &Target::caret(5), &rust())),
             "\n  a\n  b\n"
         );
     }
@@ -463,10 +463,10 @@ mod tests {
     #[test]
     fn toggle_block_with_a_caret_wraps_the_line_content() {
         let text = "    foo();  \nbar";
-        let change = toggle_block(text, Target::caret(6), &rust());
+        let change = toggle_block(text, &Target::caret(6), &rust());
         assert_eq!(change.selection, Some(9..9));
         assert_eq!(applied(text, &change), "    /* foo(); */  \nbar");
-        let change = toggle_block("a\n\nb", Target::caret(2), &rust());
+        let change = toggle_block("a\n\nb", &Target::caret(2), &rust());
         assert_eq!(change.selection, Some(5..5));
         assert_eq!(applied("a\n\nb", &change), "a\n/*  */\nb");
     }
@@ -474,17 +474,20 @@ mod tests {
     #[test]
     fn toggle_block_on_lines_and_the_document() {
         let text = "\n  a\n  b  \n\n";
-        let wrapped = applied(text, &toggle_block(text, Target::Document, &rust()));
+        let wrapped = applied(text, &toggle_block(text, &Target::Document, &rust()));
         assert_eq!(wrapped, "\n  /* a\n  b */  \n\n");
         assert_eq!(
-            applied(&wrapped, &toggle_block(&wrapped, Target::Document, &rust())),
+            applied(
+                &wrapped,
+                &toggle_block(&wrapped, &Target::Document, &rust())
+            ),
             text
         );
         assert_eq!(
-            applied(text, &toggle_block(text, Target::Lines(0..3), &rust())),
+            applied(text, &toggle_block(text, &Target::Lines(0..3), &rust())),
             "\n  /* a\n  b */  \n\n"
         );
-        assert!(toggle_block("  \n", Target::Document, &rust()).is_empty());
+        assert!(toggle_block("  \n", &Target::Document, &rust()).is_empty());
     }
 
     fn plain_text() -> impl Strategy<Value = (String, Target)> {
@@ -513,9 +516,9 @@ mod tests {
         #[test]
         fn toggling_twice_restores_uncommented_lines((text, target) in plain_text()) {
             for tokens in [rust(), html()] {
-                let once = applied(&text, &toggle_line(&text, target.clone(), &tokens));
+                let once = applied(&text, &toggle_line(&text, &target.clone(), &tokens));
                 let lines = naive_lines(&text, &target);
-                let twice = applied(&once, &toggle_line(&once, Target::Lines(lines), &tokens));
+                let twice = applied(&once, &toggle_line(&once, &Target::Lines(lines), &tokens));
                 prop_assert_eq!(twice, text.clone());
             }
         }
@@ -526,7 +529,7 @@ mod tests {
             let lines: Vec<&str> = text.split('\n').collect();
             let blank = |line: &str| line.chars().all(|c| c == ' ' || c == '\t');
             let chosen: Vec<usize> = range.clone().filter(|&i| !blank(lines[i])).collect();
-            let chosen = if chosen.is_empty() { range.clone().collect() } else { chosen };
+            let chosen = if chosen.is_empty() { range.collect() } else { chosen };
             let indent = chosen
                 .iter()
                 .map(|&i| lines[i].len() - lines[i].trim_start_matches([' ', '\t']).len())
@@ -544,17 +547,17 @@ mod tests {
                 })
                 .collect();
             prop_assert_eq!(
-                applied(&text, &comment_lines(&text, target, &rust())),
+                applied(&text, &comment_lines(&text, &target, &rust())),
                 expected.join("\n")
             );
         }
 
         #[test]
         fn toggle_block_twice_restores_a_selection((text, range) in selected_text()) {
-            let change = toggle_block(&text, Target::Selection(range), &rust());
+            let change = toggle_block(&text, &Target::Selection(range), &rust());
             let wrapped = applied(&text, &change);
-            let selection = change.selection.clone().unwrap();
-            let back = applied(&wrapped, &toggle_block(&wrapped, Target::Selection(selection), &rust()));
+            let selection = change.selection.unwrap();
+            let back = applied(&wrapped, &toggle_block(&wrapped, &Target::Selection(selection), &rust()));
             prop_assert_eq!(back, text);
         }
     }

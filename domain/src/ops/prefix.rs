@@ -55,10 +55,10 @@ impl Default for Numbering {
 
 /// Adds `prefix` at the start and `suffix` at the end of every line of the target, empty
 /// lines included.
-pub fn add(text: &str, target: Target, prefix: &str, suffix: &str) -> Change {
+pub fn add(text: &str, target: &Target, prefix: &str, suffix: &str) -> Change {
     let doc = Doc::new(text);
     let mut edits = Vec::new();
-    for line in doc.lines(&target) {
+    for line in doc.lines(target) {
         let (start, end) = (doc.start(line), doc.end(line));
         if start == end {
             edits.push(TextEdit::insert(start, format!("{prefix}{suffix}")));
@@ -72,9 +72,9 @@ pub fn add(text: &str, target: Target, prefix: &str, suffix: &str) -> Change {
 
 /// Inserts one number per line of the target at character `column` (the caret's column),
 /// filling shorter lines with spaces up to it.
-pub fn insert_numbers(text: &str, target: Target, column: usize, numbering: &Numbering) -> Change {
+pub fn insert_numbers(text: &str, target: &Target, column: usize, numbering: &Numbering) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     let numbers = numbers(lines.len(), numbering);
     let mut edits = Vec::with_capacity(numbers.len());
     for (line, number) in lines.zip(numbers) {
@@ -158,13 +158,13 @@ mod tests {
     #[test]
     fn prefix_and_suffix_go_on_every_line_including_empty_ones() {
         let text = "a\n\nb\n";
-        let change = add(text, Target::Document, "- ", ";");
+        let change = add(text, &Target::Document, "- ", ";");
         assert_eq!(applied(text, &change), "- a;\n- ;\n- b;\n");
         assert_eq!(change.selection_after(0..5), 0..14);
         assert_eq!(
             applied(
                 "x\ny\nz",
-                &add("x\ny\nz", Target::Selection(0..4), "<", ">")
+                &add("x\ny\nz", &Target::Selection(0..4), "<", ">")
             ),
             "<x>\n<y>\nz"
         );
@@ -229,9 +229,9 @@ mod tests {
     #[test]
     fn numbers_go_in_at_the_column_and_pad_short_lines() {
         let text = "abc\nx\n\nlonger";
-        let change = insert_numbers(text, Target::Document, 2, &numbering(8, 1, Padding::Zeros));
+        let change = insert_numbers(text, &Target::Document, 2, &numbering(8, 1, Padding::Zeros));
         assert_eq!(applied(text, &change), "ab08c\nx 09\n  10\nlo11nger");
-        let change = insert_numbers(text, Target::Lines(0..2), 0, &Numbering::default());
+        let change = insert_numbers(text, &Target::Lines(0..2), 0, &Numbering::default());
         assert_eq!(applied(text, &change), "1abc\n2x\n\nlonger");
     }
 
@@ -244,7 +244,7 @@ mod tests {
                 .map(|line| format!("{prefix}{line}{suffix}"))
                 .collect();
             prop_assert_eq!(
-                applied(&text, &add(&text, target, &prefix, &suffix)),
+                applied(&text, &add(&text, &target, &prefix, &suffix)),
                 splice_lines(&text, range, lines)
             );
         }
@@ -267,7 +267,7 @@ mod tests {
                 })
                 .collect();
             prop_assert_eq!(
-                applied(&text, &insert_numbers(&text, target, column, &settings)),
+                applied(&text, &insert_numbers(&text, &target, column, &settings)),
                 splice_lines(&text, range, lines)
             );
         }

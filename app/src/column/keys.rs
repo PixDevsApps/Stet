@@ -112,11 +112,8 @@ pub fn column_key(view: &StetView, key: gdk::Key, state: gdk::ModifierType) -> g
     let mods = state & gtk::accelerator_get_default_mod_mask();
     let plain = mods.is_empty();
     match key {
-        gdk::Key::Escape if plain => {
-            view.end_column_mode(Collapse::Cursor);
-            glib::Propagation::Stop
-        }
-        gdk::Key::Left
+        gdk::Key::Escape
+        | gdk::Key::Left
         | gdk::Key::Right
         | gdk::Key::Up
         | gdk::Key::Down

@@ -248,7 +248,15 @@ impl Window {
             let bulk = (edit.edits.len() > BULK_EDIT_THRESHOLD)
                 .then(|| coalesce(&edit.edits, &text))
                 .flatten();
-            self.finish_line_op(&page, &text, edit, bulk, clipboard, started, false);
+            self.finish_line_op(
+                &page,
+                &text,
+                &edit,
+                bulk.as_ref(),
+                clipboard,
+                started,
+                false,
+            );
             return;
         }
         let revision = page.revision();
@@ -278,7 +286,7 @@ impl Window {
                 ));
                 return;
             }
-            window.finish_line_op(&page, &text, edit, bulk, clipboard, started, true);
+            window.finish_line_op(&page, &text, &edit, bulk.as_ref(), clipboard, started, true);
         });
     }
 
@@ -287,8 +295,8 @@ impl Window {
         &self,
         page: &EditorPage,
         text: &str,
-        edit: LineEdit,
-        bulk: Option<TextEdit>,
+        edit: &LineEdit,
+        bulk: Option<&TextEdit>,
         clipboard: Option<String>,
         started: Instant,
         worker: bool,
@@ -309,7 +317,7 @@ impl Window {
         page.clear_current_match();
         let mut applied = None;
         page.track_edit(text, &edit.edits, Some(edit.bookmarks.clone()), || {
-            let done = match &bulk {
+            let done = match bulk {
                 Some(bulk) => edits::apply_coalesced(&buffer, &edit.edits, bulk),
                 None => edits::apply_change(
                     &buffer,
@@ -356,7 +364,7 @@ impl Window {
         let bookmark = find.bookmark_line.is_active();
         let purge = find.purge.is_active();
         let options = find.options();
-        let (range, _) = self.command_scope(&page, &options);
+        let (range, _) = Self::command_scope(&page, options);
         let matcher = Arc::clone(&compiled.matcher);
         let request = MarkRequest {
             style,
@@ -404,7 +412,7 @@ impl Window {
         };
         if text.len() <= super::SYNC_BYTES {
             let found = search(&text);
-            self.finish_mark(page, request, found, started, false, what);
+            self.finish_mark(page, &request, found, started, false, what);
             return;
         }
         let revision = page.revision();
@@ -426,7 +434,7 @@ impl Window {
                 return;
             }
             match found {
-                Some(found) => window.finish_mark(&page, request, found, started, true, what),
+                Some(found) => window.finish_mark(&page, &request, found, started, true, what),
                 None => window
                     .inner
                     .find
@@ -438,7 +446,7 @@ impl Window {
     fn finish_mark(
         &self,
         page: &EditorPage,
-        request: MarkRequest,
+        request: &MarkRequest,
         found: Result<Found, SearchError>,
         started: Instant,
         worker: bool,

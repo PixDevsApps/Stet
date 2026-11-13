@@ -36,7 +36,7 @@ pub fn format(text: &str, indent: Indent) -> Result<String, XmlError> {
 
 /// [`format()`] on the selection, or on the whole document for a caret or `Document`. The
 /// whitespace around the XML stays; error positions are positions in `text`.
-pub fn format_target(text: &str, target: Target, indent: Indent) -> Result<Change, XmlError> {
+pub fn format_target(text: &str, target: &Target, indent: Indent) -> Result<Change, XmlError> {
     reformat_target(text, target, |xml| format(xml, indent))
 }
 
@@ -248,6 +248,8 @@ fn write(text: &str, document: &Document, mut breaks: Breaks) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
     use crate::text::apply;
     use proptest::prelude::*;
@@ -384,13 +386,13 @@ mod tests {
     #[test]
     fn targets_keep_the_surrounding_whitespace() {
         let text = "\n<a><b/></a>\n";
-        let change = format_target(text, Target::Document, Indent::Spaces(4)).unwrap();
+        let change = format_target(text, &Target::Document, Indent::Spaces(4)).unwrap();
         assert_eq!(
             apply(text, change.edits).unwrap(),
             "\n<a>\n    <b/>\n</a>\n"
         );
         let text = "x\n<a><b></a>";
-        let error = format_target(text, Target::Selection(2..12), Indent::default()).unwrap_err();
+        let error = format_target(text, &Target::Selection(2..12), Indent::default()).unwrap_err();
         assert_eq!((error.line, error.column, error.offset), (2, 7, 8));
     }
 
@@ -511,7 +513,8 @@ mod tests {
         let mut text = String::from("<?xml version=\"1.0\"?>\n<catalog>");
         let mut id = 0u64;
         while text.len() < bytes {
-            text.push_str(&std::format!(
+            let _ = write!(
+                text,
                 concat!(
                     "<book id=\"{id}\" lang='en'><title>Title {id}</title><author>A &amp; B</author>",
                     "<price currency=\"EUR\">{price}.50</price><!-- note {id} --><tags><tag>x</tag><tag>y</tag></tags>",
@@ -519,7 +522,7 @@ mod tests {
                 ),
                 id = id,
                 price = id % 100
-            ));
+            );
             id += 1;
         }
         text.push_str("</catalog>\n");
@@ -556,7 +559,7 @@ mod tests {
             String::new()
         });
         time("format_target (Document, with the edit)", &|| {
-            let change = format_target(&compact, Target::Document, Indent::Spaces(2)).unwrap();
+            let change = format_target(&compact, &Target::Document, Indent::Spaces(2)).unwrap();
             assert_eq!(change.edits.len(), 1);
             String::new()
         });

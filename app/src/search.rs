@@ -27,21 +27,15 @@ pub async fn find(
     from: &gtk::TextIter,
     forward: bool,
 ) -> Option<Match> {
-    let (sender, receiver) = async_channel::bounded(1);
-    let pending = Box::new(Pending {
-        forward,
-        buffer: search.buffer(),
-        sender,
-    });
     unsafe extern "C" fn done(
         source: *mut glib::gobject_ffi::GObject,
-        result: *mut gtk4::gio::ffi::GAsyncResult,
+        result: *mut gio::ffi::GAsyncResult,
         data: glib::ffi::gpointer,
     ) {
         // SAFETY: `data` is the `Pending` boxed below, handed to exactly one callback; the
         // iterators are initialised from the buffer before the finish function overwrites them.
         unsafe {
-            let pending = Box::from_raw(data as *mut Pending);
+            let pending = Box::from_raw(data.cast::<Pending>());
             let mut start = pending.buffer.start_iter();
             let mut end = pending.buffer.start_iter();
             let mut wrapped = 0;
@@ -52,12 +46,12 @@ pub async fn find(
                 sourceview5::ffi::gtk_source_search_context_backward_finish
             };
             let found = finish(
-                source as *mut _,
+                source.cast(),
                 result,
                 start.to_glib_none_mut().0,
                 end.to_glib_none_mut().0,
-                &mut wrapped,
-                &mut error,
+                &raw mut wrapped,
+                &raw mut error,
             ) != 0;
             let failed = !error.is_null();
             if failed {
@@ -67,6 +61,12 @@ pub async fn find(
             let _ = pending.sender.try_send(found);
         }
     }
+    let (sender, receiver) = async_channel::bounded(1);
+    let pending = Box::new(Pending {
+        forward,
+        buffer: search.buffer(),
+        sender,
+    });
     // SAFETY: the context and the iterator outlive the call (GIO copies the iterator), and
     // `done` takes back ownership of `pending`.
     unsafe {

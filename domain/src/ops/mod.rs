@@ -359,15 +359,15 @@ fn replace_lines(doc: &Doc<'_>, range: Range<usize>, old: &[&str], new: &[&str])
 /// Errors are reported in positions of `text`.
 fn reformat_target(
     text: &str,
-    target: Target,
+    target: &Target,
     transform: impl FnOnce(&str) -> Result<String, SyntaxError>,
 ) -> Result<Change, SyntaxError> {
     let doc = Doc::new(text);
-    let selected = matches!(&target, Target::Selection(range) if range.start != range.end);
-    let range = match &target {
+    let selected = matches!(target, Target::Selection(range) if range.start != range.end);
+    let range = match target {
         Target::Selection(range) if selected => doc.clamp(range),
         Target::Lines(_) => {
-            let lines = doc.lines(&target);
+            let lines = doc.lines(target);
             if lines.is_empty() {
                 return Ok(Change::default());
             }

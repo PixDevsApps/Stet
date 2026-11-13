@@ -257,12 +257,7 @@ mod tests {
     fn only_unicode_entries_have_a_bom_variant() {
         for entry in &ENCODINGS {
             let unicode = !bom_bytes(entry.encoding).is_empty();
-            assert_eq!(
-                entry.group == EncodingGroup::Unicode,
-                unicode,
-                "{}",
-                entry.label
-            );
+            assert_eq!(entry.group == Unicode, unicode, "{}", entry.label);
             assert!(!entry.bom || unicode, "{}", entry.label);
         }
         for encoding in [UTF_8, UTF_16LE, UTF_16BE] {

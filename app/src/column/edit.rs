@@ -249,7 +249,7 @@ fn replace(buffer: &sourceview5::Buffer, base: usize, edit: &TextEdit) {
 
 /// What the views of one buffer share (M7: a clone shows the same buffer in the other view):
 /// the redo workaround's state, and which view is in column mode, since only one may be.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct BufferShared {
     /// An outermost user action is open on the buffer.
     user_action: Cell<bool>,
@@ -454,7 +454,7 @@ unsafe extern "C" fn insert_text_trampoline(
         let Ok(text) = std::str::from_utf8(bytes) else {
             return;
         };
-        let iter = gtk::TextIter::from_glib_none(location as *const gtk::ffi::GtkTextIter);
+        let iter = gtk::TextIter::from_glib_none(location.cast_const());
         if !view.takes_insert(&iter, text) {
             return;
         }

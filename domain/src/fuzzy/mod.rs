@@ -57,6 +57,8 @@ pub fn score(query: &str, candidate: &str) -> Option<Match> {
 /// The best `limit` matches, best first. Equal scores rank the shorter candidate first, then
 /// the earlier one. An empty query returns the first `limit` candidates in their order.
 pub fn rank<S: AsRef<str>>(query: &str, candidates: &[S], limit: usize) -> Vec<Ranked> {
+    /// Higher is better: the score, then the shorter candidate, then the earlier one.
+    type Key = (i32, Reverse<usize>, Reverse<usize>);
     let mut matcher = Matcher::new(query);
     if matcher.is_empty() {
         return (0..candidates.len().min(limit))
@@ -67,8 +69,6 @@ pub fn rank<S: AsRef<str>>(query: &str, candidates: &[S], limit: usize) -> Vec<R
             })
             .collect();
     }
-    /// Higher is better: the score, then the shorter candidate, then the earlier one.
-    type Key = (i32, Reverse<usize>, Reverse<usize>);
     let mut best: BinaryHeap<Reverse<Key>> = BinaryHeap::with_capacity(limit + 1);
     for (index, candidate) in candidates.iter().enumerate() {
         let candidate = candidate.as_ref();

@@ -77,14 +77,17 @@ impl SearchOptions {
         }
     }
 
+    #[must_use]
     pub fn with_match_case(self, match_case: bool) -> Self {
         Self { match_case, ..self }
     }
 
+    #[must_use]
     pub fn with_whole_word(self, whole_word: bool) -> Self {
         Self { whole_word, ..self }
     }
 
+    #[must_use]
     pub fn with_dot_matches_newline(self, dot_matches_newline: bool) -> Self {
         Self {
             dot_matches_newline,
@@ -136,6 +139,7 @@ impl Query {
         Self::new(pattern, SearchOptions::new(SearchMode::Regex))
     }
 
+    #[must_use]
     pub fn with_options(self, options: SearchOptions) -> Self {
         Self { options, ..self }
     }

@@ -65,7 +65,7 @@ pub(crate) fn pcre2_message(error: impl fmt::Display) -> String {
     let text = error.to_string();
     text.strip_prefix("PCRE2: ")
         .and_then(|rest| rest.split_once(": "))
-        .map_or(text.clone(), |(_, message)| message.to_owned())
+        .map_or_else(|| text.clone(), |(_, message)| message.to_owned())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -9,10 +9,12 @@ mod config;
 mod editor;
 mod edits;
 mod loader;
+#[expect(unsafe_code, reason = "a GtkSourceView call the bindings lack")]
 mod marks;
 mod monitor;
 mod page_search;
 mod preferences;
+#[expect(unsafe_code, reason = "GtkSourceView's async search through its C API")]
 mod search;
 mod selftest;
 mod session;

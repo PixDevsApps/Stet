@@ -183,7 +183,7 @@ fn round_trips_forty_tabs_and_keeps_backups_of_unopened_tabs() {
     // sending their text again.
     store
         .commit(Snapshot {
-            session: restored.session.clone(),
+            session: restored.session,
             ..Snapshot::default()
         })
         .unwrap();

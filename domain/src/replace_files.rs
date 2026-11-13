@@ -12,7 +12,7 @@
 
 use crate::search::report::counted;
 use crate::text::{Eol, EolStats};
-use std::fmt;
+use std::fmt::{self, Write as _};
 use std::ops::Range;
 
 /// A decoded text normalized to LF, with what it takes to map offsets back to the text as it
@@ -237,10 +237,10 @@ pub fn heading(
         counted(files, "file", "files")
     );
     if let Some(searched) = searched {
-        heading.push_str(&format!(" of {searched} searched"));
+        let _ = write!(heading, " of {searched} searched");
     }
     if skipped > 0 {
-        heading.push_str(&format!("; {skipped} skipped"));
+        let _ = write!(heading, "; {skipped} skipped");
     }
     heading.push(')');
     heading

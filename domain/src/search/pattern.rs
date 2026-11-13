@@ -5,6 +5,8 @@
 //! It is not a validator. Whatever it does not recognize is copied unchanged, so PCRE2 reports
 //! the error with an offset that [`SourceMap`] maps back to the typed pattern.
 
+use std::fmt::Write as _;
+
 use super::translate::{Note, Target};
 
 pub(crate) struct Rewrite {
@@ -252,7 +254,10 @@ impl Scanner<'_> {
             match self.peek() {
                 Some(c) if is_pattern_space(c) => self.copy_chars(1),
                 Some('#') => {
-                    let len = self.rest().find(is_newline).unwrap_or(self.rest().len());
+                    let len = self
+                        .rest()
+                        .find(is_newline)
+                        .unwrap_or_else(|| self.rest().len());
                     self.copy_bytes(len);
                 }
                 _ => return,
@@ -454,7 +459,7 @@ impl Scanner<'_> {
                         let joined = 0x10000 + ((value - 0xD800) << 10) + (low - 0xDC00);
                         self.anchor(false);
                         self.bump_bytes(len + low_len);
-                        self.out.push_str(&format!(r"\x{{{joined:X}}}"));
+                        let _ = write!(self.out, r"\x{{{joined:X}}}");
                     }
                     None => self.copy_bytes(len),
                 }
@@ -463,7 +468,7 @@ impl Scanner<'_> {
                 self.note(Note::OctalEscape);
                 self.anchor(false);
                 self.bump_bytes(len);
-                self.out.push_str(&format!(r"\x{{{value:X}}}"));
+                let _ = write!(self.out, r"\x{{{value:X}}}");
             }
             _ => self.copy_bytes(len),
         }
@@ -652,7 +657,7 @@ impl Scanner<'_> {
                     self.note(Note::OctalEscape);
                     self.anchor(false);
                     self.bump_bytes(len);
-                    self.out.push_str(&format!(r"\x{{{value:X}}}"));
+                    let _ = write!(self.out, r"\x{{{value:X}}}");
                     Some(value)
                 }
                 Some((len, value)) => {
@@ -737,11 +742,9 @@ impl Scanner<'_> {
                     nullable: self.group_body(),
                 }
             }
-            (Some('P'), Some('=' | '>')) | (Some('&' | 'R' | '0'..='9' | '+'), _) => {
-                self.copy_through_paren();
-                NULLABLE
-            }
-            (Some('-'), Some('0'..='9')) => {
+            (Some('P'), Some('=' | '>'))
+            | (Some('&' | 'R' | '0'..='9' | '+'), _)
+            | (Some('-'), Some('0'..='9')) => {
                 self.copy_through_paren();
                 NULLABLE
             }
@@ -776,7 +779,7 @@ impl Scanner<'_> {
         let len = self
             .rest()
             .find(')')
-            .map_or(self.rest().len(), |end| end + 1);
+            .map_or_else(|| self.rest().len(), |end| end + 1);
         self.copy_bytes(len);
     }
 
@@ -1011,7 +1014,7 @@ fn code_point_at(rest: &str) -> Option<(usize, u32)> {
                     .take(2)
                     .take_while(u8::is_ascii_hexdigit)
                     .count();
-                let value = u32::from_str_radix(&body[1..1 + digits], 16).unwrap_or(0);
+                let value = u32::from_str_radix(&body[1..=digits], 16).unwrap_or(0);
                 Some((2 + digits, value))
             }
         }
@@ -1027,7 +1030,7 @@ fn code_point_at(rest: &str) -> Option<(usize, u32)> {
                 .take(3)
                 .take_while(|b| (b'0'..=b'7').contains(b))
                 .count();
-            let value = u32::from_str_radix(&body[..1 + digits], 8).ok()?;
+            let value = u32::from_str_radix(&body[..=digits], 8).ok()?;
             Some((2 + digits, value))
         }
         'c' => {

@@ -278,7 +278,7 @@ fn applied(text: &str, index: &LineIndex, edit: &ColumnEdit) -> Result<String, T
     prop_assert!(lines.windows(2).all(|pair| pair[0] < pair[1]));
     let result = apply(text, edit.edits.clone()).unwrap();
     if let Some(bulk) = edit.to_bulk(text, index) {
-        prop_assert_eq!(apply(text, vec![bulk.edit]).unwrap(), result.clone());
+        prop_assert_eq!(apply(text, vec![bulk.edit]).unwrap(), result.as_str());
         prop_assert_eq!(
             LineIndex::new(&result).line_count(),
             index.line_count() + bulk.appended_lines

@@ -35,7 +35,6 @@ notes/               repository root (this checkout's folder keeps the M0 workin
   app/               crate `stet` (binary): the only production crate that links GTK
   domain/            crate `stet-domain`: pure logic
   infrastructure/    crate `stet-infrastructure`: std I/O
-  spikes/            crate `stet-spikes`: M0 spike binaries s1_perf, s2_search, s3_theme, s4_live, s5_column
   assets/            brand/ (SVG icon masters), icons/ (PNG exports); provenance in docs/ASSETS.md
   packaging/         PKGBUILD.in, the desktop file, the metainfo, dependency-licenses.json and licenses/;
                      flatpak/ (the Flatpak's manifest and cargo-sources.json, 1.6)
@@ -104,7 +103,7 @@ infrastructure/  encoding/ (detect, decode, encode); fs/ (load, safe save, finge
 - `stet-domain`: no I/O, no GTK, no threads. Only pure crates (for example `serde`, `thiserror`, `memchr`, `unicode-segmentation`).
 - `stet-infrastructure`: depends on `stet-domain`; std I/O and worker-safe code; no GTK; every test runs headless.
 - `stet` (the app): depends on both; links `gtk4`, `libadwaita` and `sourceview5`. Nothing blocking runs on the GTK thread; workers are plain `std::thread`s and results come back through `async-channel`.
-- `stet-spikes`: measurement code for M0. It may depend on anything; nothing depends on it; it is not a default member.
+- The M0 spike crate `stet-spikes` was removed on 2026-11-13 ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13)); its code is at the tag `m0-spikes` (see "Spikes (M0)" below).
 - Deliberately **not** used: `syntect`/`two-face` (GtkSourceView highlights), `ropey` ([ADR-003](DECISIONS.md)), `fancy-regex` ([ADR-005](DECISIONS.md)), `notify` (GFileMonitor), `zbus` (GApplication), `ashpd` (portals are the GTK default), `toml_edit` (no Preferences GUI), relm4, tokio. `serde_json`'s `arbitrary_precision` is never enabled: it breaks untagged and flattened types across the whole binary; the JSON tools are token-level.
 
 The planned dependency versions are in the approved plan and [RESEARCH.md](RESEARCH.md#4-core-crates); `Cargo.toml` is the source of truth for what is actually used. Added in M1: `clap` 4.6 (builder API, without the `color` feature) and `async-channel` 2.5 in the app, `gio` directly with `v2_80` (for `GApplicationCommandLine::print_literal`), and `serde` and `serde_json` in `stet-infrastructure` for `recent.json`. Added in M2: `glib-unix` 0.22 in the app, for the SIGTERM, SIGHUP and SIGINT handlers (gtk-rs moved `unix_signal_add_local` out of `glib` into that crate), and `serde_json` in the app, which the self-test uses to read `session.json`. Added in M5: `toml` 1.1 in `stet-domain`, with only its `std` and `parse` features (spanned tables, no serde or writing), for `config.toml` and `keys.toml` ([ADR-017](DECISIONS.md#adr-017--settings-in-configtoml-and-keystoml-2026-10-01)).
@@ -223,6 +222,12 @@ python3 tools/gen-fixtures.py
 Writes the large generated inputs to `target/fixtures/`. They are **not committed** (`target/` is build output), and `cargo clean` removes them, as it did on 2026-09-30 when `target/` was cleaned to free disk space. Regenerate them with `python3 tools/gen-fixtures.py` before running a spike. Output is seeded, so every run produces identical files; existing files are kept unless `--force` is given. As scaffolded on 2026-09-30 it writes `big-1m-lines.txt` (1M lines of code-like text, for the open test), `medium-10mb.rs` (typing latency), `single-line-10mb.json` (the long-line path) and `search-1m.log` (replace-all). The script prints each file's size; record the actual sizes with spike results rather than assuming them. Small hand-made fixtures (encodings, line endings, NUL, binary) are committed under `tests/fixtures/` from M3.
 
 ## Spikes (M0)
+
+The spike code left the tree on 2026-11-13 ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13)); its results stay in `docs/spikes/`. To run a spike again, check out the tag in a worktree of its own and run the commands below there:
+
+```sh
+git worktree add ../stet-m0-spikes m0-spikes
+```
 
 Generate the fixtures, build once, then run each spike headless on your own display number. Full runs take far longer than the wrapper's default 300 s limit, so raise `STET_HEADLESS_TIMEOUT`. On 2026-09-30, S1 and S2 used up to 3000 and 3600 s, and a full S3 run took 7 min 43 s.
 

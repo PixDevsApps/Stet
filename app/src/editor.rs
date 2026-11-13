@@ -220,6 +220,7 @@ pub enum IndentSource {
 
 /// What a tab shows, whichever views show it: the buffer and everything about the document.
 /// A clone in the other view (M7) is a second [`EditorPage`] over the same document.
+#[derive(Debug)]
 pub struct Document {
     buffer: sourceview5::Buffer,
     /// What the buffer's views share (column mode's redo workaround and owner).
@@ -388,7 +389,7 @@ impl Document {
 mod imp {
     use super::*;
 
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     pub struct EditorPage {
         pub view: OnceCell<StetView>,
         pub banner_box: OnceCell<gtk::Box>,
@@ -425,7 +426,7 @@ mod imp {
         /// The page's focus is its editor: a click on the page's tab, and GTK moving a focus
         /// that a banner button lost, land there.
         fn grab_focus(&self) -> bool {
-            self.view.get().is_some_and(|view| view.grab_focus())
+            self.view.get().is_some_and(WidgetExt::grab_focus)
         }
     }
     impl BoxImpl for EditorPage {}
@@ -443,7 +444,7 @@ impl EditorPage {
         scheme: Option<&sourceview5::StyleScheme>,
         settings: ViewSettings,
     ) -> Self {
-        Self::with_document(Document::new(state), scheme, settings)
+        Self::with_document(&Document::new(state), scheme, settings)
     }
 
     /// A second view of this page's document (Clone to Other View, M7): the same buffer,
@@ -453,13 +454,13 @@ impl EditorPage {
         scheme: Option<&sourceview5::StyleScheme>,
         settings: ViewSettings,
     ) -> Self {
-        let page = Self::with_document(self.document().clone(), scheme, settings);
+        let page = Self::with_document(self.document(), scheme, settings);
         page.save_selection();
         page
     }
 
     fn with_document(
-        document: Rc<Document>,
+        document: &Rc<Document>,
         scheme: Option<&sourceview5::StyleScheme>,
         settings: ViewSettings,
     ) -> Self {
@@ -505,7 +506,7 @@ impl EditorPage {
         view.set_mark_attributes(crate::marks::BOOKMARK_CATEGORY, &attributes, 10);
         view.set_show_line_marks(true);
         // Line numbers and bookmarks at the top of their line, which a comparison pads below.
-        let gutter = sourceview5::prelude::ViewExt::gutter(
+        let gutter = ViewExt::gutter(
             view.upcast_ref::<sourceview5::View>(),
             gtk::TextWindowType::Left,
         );
@@ -526,7 +527,7 @@ impl EditorPage {
                 }
             }
         ));
-        let weak = Rc::downgrade(&document);
+        let weak = Rc::downgrade(document);
         view.set_column_tracker(Rc::new(move |lines, logical, apply| {
             if let Some(document) = weak.upgrade() {
                 document
@@ -537,7 +538,7 @@ impl EditorPage {
             }
         }));
         if let Some(adjustment) = view.vadjustment() {
-            let weak = Rc::downgrade(&document);
+            let weak = Rc::downgrade(document);
             adjustment.connect_value_changed(move |_| {
                 if let Some(document) = weak.upgrade() {
                     document.schedule_retag();
@@ -1124,7 +1125,7 @@ impl EditorPage {
             .map
             .borrow()
             .as_ref()
-            .is_some_and(|map| map.is_visible())
+            .is_some_and(WidgetExt::is_visible)
     }
 
     // ----- indentation ---------------------------------------------------------------------

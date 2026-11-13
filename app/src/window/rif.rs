@@ -19,6 +19,7 @@ use gtk4::prelude::*;
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::collections::VecDeque;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -470,16 +471,18 @@ impl Window {
             status.push_str(" — stopped");
         }
         if totals.failed > 0 {
-            status.push_str(&format!(
+            let _ = write!(
+                status,
                 " — {} failed",
                 counted(totals.failed, "file", "files")
-            ));
+            );
         }
         if unlisted_files > 0 {
-            status.push_str(&format!(
+            let _ = write!(
+                status,
                 " — {} listed without their lines",
                 counted(unlisted_files, "file", "files")
-            ));
+            );
         }
         results.status.set_label(&status);
         results.stop.set_visible(false);
@@ -584,7 +587,7 @@ impl Window {
         if page.read_only().is_some() {
             return skipped(Skip::DocumentReadOnly);
         }
-        let dirty = self.has_unsaved_changes(&page);
+        let dirty = Self::has_unsaved_changes(&page);
         let text = page.text();
         let revision = page.revision();
         let replaced = worker::run(move || {

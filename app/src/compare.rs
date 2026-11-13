@@ -103,7 +103,7 @@ pub fn line_height(view: &sourceview5::View) -> i32 {
         return measured;
     }
     let metrics = view.pango_context().metrics(None, None);
-    ((metrics.ascent() + metrics.descent()) as f64 / gtk::pango::SCALE as f64).ceil() as i32
+    (f64::from(metrics.ascent() + metrics.descent()) / f64::from(gtk::pango::SCALE)).ceil() as i32
 }
 
 /// Removes the comparison from `page`'s document and every view of it.

@@ -6,7 +6,7 @@
 pub mod keymap;
 
 use std::collections::BTreeMap;
-use std::fmt;
+use std::fmt::{self, Write as _};
 use std::ops::Range;
 use std::time::Duration;
 
@@ -451,9 +451,9 @@ pub fn default_config_file() -> String {
     );
     let line = |out: &mut String, setting: String, note: &str| {
         if note.is_empty() {
-            out.push_str(&format!("# {setting}\n"));
+            let _ = writeln!(out, "# {setting}");
         } else {
-            out.push_str(&format!("# {setting:<34} # {note}\n"));
+            let _ = writeln!(out, "# {setting:<34} # {note}");
         }
     };
     line(
@@ -522,12 +522,12 @@ pub fn default_config_file() -> String {
          # defaults are listed.\n",
     );
     for (id, indent) in LANGUAGE_INDENTS {
-        out.push_str(&format!("# [language.{id}]\n"));
+        let _ = writeln!(out, "# [language.{id}]");
         if let Some(width) = indent.tab_width {
-            out.push_str(&format!("# tab_width = {width}\n"));
+            let _ = writeln!(out, "# tab_width = {width}");
         }
         if let Some(spaces) = indent.insert_spaces {
-            out.push_str(&format!("# insert_spaces = {spaces}\n"));
+            let _ = writeln!(out, "# insert_spaces = {spaces}");
         }
     }
     out
@@ -722,7 +722,7 @@ mod tests {
                         .split_once(" = ")
                         .is_some_and(|(key, _)| !key.contains(' '))
             })
-            .map(|line| format!("{line}\n"))
+            .flat_map(|line| [line, "\n"])
             .collect();
         let settings = Settings::parse(&uncommented).unwrap();
         assert_eq!(settings.font.as_deref(), Some("JetBrainsMono Nerd Font"));

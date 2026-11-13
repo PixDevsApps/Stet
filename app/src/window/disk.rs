@@ -109,7 +109,7 @@ impl Window {
             match result {
                 Ok(now) if baseline.matches(&now) => {
                     if matches!(state.disk, DiskState::Deleted { .. }) {
-                        self.file_returned(&page, now).await;
+                        self.file_returned(&page, now);
                     }
                 }
                 Ok(now) => self.file_changed(&page, now).await,
@@ -146,7 +146,7 @@ impl Window {
     }
 
     /// The file is back unchanged after it was gone: nothing to reload.
-    async fn file_returned(&self, page: &EditorPage, now: Fingerprint) {
+    fn file_returned(&self, page: &EditorPage, now: Fingerprint) {
         let clean = matches!(
             page.state().disk,
             DiskState::Deleted { clean_revision } if clean_revision == Some(page.revision())

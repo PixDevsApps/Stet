@@ -275,7 +275,7 @@ impl Harness {
             self.wait_until_settled().await;
             return Ok(());
         }
-        let values: [&dyn glib::value::ToValue; 3] = [&key.into_glib(), &0u32, &mods];
+        let values: [&dyn ToValue; 3] = [&key.into_glib(), &0u32, &mods];
         if view
             .column_keys()
             .emit_by_name::<bool>("key-pressed", &values)
@@ -741,7 +741,7 @@ impl Harness {
         }
         let editor = editor.ok_or_else(|| "the Column Editor is not open".to_owned())?;
         if wanted == "focused" {
-            let focus = gtk::prelude::RootExt::focus(self.window.window());
+            let focus = RootExt::focus(self.window.window());
             let inside = focus
                 .as_ref()
                 .is_some_and(|focus| focus.is_ancestor(&editor.dialog) && focus.is_mapped());

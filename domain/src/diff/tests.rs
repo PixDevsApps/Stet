@@ -445,7 +445,7 @@ fn any_options() -> impl Strategy<Value = CompareOptions> {
 }
 
 /// The keys of the lines that take part in the comparison.
-fn compared_keys(text: &str, options: &CompareOptions) -> Vec<String> {
+fn compared_keys(text: &str, options: CompareOptions) -> Vec<String> {
     lines(text)
         .into_iter()
         .map(|line| key::line_key(line, options).into_owned())
@@ -522,7 +522,7 @@ proptest! {
     fn hunks_turn_the_left_text_into_the_right((left, right) in texts(), detect_moves in any::<bool>()) {
         let options = CompareOptions { detect_moves, ..exact() };
         let comparison = compare(&left, &right, &options);
-        prop_assert_eq!(apply_hunks(&left, &right, &comparison), right.clone());
+        prop_assert_eq!(apply_hunks(&left, &right, &comparison), right.as_str());
         check_structure(&comparison, &left, &right)?;
         for (row, (l, r)) in rows(&comparison.alignment).into_iter().enumerate() {
             let in_hunk = (0..comparison.hunks.len()).any(|i| comparison.hunk_rows(i).contains(&row));
@@ -545,7 +545,7 @@ proptest! {
     fn options_only_hide_differences_they_name((left, right) in texts(), options in any_options()) {
         let comparison = compare(&left, &right, &options);
         let patched = apply_hunks(&left, &right, &comparison);
-        prop_assert_eq!(compared_keys(&patched, &options), compared_keys(&right, &options));
+        prop_assert_eq!(compared_keys(&patched, options), compared_keys(&right, options));
         check_structure(&comparison, &left, &right)?;
     }
 }

@@ -74,7 +74,7 @@ fn filters_include_and_exclude() {
         assert_eq!(summary.files_matched, files.len());
         paths(&files)
             .iter()
-            .map(|path| path.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>()
     };
     assert_eq!(
@@ -384,7 +384,7 @@ fn cancel_stops_within_50_ms() {
             sink_delivered.fetch_add(1, Ordering::SeqCst);
         })
         .unwrap();
-        std::thread::sleep(Duration::from_millis(30));
+        thread::sleep(Duration::from_millis(30));
         assert!(
             !handle.is_finished(),
             "{query:?} finished before it could be cancelled"

@@ -281,9 +281,9 @@ impl Window {
                     Reach::Document,
                     Box::new(move |text, target| {
                         Ok(if spaces {
-                            lines::tabs_to_spaces(text, target, width, Scope::Leading)
+                            lines::tabs_to_spaces(text, &target, width, Scope::Leading)
                         } else {
-                            lines::spaces_to_tabs(text, target, width, Scope::Leading)
+                            lines::spaces_to_tabs(text, &target, width, Scope::Leading)
                         })
                     }),
                     "Convert Indentation",

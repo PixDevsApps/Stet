@@ -164,6 +164,7 @@ pub const FILE_DEBOUNCE: Duration = Duration::from_millis(300);
 /// Watches one open file, renames into and out of its place included. Any event restarts a
 /// 300 ms debounce, after which `on_change` runs once; the owner then compares fingerprints,
 /// so events that changed nothing cost one `stat`.
+#[derive(Debug)]
 pub struct FileWatch {
     monitor: gio::FileMonitor,
     debounce: Rc<RefCell<Option<glib::SourceId>>>,

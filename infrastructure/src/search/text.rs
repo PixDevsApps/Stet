@@ -17,10 +17,10 @@ pub(crate) fn next_boundary(bytes: &[u8], at: usize) -> usize {
 /// The byte offset of character `target`, walking from byte `byte`, which is character
 /// `chars`. `None` beyond the end of `text`.
 pub(crate) fn char_to_byte(text: &str, byte: usize, chars: usize, target: usize) -> Option<usize> {
+    const BLOCK: usize = 64;
     if target < chars {
         return char_to_byte(text, 0, 0, target);
     }
-    const BLOCK: usize = 64;
     let mut remaining = target - chars;
     let bytes = text.as_bytes();
     let mut at = byte;

@@ -8,6 +8,7 @@ use gtk4::{gio, glib};
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::cell::Cell;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use stet_domain::text::{LONG_LINE_CHARS, LongestLine};
@@ -133,11 +134,12 @@ impl Window {
             grouped(LONG_LINE_CHARS)
         );
         if let Some(kind) = kind {
-            body.push_str(&format!(
+            let _ = write!(
+                body,
                 "\n\nOpen Formatted pretty-prints the {} on its lines; the text then differs \
                  from the file's bytes, and saving asks first.",
                 kind.label()
-            ));
+            );
         }
         body.push_str(
             "\n\nOpen Read-Only breaks the long lines for display; the text can't be saved.",

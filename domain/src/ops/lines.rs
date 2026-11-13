@@ -71,7 +71,7 @@ pub enum Order {
 
 /// Duplicates the selected text after itself (Ctrl+D). With a caret, `Lines` or `Document`
 /// it duplicates the lines instead. The selection or caret stays on the original.
-pub fn duplicate(text: &str, target: Target) -> Change {
+pub fn duplicate(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     if let Target::Selection(range) = &target {
         let range = doc.clamp(range);
@@ -80,20 +80,20 @@ pub fn duplicate(text: &str, target: Target) -> Change {
             return Change::new(vec![TextEdit::insert(range.end, copy)], Some(range));
         }
     }
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     if lines.is_empty() {
         return Change::default();
     }
     let copy = format!("\n{}", doc.block(lines.clone()));
     let at = doc.end(lines.end - 1);
-    Change::new(vec![TextEdit::insert(at, copy)], caret_of(&doc, &target))
+    Change::new(vec![TextEdit::insert(at, copy)], caret_of(&doc, target))
 }
 
 /// Deletes the lines of the target with their line break (Ctrl+Shift+L). The caret goes to
 /// the start of the line that takes their place, or of the new last line.
-pub fn delete(text: &str, target: Target) -> Change {
+pub fn delete(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     if lines.is_empty() {
         return Change::default();
     }
@@ -109,9 +109,9 @@ pub fn delete(text: &str, target: Target) -> Change {
 
 /// Swaps the lines of the target with the line above (Ctrl+Shift+Up). The selection moves
 /// with them.
-pub fn move_up(text: &str, target: Target) -> Change {
+pub fn move_up(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     if lines.is_empty() || lines.start == 0 {
         return Change::default();
     }
@@ -119,15 +119,15 @@ pub fn move_up(text: &str, target: Target) -> Change {
     let moved = format!("{}\n{}", doc.block(lines.clone()), doc.line(above));
     let edit = TextEdit::new(doc.start(above)..doc.end(lines.end - 1), moved);
     let shift = doc.end(above) - doc.start(above) + 1;
-    let selection = selection_of(&doc, &target).map(|range| range.start - shift..range.end - shift);
+    let selection = selection_of(&doc, target).map(|range| range.start - shift..range.end - shift);
     Change::new(vec![edit], selection)
 }
 
 /// Swaps the lines of the target with the line below (Ctrl+Shift+Down). The selection moves
 /// with them.
-pub fn move_down(text: &str, target: Target) -> Change {
+pub fn move_down(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     if lines.is_empty() || lines.end >= doc.line_count() {
         return Change::default();
     }
@@ -136,7 +136,7 @@ pub fn move_down(text: &str, target: Target) -> Change {
     let edit = TextEdit::new(doc.start(lines.start)..doc.end(below), moved);
     let shift = doc.end(below) - doc.start(below) + 1;
     let len = doc.len();
-    let selection = selection_of(&doc, &target)
+    let selection = selection_of(&doc, target)
         .map(|range| (range.start + shift).min(len)..(range.end + shift).min(len));
     Change::new(vec![edit], selection)
 }
@@ -146,10 +146,10 @@ pub fn move_down(text: &str, target: Target) -> Change {
 /// ends in a blank. The first non-blank line keeps its indentation; if all lines are blank,
 /// the first one with spaces or tabs is kept. A caret or a selection within one line joins
 /// that line with the next.
-pub fn join(text: &str, target: Target) -> Change {
+pub fn join(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
-    let mut lines = doc.lines(&target);
-    let selection = selection_of(&doc, &target);
+    let mut lines = doc.lines(target);
+    let selection = selection_of(&doc, target);
     if lines.len() == 1 && selection.is_some() && lines.end < doc.line_count() {
         lines.end += 1;
     }
@@ -207,9 +207,9 @@ pub fn join(text: &str, target: Target) -> Change {
 
 /// Inserts an empty line above the first line of the target and puts the caret on it
 /// (Ctrl+Alt+Enter).
-pub fn insert_blank_above(text: &str, target: Target) -> Change {
+pub fn insert_blank_above(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     if lines.is_empty() {
         return Change::default();
     }
@@ -219,9 +219,9 @@ pub fn insert_blank_above(text: &str, target: Target) -> Change {
 
 /// Inserts an empty line below the last line of the target and puts the caret on it
 /// (Ctrl+Alt+Shift+Enter).
-pub fn insert_blank_below(text: &str, target: Target) -> Change {
+pub fn insert_blank_below(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     if lines.is_empty() {
         return Change::default();
     }
@@ -230,12 +230,12 @@ pub fn insert_blank_below(text: &str, target: Target) -> Change {
 }
 
 /// Removes repeated lines of the target; lines must match exactly.
-pub fn remove_duplicates(text: &str, target: Target, which: Duplicates) -> Change {
+pub fn remove_duplicates(text: &str, target: &Target, which: Duplicates) -> Change {
     let doc = Doc::new(text);
     let mut seen = HashSet::new();
     let mut previous = None;
     let repeated: Vec<usize> = doc
-        .lines(&target)
+        .lines(target)
         .filter(|&line| {
             let content = doc.line(line);
             match which {
@@ -248,10 +248,10 @@ pub fn remove_duplicates(text: &str, target: Target, which: Duplicates) -> Chang
 }
 
 /// Removes the empty lines of the target, or also the lines of spaces and tabs.
-pub fn remove_empty(text: &str, target: Target, which: EmptyLines) -> Change {
+pub fn remove_empty(text: &str, target: &Target, which: EmptyLines) -> Change {
     let doc = Doc::new(text);
     let empty: Vec<usize> = doc
-        .lines(&target)
+        .lines(target)
         .filter(|&line| match which {
             EmptyLines::Empty => doc.line(line).is_empty(),
             EmptyLines::Blank => is_blank(doc.line(line)),
@@ -261,10 +261,10 @@ pub fn remove_empty(text: &str, target: Target, which: EmptyLines) -> Change {
 }
 
 /// Removes spaces and tabs at the start, the end or both ends of each line.
-pub fn trim(text: &str, target: Target, which: Trim) -> Change {
+pub fn trim(text: &str, target: &Target, which: Trim) -> Change {
     let doc = Doc::new(text);
     let mut edits = Vec::new();
-    for line in doc.lines(&target) {
+    for line in doc.lines(target) {
         let content = doc.line(line);
         let (start, end) = (doc.start(line), doc.end(line));
         let lead = if which == Trim::Trailing {
@@ -293,11 +293,11 @@ pub fn trim(text: &str, target: Target, which: Trim) -> Change {
 
 /// Replaces tabs with spaces up to the next tab stop. Columns count characters, like
 /// GtkSourceView's visual column. A tab width of 0 counts as 1.
-pub fn tabs_to_spaces(text: &str, target: Target, tab_width: usize, scope: Scope) -> Change {
+pub fn tabs_to_spaces(text: &str, target: &Target, tab_width: usize, scope: Scope) -> Change {
     let doc = Doc::new(text);
     let width = tab_width.max(1);
     let mut edits = Vec::new();
-    for line in doc.lines(&target) {
+    for line in doc.lines(target) {
         let content = doc.line(line);
         let limit = match scope {
             Scope::Leading => leading_blanks(content),
@@ -320,11 +320,11 @@ pub fn tabs_to_spaces(text: &str, target: Target, tab_width: usize, scope: Scope
 
 /// Rewrites runs of spaces and tabs as tabs up to the last tab stop they cross, then spaces,
 /// keeping every column. A single space stays a space. A tab width of 0 counts as 1.
-pub fn spaces_to_tabs(text: &str, target: Target, tab_width: usize, scope: Scope) -> Change {
+pub fn spaces_to_tabs(text: &str, target: &Target, tab_width: usize, scope: Scope) -> Change {
     let doc = Doc::new(text);
     let width = tab_width.max(1);
     let mut edits = Vec::new();
-    for line in doc.lines(&target) {
+    for line in doc.lines(target) {
         let content = doc.line(line);
         let limit = match scope {
             Scope::Leading => leading_blanks(content),
@@ -389,18 +389,18 @@ impl BlankRun {
 
 /// Sorts the lines of the target. Every sort is stable, also descending: equal lines keep
 /// their order.
-pub fn sort(text: &str, target: Target, key: SortKey, order: Order) -> Change {
+pub fn sort(text: &str, target: &Target, key: SortKey, order: Order) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     let old: Vec<&str> = lines.clone().map(|line| doc.line(line)).collect();
     let new = sort_lines(&old, key, order);
     Change::new(replace_lines(&doc, lines, &old, &new), None)
 }
 
 /// Reverses the order of the lines of the target.
-pub fn reverse(text: &str, target: Target) -> Change {
+pub fn reverse(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
-    let lines = doc.lines(&target);
+    let lines = doc.lines(target);
     let old: Vec<&str> = lines.clone().map(|line| doc.line(line)).collect();
     let new: Vec<&str> = old.iter().rev().copied().collect();
     Change::new(replace_lines(&doc, lines, &old, &new), None)
@@ -418,7 +418,7 @@ pub fn sort_lines<'a>(lines: &[&'a str], key: SortKey, order: Order) -> Vec<&'a 
         sorted
     };
     match key {
-        SortKey::Lexical => sorted_by(|a, b| a.cmp(b)),
+        SortKey::Lexical => sorted_by(Ord::cmp),
         SortKey::LexicalIgnoreCase => sorted_by(compare_ignoring_case),
         SortKey::Integer => {
             let mut arena = Vec::new();
@@ -631,8 +631,8 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    fn run(text: &str, change: Change) -> String {
-        applied(text, &change)
+    fn run(text: &str, change: &Change) -> String {
+        applied(text, change)
     }
 
     fn sel(range: Range<usize>) -> Target {
@@ -641,83 +641,89 @@ mod tests {
 
     #[test]
     fn duplicate_copies_the_caret_line_below_and_keeps_the_caret() {
-        let change = duplicate("one\ntwo\nthree", Target::caret(5));
+        let change = duplicate("one\ntwo\nthree", &Target::caret(5));
         assert_eq!(change.selection, Some(5..5));
-        assert_eq!(run("one\ntwo\nthree", change), "one\ntwo\ntwo\nthree");
+        assert_eq!(run("one\ntwo\nthree", &change), "one\ntwo\ntwo\nthree");
         assert_eq!(
-            run("one\ntwo", duplicate("one\ntwo", Target::caret(7))),
+            run("one\ntwo", &duplicate("one\ntwo", &Target::caret(7))),
             "one\ntwo\ntwo"
         );
-        assert_eq!(run("", duplicate("", Target::caret(0))), "\n");
+        assert_eq!(run("", &duplicate("", &Target::caret(0))), "\n");
     }
 
     #[test]
     fn duplicate_copies_a_selection_right_after_itself() {
-        let change = duplicate("say hello", sel(4..9));
+        let change = duplicate("say hello", &sel(4..9));
         assert_eq!(change.selection, Some(4..9));
-        assert_eq!(run("say hello", change), "say hellohello");
-        assert_eq!(run("ab\ncd", duplicate("ab\ncd", sel(1..4))), "ab\ncb\ncd");
+        assert_eq!(run("say hello", &change), "say hellohello");
+        assert_eq!(
+            run("ab\ncd", &duplicate("ab\ncd", &sel(1..4))),
+            "ab\ncb\ncd"
+        );
     }
 
     #[test]
     fn duplicate_copies_whole_lines_for_line_and_document_targets() {
         assert_eq!(
-            run("a\nb\nc", duplicate("a\nb\nc", Target::Lines(0..2))),
+            run("a\nb\nc", &duplicate("a\nb\nc", &Target::Lines(0..2))),
             "a\nb\na\nb\nc"
         );
         assert_eq!(
-            run("a\nb\n", duplicate("a\nb\n", Target::Document)),
+            run("a\nb\n", &duplicate("a\nb\n", &Target::Document)),
             "a\nb\na\nb\n"
         );
     }
 
     #[test]
     fn delete_removes_lines_with_their_line_break() {
-        let change = delete("one\ntwo\nthree", Target::caret(5));
+        let change = delete("one\ntwo\nthree", &Target::caret(5));
         assert_eq!(change.selection, Some(4..4));
-        assert_eq!(run("one\ntwo\nthree", change), "one\nthree");
-        let change = delete("one\ntwo", Target::caret(6));
+        assert_eq!(run("one\ntwo\nthree", &change), "one\nthree");
+        let change = delete("one\ntwo", &Target::caret(6));
         assert_eq!(change.selection, Some(0..0));
-        assert_eq!(run("one\ntwo", change), "one");
-        assert_eq!(run("one\ntwo\n", delete("one\ntwo\n", sel(4..7))), "one\n");
-        assert_eq!(run("only", delete("only", Target::caret(2))), "");
-        assert!(delete("", Target::caret(0)).is_empty());
+        assert_eq!(run("one\ntwo", &change), "one");
+        assert_eq!(
+            run("one\ntwo\n", &delete("one\ntwo\n", &sel(4..7))),
+            "one\n"
+        );
+        assert_eq!(run("only", &delete("only", &Target::caret(2))), "");
+        assert!(delete("", &Target::caret(0)).is_empty());
     }
 
     #[test]
     fn delete_leaves_out_a_line_the_selection_reaches_at_column_zero() {
-        assert_eq!(run("a\nb\nc\n", delete("a\nb\nc\n", sel(0..4))), "c\n");
+        assert_eq!(run("a\nb\nc\n", &delete("a\nb\nc\n", &sel(0..4))), "c\n");
     }
 
     #[test]
     fn delete_on_the_line_after_a_final_newline_removes_that_newline() {
-        assert_eq!(run("a\n", delete("a\n", Target::caret(2))), "a");
+        assert_eq!(run("a\n", &delete("a\n", &Target::caret(2))), "a");
     }
 
     #[test]
     fn move_up_swaps_with_the_line_above_and_moves_the_selection() {
-        let change = move_up("a\nbb\ncc", sel(3..4));
+        let change = move_up("a\nbb\ncc", &sel(3..4));
         assert_eq!(change.selection, Some(1..2));
-        assert_eq!(run("a\nbb\ncc", change), "bb\na\ncc");
-        assert_eq!(run("a\nb", move_up("a\nb", Target::caret(3))), "b\na");
-        assert!(move_up("a\nb", Target::caret(0)).is_empty());
+        assert_eq!(run("a\nbb\ncc", &change), "bb\na\ncc");
+        assert_eq!(run("a\nb", &move_up("a\nb", &Target::caret(3))), "b\na");
+        assert!(move_up("a\nb", &Target::caret(0)).is_empty());
     }
 
     #[test]
     fn move_down_swaps_with_the_line_below_and_moves_the_selection() {
-        let change = move_down("a\nbb\ncc", sel(0..5));
+        let change = move_down("a\nbb\ncc", &sel(0..5));
         assert_eq!(change.selection, Some(3..7));
-        assert_eq!(run("a\nbb\ncc", change), "cc\na\nbb");
-        assert!(move_down("a\nb", Target::caret(3)).is_empty());
-        let change = move_down("a\nb\nc", sel(0..2));
+        assert_eq!(run("a\nbb\ncc", &change), "cc\na\nbb");
+        assert!(move_down("a\nb", &Target::caret(3)).is_empty());
+        let change = move_down("a\nb\nc", &sel(0..2));
         assert_eq!(change.selection, Some(2..4));
-        assert_eq!(run("a\nb\nc", change), "b\na\nc");
+        assert_eq!(run("a\nb\nc", &change), "b\na\nc");
     }
 
     #[test]
     fn move_down_into_the_line_after_a_final_newline_swaps_with_it() {
         assert_eq!(
-            run("a\nb\n", move_down("a\nb\n", Target::caret(2))),
+            run("a\nb\n", &move_down("a\nb\n", &Target::caret(2))),
             "a\n\nb"
         );
     }
@@ -725,46 +731,46 @@ mod tests {
     #[test]
     fn join_trims_indentation_and_separates_with_one_space() {
         let text = "fn f(\n    a,\n    b\n)";
-        let change = join(text, sel(0..text.len()));
+        let change = join(text, &sel(0..text.len()));
         assert_eq!(change.selection, Some(0..12));
-        assert_eq!(run(text, change), "fn f( a, b )");
+        assert_eq!(run(text, &change), "fn f( a, b )");
     }
 
     #[test]
     fn join_skips_blank_lines_and_existing_trailing_blanks() {
         let text = "a \n\n   \n\tb\nc";
-        assert_eq!(run(text, join(text, Target::Document)), "a b c");
+        assert_eq!(run(text, &join(text, &Target::Document)), "a b c");
         let text = "\n  \n  first\nsecond";
-        assert_eq!(run(text, join(text, Target::Document)), "  first second");
-        assert_eq!(run("\n \n\t", join("\n \n\t", Target::Document)), " ");
-        assert_eq!(run("\n\n", join("\n\n", Target::Document)), "\n");
+        assert_eq!(run(text, &join(text, &Target::Document)), "  first second");
+        assert_eq!(run("\n \n\t", &join("\n \n\t", &Target::Document)), " ");
+        assert_eq!(run("\n\n", &join("\n\n", &Target::Document)), "\n");
     }
 
     #[test]
     fn join_with_a_caret_joins_the_next_line() {
-        let change = join("one\n  two\nthree", Target::caret(1));
+        let change = join("one\n  two\nthree", &Target::caret(1));
         assert_eq!(change.selection, Some(4..4));
-        assert_eq!(run("one\n  two\nthree", change), "one two\nthree");
-        assert!(join("one\ntwo", Target::caret(5)).is_empty());
-        assert!(join("one\ntwo", Target::Lines(1..2)).is_empty());
+        assert_eq!(run("one\n  two\nthree", &change), "one two\nthree");
+        assert!(join("one\ntwo", &Target::caret(5)).is_empty());
+        assert!(join("one\ntwo", &Target::Lines(1..2)).is_empty());
     }
 
     #[test]
     fn join_of_the_document_keeps_the_final_newline() {
-        assert_eq!(run("a\nb\n", join("a\nb\n", Target::Document)), "a b\n");
+        assert_eq!(run("a\nb\n", &join("a\nb\n", &Target::Document)), "a b\n");
     }
 
     #[test]
     fn blank_lines_are_inserted_above_and_below_with_the_caret_on_them() {
-        let change = insert_blank_above("a\nb", Target::caret(3));
+        let change = insert_blank_above("a\nb", &Target::caret(3));
         assert_eq!(change.selection, Some(2..2));
-        assert_eq!(run("a\nb", change), "a\n\nb");
-        let change = insert_blank_below("a\nb", Target::caret(0));
+        assert_eq!(run("a\nb", &change), "a\n\nb");
+        let change = insert_blank_below("a\nb", &Target::caret(0));
         assert_eq!(change.selection, Some(2..2));
-        assert_eq!(run("a\nb", change), "a\n\nb");
-        let change = insert_blank_below("a\nb", Target::caret(3));
+        assert_eq!(run("a\nb", &change), "a\n\nb");
+        let change = insert_blank_below("a\nb", &Target::caret(3));
         assert_eq!(change.selection, Some(4..4));
-        assert_eq!(run("a\nb", change), "a\nb\n");
+        assert_eq!(run("a\nb", &change), "a\nb\n");
     }
 
     #[test]
@@ -773,7 +779,7 @@ mod tests {
         assert_eq!(
             run(
                 text,
-                remove_duplicates(text, Target::Document, Duplicates::All)
+                &remove_duplicates(text, &Target::Document, Duplicates::All)
             ),
             "b\na\nc\n"
         );
@@ -781,14 +787,14 @@ mod tests {
         assert_eq!(
             run(
                 text,
-                remove_duplicates(text, Target::Document, Duplicates::Consecutive)
+                &remove_duplicates(text, &Target::Document, Duplicates::Consecutive)
             ),
             "a\nb\na"
         );
         assert_eq!(
             run(
                 text,
-                remove_duplicates(text, Target::Document, Duplicates::All)
+                &remove_duplicates(text, &Target::Document, Duplicates::All)
             ),
             "a\nb"
         );
@@ -798,7 +804,7 @@ mod tests {
     fn remove_duplicates_is_exact_and_limited_to_the_target() {
         let text = "a\nA\na \na\nx\na";
         assert_eq!(
-            run(text, remove_duplicates(text, sel(0..8), Duplicates::All)),
+            run(text, &remove_duplicates(text, &sel(0..8), Duplicates::All)),
             "a\nA\na \nx\na"
         );
     }
@@ -809,21 +815,21 @@ mod tests {
         assert_eq!(
             run(
                 text,
-                remove_empty(text, Target::Document, EmptyLines::Empty)
+                &remove_empty(text, &Target::Document, EmptyLines::Empty)
             ),
             "a\n  \nb\n"
         );
         assert_eq!(
             run(
                 text,
-                remove_empty(text, Target::Document, EmptyLines::Blank)
+                &remove_empty(text, &Target::Document, EmptyLines::Blank)
             ),
             "a\nb\n"
         );
         assert_eq!(
             run(
                 "a\n ",
-                remove_empty("a\n ", Target::Document, EmptyLines::Blank)
+                &remove_empty("a\n ", &Target::Document, EmptyLines::Blank)
             ),
             "a"
         );
@@ -833,15 +839,15 @@ mod tests {
     fn trim_removes_only_spaces_and_tabs() {
         let text = " \ta b \t\n\u{a0}x\u{a0}\n   \nend";
         assert_eq!(
-            run(text, trim(text, Target::Document, Trim::Trailing)),
+            run(text, &trim(text, &Target::Document, Trim::Trailing)),
             " \ta b\n\u{a0}x\u{a0}\n\nend"
         );
         assert_eq!(
-            run(text, trim(text, Target::Document, Trim::Leading)),
+            run(text, &trim(text, &Target::Document, Trim::Leading)),
             "a b \t\n\u{a0}x\u{a0}\n\nend"
         );
         assert_eq!(
-            run(text, trim(text, Target::Document, Trim::Both)),
+            run(text, &trim(text, &Target::Document, Trim::Both)),
             "a b\n\u{a0}x\u{a0}\n\nend"
         );
     }
@@ -850,20 +856,23 @@ mod tests {
     fn tabs_become_spaces_up_to_the_next_tab_stop() {
         let text = "\tx\tyz\t!\n  \t\tq";
         assert_eq!(
-            run(text, tabs_to_spaces(text, Target::Document, 4, Scope::All)),
+            run(
+                text,
+                &tabs_to_spaces(text, &Target::Document, 4, Scope::All)
+            ),
             "    x   yz  !\n        q"
         );
         assert_eq!(
             run(
                 text,
-                tabs_to_spaces(text, Target::Document, 4, Scope::Leading)
+                &tabs_to_spaces(text, &Target::Document, 4, Scope::Leading)
             ),
             "    x\tyz\t!\n        q"
         );
         assert_eq!(
             run(
                 "é\tx",
-                tabs_to_spaces("é\tx", Target::Document, 0, Scope::All)
+                &tabs_to_spaces("é\tx", &Target::Document, 0, Scope::All)
             ),
             "é x"
         );
@@ -873,13 +882,16 @@ mod tests {
     fn spaces_become_tabs_without_moving_any_column() {
         let text = "        x = 1;      // note\n      y\n abc d\n  \t z";
         assert_eq!(
-            run(text, spaces_to_tabs(text, Target::Document, 4, Scope::All)),
+            run(
+                text,
+                &spaces_to_tabs(text, &Target::Document, 4, Scope::All)
+            ),
             "\t\tx = 1;\t\t// note\n\t  y\n abc d\n\t z"
         );
         assert_eq!(
             run(
                 text,
-                spaces_to_tabs(text, Target::Document, 4, Scope::Leading)
+                &spaces_to_tabs(text, &Target::Document, 4, Scope::Leading)
             ),
             "\t\tx = 1;      // note\n\t  y\n abc d\n\t z"
         );
@@ -887,11 +899,11 @@ mod tests {
 
     #[test]
     fn a_single_space_at_a_tab_stop_stays_a_space() {
-        assert!(spaces_to_tabs("abc d", Target::Document, 4, Scope::All).is_empty());
+        assert!(spaces_to_tabs("abc d", &Target::Document, 4, Scope::All).is_empty());
         assert_eq!(
             run(
                 "ab  d",
-                spaces_to_tabs("ab  d", Target::Document, 4, Scope::All)
+                &spaces_to_tabs("ab  d", &Target::Document, 4, Scope::All)
             ),
             "ab\td"
         );
@@ -1014,7 +1026,7 @@ mod tests {
         assert_eq!(
             run(
                 text,
-                sort(text, Target::Document, SortKey::Lexical, Order::Ascending)
+                &sort(text, &Target::Document, SortKey::Lexical, Order::Ascending)
             ),
             "a\nb\nc\n"
         );
@@ -1023,16 +1035,27 @@ mod tests {
     #[test]
     fn sorting_touches_only_the_lines_that_move() {
         let text = "a\nc\nb\nd";
-        let change = sort(text, Target::Document, SortKey::Lexical, Order::Ascending);
+        let change = sort(text, &Target::Document, SortKey::Lexical, Order::Ascending);
         assert_eq!(change.edits, vec![TextEdit::new(2..5, "b\nc")]);
-        assert!(sort("a\nb", Target::Document, SortKey::Lexical, Order::Ascending).is_empty());
+        assert!(
+            sort(
+                "a\nb",
+                &Target::Document,
+                SortKey::Lexical,
+                Order::Ascending
+            )
+            .is_empty()
+        );
     }
 
     #[test]
     fn reverse_reverses_the_target_lines() {
         let text = "1\n2\n3\n4";
-        assert_eq!(run(text, reverse(text, sel(2..5))), "1\n3\n2\n4");
-        assert_eq!(run("a\nb\n", reverse("a\nb\n", Target::Document)), "b\na\n");
+        assert_eq!(run(text, &reverse(text, &sel(2..5))), "1\n3\n2\n4");
+        assert_eq!(
+            run("a\nb\n", &reverse("a\nb\n", &Target::Document)),
+            "b\na\n"
+        );
     }
 
     fn lines_of(text: &str) -> Vec<String> {
@@ -1132,7 +1155,7 @@ mod tests {
         #[test]
         fn line_edits_match_naive_models((text, target) in text_and_target()) {
             prop_assert_eq!(
-                run(&text, delete(&text, target.clone())),
+                run(&text, &delete(&text, &target)),
                 model(&text, &target, |_| Vec::new())
             );
             let range = naive_lines(&text, &target);
@@ -1144,7 +1167,7 @@ mod tests {
             } else {
                 text.clone()
             };
-            prop_assert_eq!(run(&text, move_up(&text, target.clone())), expected);
+            prop_assert_eq!(run(&text, &move_up(&text, &target)), expected);
             let count = lines_of(&text).len();
             let expected = if !range.is_empty() && range.end < count {
                 let mut lines = lines_of(&text);
@@ -1154,21 +1177,21 @@ mod tests {
             } else {
                 text.clone()
             };
-            prop_assert_eq!(run(&text, move_down(&text, target.clone())), expected);
+            prop_assert_eq!(run(&text, &move_down(&text, &target)), expected);
+            let expected = if range.is_empty() {
+                text.clone()
+            } else {
+                splice_lines(&text, range.start..range.start, vec![String::new()])
+            };
+            prop_assert_eq!(run(&text, &insert_blank_above(&text, &target)), expected);
+            let expected = if range.is_empty() {
+                text.clone()
+            } else {
+                splice_lines(&text, range.end..range.end, vec![String::new()])
+            };
+            prop_assert_eq!(run(&text, &insert_blank_below(&text, &target)), expected);
             prop_assert_eq!(
-                run(&text, insert_blank_above(&text, target.clone())),
-                if range.is_empty() { text.clone() } else {
-                    splice_lines(&text, range.start..range.start, vec![String::new()])
-                }
-            );
-            prop_assert_eq!(
-                run(&text, insert_blank_below(&text, target.clone())),
-                if range.is_empty() { text.clone() } else {
-                    splice_lines(&text, range.end..range.end, vec![String::new()])
-                }
-            );
-            prop_assert_eq!(
-                run(&text, reverse(&text, target.clone())),
+                run(&text, &reverse(&text, &target)),
                 model(&text, &target, |lines| lines.into_iter().rev().collect())
             );
         }
@@ -1193,7 +1216,7 @@ mod tests {
                 }
                 None => model(&text, &target, |lines| [lines.clone(), lines].concat()),
             };
-            prop_assert_eq!(run(&text, duplicate(&text, target)), expected);
+            prop_assert_eq!(run(&text, &duplicate(&text, &target)), expected);
         }
 
         #[test]
@@ -1202,36 +1225,36 @@ mod tests {
                 model(&text, &target, |lines| lines.iter().map(|l| f(l).to_owned()).collect())
             };
             prop_assert_eq!(
-                run(&text, trim(&text, target.clone(), Trim::Leading)),
+                run(&text, &trim(&text, &target.clone(), Trim::Leading)),
                 trimmed(|l| l.trim_start_matches([' ', '\t']))
             );
             prop_assert_eq!(
-                run(&text, trim(&text, target.clone(), Trim::Trailing)),
+                run(&text, &trim(&text, &target.clone(), Trim::Trailing)),
                 trimmed(|l| l.trim_end_matches([' ', '\t']))
             );
             prop_assert_eq!(
-                run(&text, trim(&text, target.clone(), Trim::Both)),
+                run(&text, &trim(&text, &target.clone(), Trim::Both)),
                 trimmed(|l| l.trim_matches([' ', '\t']))
             );
             prop_assert_eq!(
-                run(&text, remove_empty(&text, target.clone(), EmptyLines::Empty)),
+                run(&text, &remove_empty(&text, &target.clone(), EmptyLines::Empty)),
                 model(&text, &target, |lines| lines.into_iter().filter(|l| !l.is_empty()).collect())
             );
             prop_assert_eq!(
-                run(&text, remove_empty(&text, target.clone(), EmptyLines::Blank)),
+                run(&text, &remove_empty(&text, &target.clone(), EmptyLines::Blank)),
                 model(&text, &target, |lines| {
                     lines.into_iter().filter(|l| !is_blank_line(l)).collect()
                 })
             );
             prop_assert_eq!(
-                run(&text, remove_duplicates(&text, target.clone(), Duplicates::All)),
+                run(&text, &remove_duplicates(&text, &target.clone(), Duplicates::All)),
                 model(&text, &target, |lines| {
                     let mut seen = HashSet::new();
                     lines.into_iter().filter(|l| seen.insert(l.clone())).collect()
                 })
             );
             prop_assert_eq!(
-                run(&text, remove_duplicates(&text, target.clone(), Duplicates::Consecutive)),
+                run(&text, &remove_duplicates(&text, &target.clone(), Duplicates::Consecutive)),
                 model(&text, &target, |mut lines| { lines.dedup(); lines })
             );
         }
@@ -1250,7 +1273,7 @@ mod tests {
                 let joined = naive_join(&lines_of(&text)[range.clone()]);
                 splice_lines(&text, range, vec![joined])
             };
-            prop_assert_eq!(run(&text, join(&text, target)), expected);
+            prop_assert_eq!(run(&text, &join(&text, &target)), expected);
         }
 
         #[test]
@@ -1267,14 +1290,14 @@ mod tests {
                 lines.join("\n")
             };
             prop_assert_eq!(
-                run(&text, tabs_to_spaces(&text, target.clone(), width, Scope::All)),
+                run(&text, &tabs_to_spaces(&text, &target, width, Scope::All)),
                 expanded(&text)
             );
-            let tabbed = run(&text, spaces_to_tabs(&text, target.clone(), width, Scope::All));
+            let tabbed = run(&text, &spaces_to_tabs(&text, &target, width, Scope::All));
             prop_assert_eq!(expanded(&tabbed), expanded(&text));
-            let leading = run(&text, spaces_to_tabs(&text, target.clone(), width, Scope::Leading));
+            let leading = run(&text, &spaces_to_tabs(&text, &target, width, Scope::Leading));
             prop_assert_eq!(expanded(&leading), expanded(&text));
-            let leading = run(&text, tabs_to_spaces(&text, target.clone(), width, Scope::Leading));
+            let leading = run(&text, &tabs_to_spaces(&text, &target, width, Scope::Leading));
             prop_assert_eq!(expanded(&leading), expanded(&text));
         }
 
@@ -1321,26 +1344,26 @@ mod tests {
                 let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
                 sort_lines(&refs, key, Order::Ascending).into_iter().map(str::to_owned).collect()
             });
-            prop_assert_eq!(run(&text, sort(&text, target, key, Order::Ascending)), expected);
+            prop_assert_eq!(run(&text, &sort(&text, &target, key, Order::Ascending)), expected);
         }
 
         #[test]
         fn removing_duplicates_is_idempotent(text in text()) {
             for which in [Duplicates::All, Duplicates::Consecutive] {
-                let once = run(&text, remove_duplicates(&text, Target::Document, which));
-                let again = remove_duplicates(&once, Target::Document, which);
+                let once = run(&text, &remove_duplicates(&text, &Target::Document, which));
+                let again = remove_duplicates(&once, &Target::Document, which);
                 prop_assert!(again.is_empty(), "{:?} changed {:?} again", which, once);
             }
         }
 
         #[test]
         fn removing_empty_lines_and_joining_commute(text in text()) {
-            let joined = run(&text, join(&text, Target::Document));
+            let joined = run(&text, &join(&text, &Target::Document));
             for which in [EmptyLines::Empty, EmptyLines::Blank] {
-                let cleaned = run(&text, remove_empty(&text, Target::Document, which));
+                let cleaned = run(&text, &remove_empty(&text, &Target::Document, which));
                 prop_assert_eq!(
-                    run(&cleaned, join(&cleaned, Target::Document)),
-                    run(&joined, remove_empty(&joined, Target::Document, which))
+                    run(&cleaned, &join(&cleaned, &Target::Document)),
+                    run(&joined, &remove_empty(&joined, &Target::Document, which))
                 );
             }
         }
@@ -1350,6 +1373,7 @@ mod tests {
     #[ignore = "timing; run with --release -- --ignored --nocapture"]
     fn timing_on_a_million_lines() {
         use crate::ops::{case, comment, prefix};
+        use std::fmt::Write as _;
         use std::time::Instant;
         let mut text = String::new();
         for line in 0..1_000_000u64 {
@@ -1357,11 +1381,7 @@ mod tests {
             match line % 10 {
                 0 => text.push('\n'),
                 1 => text.push_str("\tindented line with tabs\t \n"),
-                _ => text.push_str(&std::format!(
-                    "item {key} value-{} dup {}  \n",
-                    key % 97,
-                    line % 3
-                )),
+                _ => writeln!(text, "item {key} value-{} dup {}  ", key % 97, line % 3).unwrap(),
             }
         }
         println!(
@@ -1374,31 +1394,31 @@ mod tests {
         };
         let runs: [(&str, &dyn Fn() -> Change); 9] = [
             ("sort lexical", &|| {
-                sort(&text, Target::Document, SortKey::Lexical, Order::Ascending)
+                sort(&text, &Target::Document, SortKey::Lexical, Order::Ascending)
             }),
             ("sort integer", &|| {
-                sort(&text, Target::Document, SortKey::Integer, Order::Ascending)
+                sort(&text, &Target::Document, SortKey::Integer, Order::Ascending)
             }),
             ("remove duplicates (all)", &|| {
-                remove_duplicates(&text, Target::Document, Duplicates::All)
+                remove_duplicates(&text, &Target::Document, Duplicates::All)
             }),
             ("remove empty lines", &|| {
-                remove_empty(&text, Target::Document, EmptyLines::Blank)
+                remove_empty(&text, &Target::Document, EmptyLines::Blank)
             }),
             ("trim trailing", &|| {
-                trim(&text, Target::Document, Trim::Trailing)
+                trim(&text, &Target::Document, Trim::Trailing)
             }),
             ("tabs to spaces", &|| {
-                tabs_to_spaces(&text, Target::Document, 4, Scope::All)
+                tabs_to_spaces(&text, &Target::Document, 4, Scope::All)
             }),
             ("toggle line comment", &|| {
-                comment::toggle_line(&text, Target::Document, &tokens)
+                comment::toggle_line(&text, &Target::Document, &tokens)
             }),
             ("add prefix", &|| {
-                prefix::add(&text, Target::Document, "> ", "")
+                prefix::add(&text, &Target::Document, "> ", "")
             }),
             ("uppercase", &|| {
-                case::convert(&text, Target::Document, case::Case::Upper)
+                case::convert(&text, &Target::Document, case::Case::Upper)
             }),
         ];
         for (label, run) in runs {

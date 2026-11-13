@@ -68,7 +68,10 @@ impl Bookmarks {
     /// Next Bookmark (F2): the first bookmark below `line`, wrapping to the first one.
     pub fn next(&self, line: usize) -> Option<usize> {
         let index = self.lines.partition_point(|&bookmark| bookmark <= line);
-        self.lines.get(index).or(self.lines.first()).copied()
+        self.lines
+            .get(index)
+            .or_else(|| self.lines.first())
+            .copied()
     }
 
     /// Previous Bookmark (Shift+F2): the last bookmark above `line`, wrapping to the last one.
@@ -77,7 +80,7 @@ impl Bookmarks {
         index
             .checked_sub(1)
             .map(|index| self.lines[index])
-            .or(self.lines.last().copied())
+            .or_else(|| self.lines.last().copied())
     }
 
     /// The bookmarks within `lines`, for painting the visible part of the gutter.
@@ -88,6 +91,7 @@ impl Bookmarks {
     }
 
     /// Inverse Bookmark: every line of a text of `line_count` lines that is not bookmarked.
+    #[must_use]
     pub fn inverted(&self, line_count: usize) -> Self {
         let mut marked = self.lines.iter().peekable();
         let lines = (0..line_count)

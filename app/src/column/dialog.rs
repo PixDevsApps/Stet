@@ -95,7 +95,7 @@ pub fn open(window: &Window, view: &StetView) {
     editor.connect();
     let weak = Rc::downgrade(&window.inner);
     editor.dialog.connect_closed(move |_| {
-        OPEN.with(|open| open.take());
+        OPEN.with(RefCell::take);
         if let Some(inner) = weak.upgrade() {
             Window { inner }.restore_focus_later();
         }
@@ -300,7 +300,7 @@ impl EditorDialog {
             self.leading.upcast_ref(),
         ]
         .into_iter()
-        .chain(self.bases.iter().map(|base| base.upcast_ref()))
+        .chain(self.bases.iter().map(Cast::upcast_ref))
         {
             widget.set_sensitive(numbers);
         }

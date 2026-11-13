@@ -83,8 +83,8 @@ pub(crate) fn legacy(text: &str, encoding: &'static Encoding) -> Vec<u8> {
     bytes.into_owned()
 }
 
-fn with_prefix(prefix: &[u8], rest: Vec<u8>) -> Vec<u8> {
-    [prefix, &rest].concat()
+fn with_prefix(prefix: &[u8], rest: &[u8]) -> Vec<u8> {
+    [prefix, rest].concat()
 }
 
 /// Deterministic pseudo-random bytes.
@@ -127,21 +127,21 @@ pub(crate) fn fixtures() -> Vec<Fixture> {
         ),
         Fixture::new(
             "utf8-bom",
-            with_prefix(b"\xEF\xBB\xBF", "BOM text\r\nwith CRLF\r\n".into()),
+            with_prefix(b"\xEF\xBB\xBF", b"BOM text\r\nwith CRLF\r\n"),
             UTF_8,
         )
         .bom()
         .eol(Eol::CrLf),
         Fixture::new(
             "utf16le-bom",
-            with_prefix(b"\xFF\xFE", utf16(wide, true)),
+            with_prefix(b"\xFF\xFE", &utf16(wide, true)),
             UTF_16LE,
         )
         .bom()
         .eol(Eol::CrLf),
         Fixture::new(
             "utf16be-bom",
-            with_prefix(b"\xFE\xFF", utf16(wide, false)),
+            with_prefix(b"\xFE\xFF", &utf16(wide, false)),
             UTF_16BE,
         )
         .bom()
@@ -156,14 +156,14 @@ pub(crate) fn fixtures() -> Vec<Fixture> {
         .eol(Eol::CrLf),
         Fixture::new(
             "utf16le-unpaired-surrogate",
-            with_prefix(b"\xFF\xFE", vec![b'a', 0, 0x00, 0xD8, b'b', 0]),
+            with_prefix(b"\xFF\xFE", &[b'a', 0, 0x00, 0xD8, b'b', 0]),
             UTF_16LE,
         )
         .bom()
         .lossy(),
         Fixture::new(
             "utf16be-odd-length",
-            with_prefix(b"\xFE\xFF", vec![0, b'a', 0, b'b', 0]),
+            with_prefix(b"\xFE\xFF", &[0, b'a', 0, b'b', 0]),
             UTF_16BE,
         )
         .bom()
@@ -274,7 +274,7 @@ pub(crate) fn fixtures() -> Vec<Fixture> {
         .mixed(Eol::Lf),
         Fixture::new(
             "utf32le-bom",
-            with_prefix(b"\xFF\xFE\0\0", b"h\0\0\0i\0\0\0\n\0\0\0".to_vec()),
+            with_prefix(b"\xFF\xFE\0\0", b"h\0\0\0i\0\0\0\n\0\0\0"),
             WINDOWS_1252,
         )
         .binary(),

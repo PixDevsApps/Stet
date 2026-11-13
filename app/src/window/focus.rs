@@ -24,7 +24,7 @@ impl Window {
             move |_| {
                 let window = Window { inner };
                 if window.dialog_open() {
-                    if let Some(focus) = gtk::prelude::RootExt::focus(&window.inner.window) {
+                    if let Some(focus) = RootExt::focus(&window.inner.window) {
                         focus.grab_focus();
                     }
                 } else {
@@ -79,7 +79,7 @@ impl Window {
             return true;
         }
         let inner = &self.inner;
-        let Some(focus) = gtk::prelude::RootExt::focus(&inner.window) else {
+        let Some(focus) = RootExt::focus(&inner.window) else {
             return false;
         };
         if !focus.is_mapped() {

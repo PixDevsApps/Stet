@@ -82,9 +82,10 @@ impl Alignment {
         let index = self
             .chunks
             .partition_point(|chunk| chunk.lines(side).end <= line);
-        self.chunks.get(index).map_or(self.rows(), |chunk| {
-            chunk.row + line - chunk.lines(side).start
-        })
+        self.chunks.get(index).map_or_else(
+            || self.rows(),
+            |chunk| chunk.row + line - chunk.lines(side).start,
+        )
     }
 
     pub fn slot(&self, side: Side, row: usize) -> RowSlot {

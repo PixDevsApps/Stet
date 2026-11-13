@@ -104,7 +104,7 @@ fn a_crash_at_any_phase_leaves_a_consistent_session() {
         assert!(
             file_names(&dir.path().join("backup"))
                 .iter()
-                .all(|name| name.ends_with(".txt")),
+                .all(|name| has_extension(name, "txt")),
             "{phase:?}: temp files left"
         );
         assert!(!dir.path().join("session.json.tmp").exists(), "{phase:?}");
@@ -187,7 +187,7 @@ fn kill_9_coordinator() {
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
-        std::thread::sleep(Duration::from_millis(20 + round * 37 % 120));
+        thread::sleep(Duration::from_millis(20 + round * 37 % 120));
         victim.kill().unwrap();
         let status = victim.wait().unwrap();
         assert_eq!(
@@ -199,7 +199,7 @@ fn kill_9_coordinator() {
         let backup = dir.join("backup");
         if file_names(&backup)
             .iter()
-            .any(|name| name.ends_with(".tmp"))
+            .any(|name| has_extension(name, "tmp"))
             || dir.join("session.json.tmp").exists()
         {
             interrupted += 1;
@@ -240,7 +240,7 @@ fn kill_9_coordinator() {
         assert!(
             file_names(&backup)
                 .iter()
-                .all(|name| name.ends_with(".txt"))
+                .all(|name| has_extension(name, "txt"))
         );
         orphans = restored.orphans.len();
     }

@@ -31,12 +31,12 @@ pub fn minify(text: &str) -> Result<String, JsonError> {
 
 /// [`format()`] on the selection, or on the whole document for a caret or `Document`. The
 /// whitespace around the JSON value stays; error positions are positions in `text`.
-pub fn format_target(text: &str, target: Target, indent: Indent) -> Result<Change, JsonError> {
+pub fn format_target(text: &str, target: &Target, indent: Indent) -> Result<Change, JsonError> {
     reformat_target(text, target, |json| format(json, indent))
 }
 
 /// [`minify`] on the selection, or on the whole document for a caret or `Document`.
-pub fn minify_target(text: &str, target: Target) -> Result<Change, JsonError> {
+pub fn minify_target(text: &str, target: &Target) -> Result<Change, JsonError> {
     reformat_target(text, target, minify)
 }
 
@@ -153,6 +153,8 @@ fn scalar_end(bytes: &[u8], at: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
     use crate::text::{LineIndex, apply};
     use proptest::prelude::*;
@@ -251,23 +253,23 @@ mod tests {
     #[test]
     fn targets_keep_the_surrounding_whitespace() {
         let text = "\n  {\"a\":[1]}\n";
-        let change = format_target(text, Target::Document, Indent::Spaces(2)).unwrap();
+        let change = format_target(text, &Target::Document, Indent::Spaces(2)).unwrap();
         assert_eq!(change.selection, Some(3..3));
         assert_eq!(
             apply(text, change.edits).unwrap(),
             "\n  {\n  \"a\": [\n    1\n  ]\n}\n"
         );
         let text = "x = {\"a\": 1};";
-        let change = minify_target(text, Target::Selection(4..12)).unwrap();
+        let change = minify_target(text, &Target::Selection(4..12)).unwrap();
         assert_eq!(change.selection, Some(4..11));
         assert_eq!(apply(text, change.edits).unwrap(), "x = {\"a\":1};");
-        assert!(minify_target("[1]", Target::Document).unwrap().is_empty());
+        assert!(minify_target("[1]", &Target::Document).unwrap().is_empty());
     }
 
     #[test]
     fn target_errors_are_positions_in_the_document() {
         let text = "x\n  [1,]\n";
-        let error = format_target(text, Target::Selection(2..8), Indent::default()).unwrap_err();
+        let error = format_target(text, &Target::Selection(2..8), Indent::default()).unwrap_err();
         assert_eq!((error.line, error.column, error.offset), (2, 6, 7));
     }
 
@@ -359,7 +361,7 @@ mod tests {
             let indent = if tab { Indent::Tab } else { Indent::Spaces(width) };
             let formatted = format(&text, indent).unwrap();
             prop_assert_eq!(minify(&formatted).unwrap(), minify(&text).unwrap());
-            prop_assert_eq!(format(&formatted, indent).unwrap(), formatted.clone());
+            prop_assert_eq!(format(&formatted, indent).unwrap(), formatted.as_str());
             prop_assert_eq!(
                 serde_json::from_str::<serde_json::Value>(&formatted).ok(),
                 serde_json::from_str::<serde_json::Value>(&text).ok()
@@ -387,12 +389,13 @@ mod tests {
             if id > 0 {
                 text.push(',');
             }
-            text.push_str(&std::format!(
+            let _ = write!(
+                text,
                 r#"{{"id":{id},"name":"user {id}","email":"user{id}@example.com","score":{}.{},"active":{},"tags":["a","b\u00e9","c\n"],"nested":{{"x":[1,2,3],"y":null,"z":{{}}}}}}"#,
                 id % 1000,
                 id % 97,
                 id.is_multiple_of(2)
-            ));
+            );
             id += 1;
         }
         text.push(']');
@@ -432,7 +435,7 @@ mod tests {
         time("minify (minified input)", &|| minify(&minified).unwrap());
         let document = std::format!("{minified}\n");
         time("format_target (Document, with the edit)", &|| {
-            let change = format_target(&document, Target::Document, Indent::Spaces(2)).unwrap();
+            let change = format_target(&document, &Target::Document, Indent::Spaces(2)).unwrap();
             assert_eq!(change.edits.len(), 1);
             String::new()
         });

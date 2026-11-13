@@ -252,7 +252,7 @@ impl Window {
         let dirty: Vec<EditorPage> = self
             .closing_documents(&pages)
             .into_iter()
-            .filter(|page| page.is_dirty())
+            .filter(EditorPage::is_dirty)
             .collect();
         if !dirty.is_empty() {
             let names: Vec<String> = dirty.iter().map(EditorPage::name).collect();
@@ -521,11 +521,10 @@ fn tab_page_of(widget: &gtk::Widget) -> Option<adw::TabPage> {
 /// typing replaces the name and keeps the extension. GtkText selects everything as it takes
 /// the focus, so the selection is made once that is done. GtkEditable counts characters.
 fn select_stem_on_focus(entry: &adw::EntryRow, name: &str) {
-    let stem = Path::new(name)
-        .file_stem()
-        .map_or(name.chars().count(), |stem| {
-            stem.to_string_lossy().chars().count()
-        });
+    let stem = Path::new(name).file_stem().map_or_else(
+        || name.chars().count(),
+        |stem| stem.to_string_lossy().chars().count(),
+    );
     let Some(text) = entry.delegate() else {
         return;
     };

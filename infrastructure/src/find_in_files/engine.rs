@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Write as _};
 use std::io::{self, Read};
 use std::ops::Range;
 use std::sync::Arc;
@@ -201,7 +201,9 @@ fn text_regex(text: &str) -> String {
                 }
                 out.push_str(r"(?:\r\n|\n|\r)");
             }
-            c if c.is_ascii_control() => out.push_str(&format!(r"\x{{{:X}}}", u32::from(c))),
+            c if c.is_ascii_control() => {
+                let _ = write!(out, r"\x{{{:X}}}", u32::from(c));
+            }
             c => {
                 if matches!(
                     c,

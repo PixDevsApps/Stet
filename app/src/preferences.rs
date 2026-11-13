@@ -33,7 +33,7 @@ pub struct Preferences {
     settings: RefCell<Settings>,
     keymap: RefCell<Keymap>,
     /// The text each file had at the last reload, so an unchanged file is not reported again.
-    texts: RefCell<[Option<Option<String>>; 2]>,
+    texts: RefCell<[Option<String>; 2]>,
     errors: RefCell<[Vec<FileError>; 2]>,
     loaded: Cell<bool>,
     generation: Cell<u64>,
@@ -128,8 +128,8 @@ impl Preferences {
         let [config, keys] = texts;
         let first = !self.loaded.get();
         match config {
-            Ok(text) if first || self.texts.borrow()[0].as_ref() != Some(&text) => {
-                self.texts.borrow_mut()[0] = Some(text.clone());
+            Ok(text) if first || self.texts.borrow()[0] != text => {
+                self.texts.borrow_mut()[0].clone_from(&text);
                 match Settings::parse(text.as_deref().unwrap_or("")) {
                     Ok(settings) => {
                         self.errors.borrow_mut()[0].clear();
@@ -152,8 +152,8 @@ impl Preferences {
             }
         }
         match keys {
-            Ok(text) if first || self.texts.borrow()[1].as_ref() != Some(&text) => {
-                self.texts.borrow_mut()[1] = Some(text.clone());
+            Ok(text) if first || self.texts.borrow()[1] != text => {
+                self.texts.borrow_mut()[1].clone_from(&text);
                 match Keymap::parse(text.as_deref().unwrap_or(""), &canonical) {
                     Ok(keymap) => {
                         self.errors.borrow_mut()[1].clear();

@@ -128,7 +128,7 @@ impl Window {
             !other.same_document(&page)
                 && other.shows(&location.path, Some(&read.info.meta.canonical))
         }) {
-            self.transfer_waits(&page, &existing);
+            Self::transfer_waits(&page, &existing);
             self.close_without_prompt(&page);
             self.select(&existing);
             if let Some(position) = location.position {
@@ -136,7 +136,11 @@ impl Window {
             }
             return;
         }
-        let caret = Caret::Open(location.position.map(|position| position.position()));
+        let caret = Caret::Open(
+            location
+                .position
+                .map(stet_domain::location::LineCol::position),
+        );
         if !self.fill(&page, read, TextOrigin::File, caret).await {
             if self.tab_page(&page).is_some() {
                 self.close_without_prompt(&page);
@@ -203,7 +207,7 @@ impl Window {
             TextOrigin::Formatted(kind) => {
                 sourceview5::LanguageManager::default().language(kind.language())
             }
-            _ => previous.or_else(|| self.guess_language(page, &head)),
+            _ => previous.or_else(|| Self::guess_language(page, &head)),
         };
         let large = page.large_file_mode();
         let limited = !self.settings().highlight_by_default(total, lines);
@@ -321,11 +325,7 @@ impl Window {
 
     /// Syntax detection: our file-name hints, GtkSourceView's globs, first-line hints
     /// (shebang, modelines), then GtkSourceView by sniffed content type.
-    pub(super) fn guess_language(
-        &self,
-        page: &EditorPage,
-        head: &str,
-    ) -> Option<sourceview5::Language> {
+    pub(super) fn guess_language(page: &EditorPage, head: &str) -> Option<sourceview5::Language> {
         let manager = sourceview5::LanguageManager::default();
         let installed = |id: &str| manager.language(id);
         let name = page
@@ -354,7 +354,7 @@ impl Window {
     /// Sets the language detected from the file name and `text`.
     pub(super) fn detect_language(&self, page: &EditorPage, text: &str) {
         let head = &text[..text.floor_char_boundary(HEAD_BYTES)];
-        let language = self.guess_language(page, head);
+        let language = Self::guess_language(page, head);
         page.set_language(language.as_ref());
         self.refresh_indentation(page);
         self.update_status();
@@ -375,7 +375,7 @@ impl Window {
         if !self.can_save(page) {
             return false;
         }
-        let suggested = self.save_as_name(page);
+        let suggested = Self::save_as_name(page);
         match self
             .choose_save_path(page.path().as_deref(), &suggested)
             .await
@@ -433,7 +433,7 @@ impl Window {
             let name = page.name();
             match result {
                 Some(Ok(outcome)) => {
-                    self.saved(page, path, outcome, revision, format, announce);
+                    self.saved(page, path, &outcome, revision, format, announce);
                     return true;
                 }
                 Some(Err(SaveError::Unmappable(error))) => {
@@ -560,7 +560,7 @@ impl Window {
         &self,
         page: &EditorPage,
         path: PathBuf,
-        outcome: SaveOutcome,
+        outcome: &SaveOutcome,
         revision: u64,
         written: DocumentFormat,
         announce: bool,

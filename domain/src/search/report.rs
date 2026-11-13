@@ -1,5 +1,7 @@
 //! The words the find bar and the results panel use to report a search.
 
+use std::fmt::Write as _;
+
 use super::{SearchOptions, TemplateWarning};
 
 /// The part of the document that Count and Replace All covered: the rows of
@@ -27,10 +29,10 @@ impl SearchOptions {
     /// Which row of the scope table applies; `has_selection` means a non-empty selection.
     pub fn scope_kind(&self, has_selection: bool) -> ScopeKind {
         match () {
-            _ if self.in_selection && has_selection => ScopeKind::Selection,
-            _ if self.wrap => ScopeKind::Document,
-            _ if self.backward => ScopeKind::ToCaret,
-            _ => ScopeKind::FromCaret,
+            () if self.in_selection && has_selection => ScopeKind::Selection,
+            () if self.wrap => ScopeKind::Document,
+            () if self.backward => ScopeKind::ToCaret,
+            () => ScopeKind::FromCaret,
         }
     }
 }
@@ -107,7 +109,7 @@ pub fn results_heading(
         counted(files, "file", "files")
     );
     if let Some(searched) = searched {
-        heading.push_str(&format!(" of {searched} searched"));
+        let _ = write!(heading, " of {searched} searched");
     }
     heading.push(')');
     heading

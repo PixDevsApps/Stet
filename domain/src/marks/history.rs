@@ -45,6 +45,7 @@ impl Footprint {
     }
 
     /// The footprint of undoing it.
+    #[must_use]
     pub fn inverse(self) -> Self {
         Self {
             start: self.start,
@@ -417,12 +418,12 @@ mod tests {
     fn replay(text: &mut Vec<char>, changes: &[Change], undo: bool) -> Footprint {
         let mut seen = Footprint::default();
         let mut play = |(at, chars, inserted): &Change| {
-            if *inserted != undo {
-                text.splice(*at..*at, chars.iter().copied());
-                seen.observe(*at, 0, chars.len());
-            } else {
+            if *inserted == undo {
                 text.drain(*at..*at + chars.len());
                 seen.observe(*at, chars.len(), 0);
+            } else {
+                text.splice(*at..*at, chars.iter().copied());
+                seen.observe(*at, 0, chars.len());
             }
         };
         if undo {

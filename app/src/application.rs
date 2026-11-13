@@ -111,7 +111,7 @@ pub fn build(config: AppConfig, started: Instant) -> (adw::Application, Rc<AppSt
             present(&state, &window);
             let locations: Vec<Location> = files
                 .iter()
-                .filter_map(|file| file.path())
+                .filter_map(FileExt::path)
                 .map(|path| Location {
                     path,
                     position: None,

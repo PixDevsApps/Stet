@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::time::Instant;
 
 use proptest::prelude::*;
@@ -150,14 +151,17 @@ proptest! {
         fillers in prop::collection::vec("[n-z0-9_.-]{1,3}", 8),
     ) {
         let path = |dirs: &[String], name: &str| {
-            dirs.iter().map(|dir| format!("{dir}/")).collect::<String>() + name
+            dirs.iter().flat_map(|dir| [dir, "/"]).collect::<String>() + name
         };
         let exact = path(&dirs, &query);
         let scattered_name: String = query
             .chars()
             .zip(&fillers)
-            .map(|(c, filler)| format!("{c}{filler}"))
-            .collect();
+            .fold(String::new(), |mut name, (c, filler)| {
+                name.push(c);
+                name.push_str(filler);
+                name
+            });
         let scattered = path(&other_dirs, &scattered_name);
         prop_assert!(points(&query, &exact) > points(&query, &scattered));
         let found = rank(&query, &[scattered.as_str(), exact.as_str()], 1);
@@ -219,13 +223,13 @@ fn project_paths(count: usize) -> Vec<String> {
     (0..count)
         .map(|i| {
             let mut path = String::new();
-            for _ in 0..1 + rng.below(5) {
+            for _ in 0..=rng.below(5) {
                 path.push_str(DIRS[rng.below(DIRS.len())]);
                 path.push('/');
             }
             let name = NAMES[rng.below(NAMES.len())];
             let extension = EXTENSIONS[rng.below(EXTENSIONS.len())];
-            path.push_str(&format!("{name}_{i}.{extension}"));
+            let _ = write!(path, "{name}_{i}.{extension}");
             path
         })
         .collect()

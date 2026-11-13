@@ -845,7 +845,7 @@ impl Harness {
         self.window
             .menu_button()
             .popover()
-            .filter(|popover| popover.is_visible())
+            .filter(WidgetExt::is_visible)
             .ok_or_else(|| "the menu is not open".to_owned())
     }
 
