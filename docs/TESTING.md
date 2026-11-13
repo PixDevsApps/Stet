@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-12
+Synced: 2026-11-13
 
 The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). Dated entries describe the state at that date; newer entries take precedence.
 
@@ -11,6 +11,14 @@ The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). 
 ## Evidence log
 
 Dated test and acceptance results go here, newest first. Spike results go to `docs/spikes/` and are linked from [RESEARCH.md](RESEARCH.md#m0-spike-results).
+
+### 2026-11-13 — The architecture cleanup ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13))
+
+Run by the agent on the development machine (gtk4 1:4.24.1-1), headless on Broadway display 93 through `tools/headless.sh`, which since 2026-11-13 runs Sealwax's patched `gtk4-broadwayd` ([upstream note](upstream/gtk-broadway-shared-render-node.md)).
+
+| Command | Result |
+| --- | --- |
+| Phase 0, before any code change, on `6991ded` plus the uncommitted `tools/headless.sh`: `cargo build -p stet`, then every script `tools/headless.sh 93 target/debug/stet --self-test tests/selftest/<name>.stet-test` except `preview*` and `perf-*`, one by one | **52 of 52 pass, 4,786 steps,** among them the 16 that stopped on the Broadway abort since 2026-11-07 (column-clipboard, column-editor, column-large, column, context, focus, indent, large, marks-large, session-settings, session, settings, tab-double-click, tab-names, toolbox-large, toolbox). No `gtk4-broadwayd` left running. |
 
 ### 2026-11-12 — 1.6.0: the Flatpak
 
@@ -51,6 +59,9 @@ Run by the agent on the development machine (Flatpak 1.18.4, flatpak-builder 1.4
 | `gh release view v1.6.0 --json assets`, `gh api repos/PixDevsApps/Stet/releases/latest`, `cargo test -p stet-infrastructure updates::tests::github -- --ignored` | GitHub's own SHA-256 of the two files equals the local files' (`c0ab8a1f…`, 3,780,306 bytes; `13f4beef…`, 1,759 bytes); the latest release is `v1.6.0`; "the latest release is 1.6.0". The package was not downloaded for this check, so that the release's download counts hold only installs. |
 | The README's Flatpak line as written, into the scratch installation again (14:48): `flatpak --user install -y https://github.com/PixDevsApps/Stet/releases/latest/download/io.github.pixdevsapps.Stet.flatpakref` | **Pass:** Stet 1.6.0 installed from the remote `stet` with GPG checks on, the same commit; `stet --version` gave 1.6.0. This is the one download of the release's `.flatpakref` made by the agent. |
 | `gh api repos/PixDevsApps/Stet/releases/latest`, the files' `download_count` | Both files read 0 at 13:48:18, 13:49:19, 13:50:07 and 13:55:45 UTC, the last one 8 minutes after the install above (13:48:01 UTC). **Not verified** that GitHub counts that download: its counter either hadn't caught up or didn't count it. Sealwax's `.flatpakref`, attached and fetched the same way, has downloads counted on its releases (`gh api repos/PixDevsApps/sealwax/releases`, read the same minute). |
+| The same again at 14:01:04 and 14:06:57 UTC; `pacman -Q stet`, `/var/log/pacman.log` and `flatpak list` on this machine | The `.flatpakref` 1 and the package 0, then 3 and 1: **GitHub counts the downloads**, some minutes late. One is the agent's test install; a second session's header request to the release link (`curl -sIL`, 13:55:33 UTC) may be another; the others didn't come from this machine, where Stet was still 1.5.1-1 (last upgraded 13:47 CET) and no Flatpak Stet was installed. |
+| After two sessions had been given the same release to do (15:00 CET): the other thread's history read; `git status`, `git ls-remote origin`, `git grep` in `HEAD` for that session's authorization row, `gh release list`, `gh api repos/PixDevsApps/stet-flatpak/commits`, `gpg --list-secret-keys`, `pgrep` | Nothing done twice: a clean tree, `main` here and on GitHub at `6991ded`, `v1.6.0` on `1d6119e`, the one release v1.6.0, one commit `b501b76` in `stet-flatpak` with Pages `built`, one secret key (`C17A8DBE…CC75F6AC`), no trace of the other session's row in the committed docs, no `gtk4-broadwayd`, `flatpak-builder` or `makepkg` running. |
+| The signing key backed up (15:03–15:07 CET): `cp -r .local/flatpak/gpg` and `gpg --armor --export-secret-keys` / `--export` into `stet-flatpak-signing-key/` on the user's USB stick (FAT, `/run/media/fredrick/0513-5FC4`), with the revocation certificate and a README; `cp -a .local/flatpak/gpg .local/backup/flatpak-gpg-2026-11-12`; `sync` | **Pass:** `diff -r` finds both folder copies equal to `.local/flatpak/gpg`. The stick's folder, copied to a scratch GnuPG folder, and the stick's exported secret key, imported into another, each list fingerprint `C17A8DBEF8BC6E47F84A9F35B266A479CC75F6AC` and make a detached signature; a third folder holding only the stick's public key reports "Good signature" for both. The `GPGKey` in the published `.flatpakref` has the same fingerprint. Sealwax's folder on the stick: 9 files, the same SHA-256 list before and after, none modified today. The scratch folders were deleted. |
 
 Not verified: the Flatpak on a live desktop and on another distribution; files from a file manager through `--file-forwarding`; D-Bus activation and `--wait`; Open Containing Folder, Move to Trash and the file dialogs through the portals; an update from one published version to the next (1.6.0 is the first).
 

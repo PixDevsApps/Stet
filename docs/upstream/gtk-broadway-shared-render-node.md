@@ -4,7 +4,7 @@ Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
 Synced: 2026-11-07
 
-**Status: not reported upstream; no workaround in Stet. The user chose on 2026-11-07 to wait for a GTK fix.** Found on 2026-11-07 when Stet's headless self-tests stopped passing after the system's update to GTK 4.24.1 ([PLAN.md](../PLAN.md#stet-140-a--button-for-a-new-tab--2026-11-07)).
+**Status: not reported upstream. Since 2026-11-13, by the user's choice, `tools/headless.sh` runs Sealwax's patched daemon (`../email/tools/broadwayd/build.sh`, or `STET_BROADWAYD`) instead of the system's; `focus`, `column` and `toolbox` then pass all their steps. (On 2026-11-07 the user had chosen to wait for a GTK fix.)** Found on 2026-11-07 when Stet's headless self-tests stopped passing after the system's update to GTK 4.24.1 ([PLAN.md](../PLAN.md#stet-140-a--button-for-a-new-tab--2026-11-07)).
 
 ## What happens
 

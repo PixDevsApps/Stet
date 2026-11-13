@@ -21,7 +21,19 @@ fi
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 mkdir -p "$root/.local"
 log="$root/.local/broadway-$display.log"
-gtk4-broadwayd --address 127.0.0.1 ":$display" >"$log" 2>&1 &
+# GTK 4.24's gtk4-broadwayd aborts when one render node sits twice in a frame
+# (docs/upstream/gtk-broadway-shared-render-node.md). Sealwax's tools/broadwayd/build.sh builds
+# GTK's daemon with a patch for that, and prints nothing before GTK 4.24; STET_BROADWAYD names
+# another daemon. Without either, the system's daemon is used.
+daemon=${STET_BROADWAYD:-}
+sealwax_build="$root/../email/tools/broadwayd/build.sh"
+if [[ -z $daemon && -x $sealwax_build ]]; then
+    daemon=$("$sealwax_build") || {
+        echo "headless.sh: building the patched gtk4-broadwayd failed; using the system's" >&2
+        daemon=
+    }
+fi
+"${daemon:-gtk4-broadwayd}" --address 127.0.0.1 ":$display" >"$log" 2>&1 &
 broadwayd=$!
 # An empty config folder: GTK would read the user's gtk-4.0/gtk.css (Omarchy Theme Studio
 # writes one) and fontconfig their fonts.conf, so a run would depend on the desktop's setup.

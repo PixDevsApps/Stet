@@ -2,7 +2,7 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-12
+Synced: 2026-11-13
 
 The repository docs are the canonical project memory ([ADR-012](#adr-012--repository-docs-as-canonical-project-memory-2026-09-30)). Dated entries describe the state at that date; newer entries and amendments take precedence.
 
@@ -12,7 +12,7 @@ Use this page for decisions with meaningful long-term cost. Keep each entry shor
 
 ADR-001 to ADR-013 were drafted on 2026-09-30 under the working name "Notes". [ADR-010](#adr-010--name-and-app-id-2026-09-30) was accepted the same day with the name **Stet**, so the product name, commands, paths and identifiers in these ADRs now read as Stet. ADR-010 itself keeps the working values as history.
 
-| ADR | Title | Status (2026-11-12) |
+| ADR | Title | Status (2026-11-13) |
 | --- | --- | --- |
 | 001 | Standalone native application | Accepted |
 | 002 | GTK4 + libadwaita + GtkSourceView 5, GPUI fallback | Accepted (user decision); confirmed when M0 closed with GO on 2026-10-01 |
@@ -33,6 +33,7 @@ ADR-001 to ADR-013 were drafted on 2026-09-30 under the working name "Notes". [A
 | 017 | Settings in `config.toml` and `keys.toml` | Accepted — M5, under the standing authorization (2026-10-01) |
 | 018 | Split view and compare presentation | Accepted — M7, under the standing authorization (2026-10-01) |
 | 019 | A Flatpak from Stet's own repository | Accepted — user decision, 2026-11-12: the repository `PixDevsApps/stet-flatpak` on GitHub Pages, a dedicated signing key, installs counted by the release's `.flatpakref` |
+| 020 | Code architecture: layers, bounded contexts and lints | Accepted — user decision, 2026-11-13 |
 
 ## ADR-001 — Standalone native application (2026-09-30)
 
@@ -1069,3 +1070,23 @@ The project folder stays `/home/fredrick/Projects/linux-apps/notes`.
 **Alternatives:** Flathub (see the reason); a `.flatpak` bundle on each GitHub release (simplest, but no updates); a `gh-pages` branch of the main repository (every clone would download the Flatpak's history); one repository shared with Sealwax (one remote for both apps, but Sealwax's is named and keyed for Sealwax); host commands through `flatpak-spawn --host` (Open Terminal Here, the host's fontconfig and `xdg-mime` would work, but the app could then run any program outside its sandbox); `--filesystem=home` (no removable media or `/mnt`); the document portal only (paths in `/run/user/…/doc/`, and no folders for Find in Files or quick open).
 
 **Consequences:** each release gets a Flatpak step and one push to `stet-flatpak`. Users of the Flatpak trust this repository's key; a lost key means everyone adds the repository again, a leaked one means a new key and a note to every user. The Flatpak and the Arch package share the app-id but keep separate settings and sessions, so only one should be installed: with both, the desktop entry and D-Bus activation pick one by `XDG_DATA_DIRS` order, and a command line of one forwards its files to the other while it runs. On Omarchy the Flatpak shows the runtime's monospace font (DejaVu Sans Mono) unless `omarchy-font-set` or `font =` in `config.toml` names one, because Omarchy's default rule is in `/etc/fonts`, which the sandbox doesn't see.
+
+## ADR-020 — Code architecture: layers, bounded contexts and lints (2026-11-13)
+
+**Status:** Accepted — user decision, 2026-11-13. Asked for "a comprehensive architectural review & cleanup: focused on organization, modularity and maintainability", the agent reviewed the three crates and proposed this rule set with a six-phase plan ([PLAN.md](PLAN.md#architecture-review-and-cleanup--2026-11-13)); the user answered "I trust you decide the best way, so I go with your recommendations on all".
+
+**Decision:**
+- **The three layers stay, with sharper edges.** `stet-domain` holds the models and the rules: no I/O, no GTK and no GTK vocabulary (no GtkSourceView style-scheme XML, libadwaita CSS or `app.`/`win.` action prefixes), and no persistence formats except those the text tools edit (JSON, XML). `stet-infrastructure` holds I/O, the file formats Stet persists (`session.json`, `recent.json`, `config.toml`, `keys.toml`) and the external engines (PCRE2, ripgrep's searcher, encoding_rs). `stet` holds GTK. Logic in the app that needs no GTK moves down, where it gets display-free tests.
+- **Modules follow the domain's bounded contexts**, not the milestones: text (offsets, edits, line endings), document (naming, the decode report, disk state), search, editing operations (the text tools and column mode), marks, navigation, session, settings and keymap, commands (the action registry and menus), appearance (the theme), updates. Each fact has one home: one definition of each constant, threshold and rule.
+- **Value objects where mixing values is a bug risk:** character and byte offsets, line numbers, tab and backup ids, tab width, the view slot. No repositories, ports, aggregates or domain events: infrastructure is synchronous and called from the app's workers, and those patterns would add indirection without a second implementation to justify it.
+- **`pub` only for what another crate uses**; one import path per item. `[workspace.lints]` sets the shared lints (`unsafe_code` forbidden outside the app's FFI module, `unreachable_pub`, the lossy-cast lints, a chosen part of Clippy's pedantic group), and every crate uses it.
+- **The app is built from feature components:** each window feature owns its state and installs its own actions; long-running work goes through one job runner that drops stale results; the self-tests reach the window through one probe module, not its fields.
+- **The self-test harness is a Cargo feature, `selftest`,** on by default so development builds and `tools/ci.sh --ui` keep it. The Arch package and the Flatpak are built without it; test builds of the Flatpak (`tools/flatpak.py build --worktree`) keep it.
+- **The M0 spike crate leaves the tree.** Its code stays in git history at the tag `m0-spikes`; its results stay in `docs/spikes/`.
+- **Comments say why, not when:** no milestone or version tags in code comments. History lives in git, PLAN.md and the ADRs.
+
+**Reason:** after M0–M9 and six 1.x releases the code was organized by milestone. The review found a window type with 43 fields extended from 27 files, a 2,926-line action module that names each action three times, facts defined in up to five places (one of which had already drifted into a bug: restored tabs ignored the highlighting limits in `config.toml`), about 50 public items used only by tests, and no shared lint configuration. Rules recorded here keep the cleanup from eroding.
+
+**Alternatives:** leave the structure and fix only the bugs (the drift would continue); a full hexagonal architecture with traits for every adapter (one implementation each, so cost without benefit); a separate self-test crate over an app library (the window's internals would become a public library API, and the activation tests, which start the binary itself, would need rework); keeping the spikes in the workspace (they are built and linted on every run and pin public items in production crates).
+
+**Consequences:** a large but behaviour-preserving change, made in small commits each passing `bash tools/ci.sh --ui`. User-visible behaviour changes only where named in PLAN.md (the command palette and the pickers rank with the quick-open matcher; number sequences share one overflow rule). Released packages lose `--self-test`.
