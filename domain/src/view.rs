@@ -19,11 +19,6 @@ pub const HIGHLIGHT_MAX_BYTES: usize = 2 * 1024 * 1024;
 /// at the same size.
 pub const HIGHLIGHT_MAX_LINES: usize = 100_000;
 
-/// Whether a document of `bytes` bytes and `lines` lines is highlighted when it opens.
-pub const fn highlight_by_default(bytes: usize, lines: usize) -> bool {
-    bytes <= HIGHLIGHT_MAX_BYTES && lines <= HIGHLIGHT_MAX_LINES
-}
-
 /// Zoom in points relative to the base size, as in Scintilla (which allows -10 to +20).
 /// Below -5 an 11 pt font gets unreadable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -103,17 +98,6 @@ mod tests {
         assert_eq!(Zoom::new(Zoom::MAX).zoom_in().points(), Zoom::MAX);
         assert_eq!(Zoom::new(3).font_size(DEFAULT_FONT_SIZE_PT), 14);
         assert_eq!(Zoom::new(-5).font_size(3), 1);
-    }
-
-    #[test]
-    fn highlighting_needs_both_limits() {
-        assert!(highlight_by_default(0, 1));
-        assert!(highlight_by_default(
-            HIGHLIGHT_MAX_BYTES,
-            HIGHLIGHT_MAX_LINES
-        ));
-        assert!(!highlight_by_default(HIGHLIGHT_MAX_BYTES + 1, 10));
-        assert!(!highlight_by_default(1024, HIGHLIGHT_MAX_LINES + 1));
     }
 
     #[test]

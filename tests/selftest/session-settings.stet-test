@@ -35,3 +35,9 @@ assert-text "a draft and more"
 write $TMP/config/stet/config.toml ""
 wait-backed-up 8000
 assert-backups $TMP/state/stet 1
+
+# A draft restored from its backup follows config.toml's highlighting limits, as an opened
+# file does, in new processes sharing $TMP/c.
+write $TMP/c/config/stet/config.toml "highlight_max_lines = 10\n"
+child-run $TMP/c $DIR/session/limits-make.stet-test 0
+child-run $TMP/c $DIR/session/limits-restore.stet-test 0

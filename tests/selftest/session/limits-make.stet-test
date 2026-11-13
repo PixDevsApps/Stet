@@ -1,0 +1,6 @@
+# Child of session-settings.stet-test: an untitled Rust draft of 20 lines, over the
+# config.toml's limit of 10 lines, backed up and kept by closing the window.
+action set-language rust
+type "fn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\nfn a() {}\n"
+wait-backed-up 10000
+quit window

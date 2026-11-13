@@ -1,0 +1,6 @@
+# Child of session-settings.stet-test: the restored draft follows config.toml's limits, as an
+# opened file does, and the banner names them.
+wait-idle
+assert-text-contains "fn a() {}"
+assert-highlight false
+assert-banner "Syntax highlighting is off for files over 2 MiB or 10 lines"

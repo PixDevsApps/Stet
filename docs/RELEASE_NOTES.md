@@ -2,6 +2,10 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
+## Unreleased
+
+- **Restored tabs follow your highlighting limits.** A tab restored from its backup when Stet starts now decides syntax highlighting with `highlight_max_bytes` and `highlight_max_lines` from `config.toml`, as an opened file always did; before, it used the built-in limits. The banner that offers Highlight Anyway now names the limits in effect instead of the built-in ones.
+
 ## 1.6.0 — 2026-11-12
 
 - **Stet as a Flatpak**, for Linux systems other than Omarchy and Arch, from Stet's own Flatpak repository: `flatpak install --user https://github.com/PixDevsApps/Stet/releases/latest/download/io.github.pixdevsapps.Stet.flatpakref`, then `flatpak update` for updates. It runs on GNOME's runtime and needs no network. In the Flatpak, Check for Updates… and Open Terminal Here aren't in the menu, Set as Default Editor… says how to choose Stet in your system's settings, and Stet keeps its settings and session in `~/.var/app/io.github.pixdevsapps.Stet/`. On Omarchy and Arch, the package stays the way to install Stet.

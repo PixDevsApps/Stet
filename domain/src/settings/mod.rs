@@ -705,6 +705,7 @@ mod tests {
         let settings = Settings::default();
         assert!(settings.highlight_by_default(HIGHLIGHT_MAX_BYTES, HIGHLIGHT_MAX_LINES));
         assert!(!settings.highlight_by_default(HIGHLIGHT_MAX_BYTES + 1, 1));
+        assert!(!settings.highlight_by_default(1024, HIGHLIGHT_MAX_LINES + 1));
         assert_eq!(settings.backup_every(), Some(Duration::from_secs(7)));
     }
 

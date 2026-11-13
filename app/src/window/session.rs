@@ -43,7 +43,7 @@ use stet_domain::session::{
     BackupAction, BackupState, SCHEMA_VERSION, Session, TabRecord, WindowState,
 };
 use stet_domain::text::line_count;
-use stet_domain::view::{Zoom, highlight_by_default};
+use stet_domain::view::Zoom;
 use stet_infrastructure::encoding::{encoding_for_name, entry_for, entry_for_id};
 use stet_infrastructure::fs::{
     DocumentFormat, EncodingChoice, LoadError, SizeClass, SizePolicy, file_meta,
@@ -638,7 +638,7 @@ impl Window {
         }
         let language = language.or_else(|| self.guess_language(page, &head));
         let large = page.large_file_mode();
-        let limited = !highlight_by_default(total, lines);
+        let limited = !self.settings().highlight_by_default(total, lines);
         page.update_state(|state| state.highlight_limited = limited && !large);
         page.set_language(language.as_ref());
         page.set_highlighting(!large && !limited);

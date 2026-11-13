@@ -9,7 +9,6 @@ use gtk4::prelude::*;
 use std::rc::Rc;
 use stet_domain::document::sudoedit_command;
 use stet_domain::text::{DISPLAY_BREAK_CHARS, Eol};
-use stet_domain::view::{HIGHLIGHT_MAX_BYTES, HIGHLIGHT_MAX_LINES};
 use stet_infrastructure::encoding::status_label;
 use stet_infrastructure::fs::MIB;
 
@@ -72,13 +71,19 @@ impl Window {
                 page.set_highlighting(true);
                 window.refresh_banners(&page);
             });
+            let settings = self.settings();
+            let bytes = settings.highlight_max_bytes as u64;
+            let size = if bytes.is_multiple_of(MIB) {
+                format!("{} MiB", bytes / MIB)
+            } else {
+                format!("{:.1} MiB", bytes as f64 / MIB as f64)
+            };
             page.show_banner(
                 BannerKind::Highlighting,
                 &format!(
-                    "Syntax highlighting is off for files over {} MiB or {} lines, so that \
+                    "Syntax highlighting is off for files over {size} or {} lines, so that \
                      typing stays fast.",
-                    HIGHLIGHT_MAX_BYTES as u64 / MIB,
-                    grouped(HIGHLIGHT_MAX_LINES)
+                    grouped(settings.highlight_max_lines)
                 ),
                 vec![button],
             );

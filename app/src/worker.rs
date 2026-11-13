@@ -11,21 +11,35 @@ thread_local! {
 /// job panicked.
 pub async fn run<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -> Option<T> {
     let (sender, receiver) = async_channel::bounded(1);
-    PENDING.with(|pending| pending.set(pending.get() + 1));
+    let _pending = Pending::start();
     let spawned = std::thread::Builder::new()
         .name("stet-worker".into())
         .spawn(move || {
             let _ = sender.send_blocking(job());
         });
-    let result = match spawned {
+    match spawned {
         Ok(_) => receiver.recv().await.ok(),
         Err(error) => {
             tracing::error!(%error, "could not start a worker thread");
             None
         }
-    };
-    PENDING.with(|pending| pending.set(pending.get() - 1));
-    result
+    }
+}
+
+/// Counts a job as pending until dropped, also when its future is dropped before the result.
+struct Pending;
+
+impl Pending {
+    fn start() -> Self {
+        PENDING.with(|pending| pending.set(pending.get() + 1));
+        Self
+    }
+}
+
+impl Drop for Pending {
+    fn drop(&mut self) {
+        PENDING.with(|pending| pending.set(pending.get() - 1));
+    }
 }
 
 /// Jobs started on this thread whose results have not arrived yet.
