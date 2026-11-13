@@ -5,7 +5,8 @@
 //! `GtkListView` over a `GtkTreeListModel` keeps large result sets cheap.
 
 use super::SearchCommand;
-use crate::editor::{EditorPage, JUMP_LOAD_WAIT};
+use crate::editor::EditorPage;
+use crate::editor::load::JUMP_LOAD_WAIT;
 use crate::window::{Location, Window};
 use gtk4 as gtk;
 use gtk4::prelude::*;

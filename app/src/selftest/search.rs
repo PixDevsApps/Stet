@@ -3,7 +3,7 @@
 
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
-use crate::page_search::OWN_MATCH_TAG;
+use crate::editor::search::OWN_MATCH_TAG;
 use crate::runtime::worker;
 use crate::window::{Field, SearchCommand};
 use gtk4 as gtk;

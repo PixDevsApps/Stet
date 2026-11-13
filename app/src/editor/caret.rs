@@ -1,8 +1,8 @@
 //! A page's own caret and selection. GTK keeps one caret per buffer, so while another view of
 //! the document is in front, this page keeps its caret and selection in marks of its own.
 
+use super::column::StetView;
 use super::page::EditorPage;
-use crate::column::StetView;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;

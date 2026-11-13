@@ -3,20 +3,20 @@
 //! matches its own command enum exhaustively.
 
 use super::Window;
-use super::compare::CompareCommand;
-use super::editing::{ColumnCommand, EditCommand};
-use super::encoding::{EncodingCommand, FixedEncoding};
-use super::files::FileCommand;
-use super::language::LanguageCommand;
-use super::marking::MarkCommand;
-use super::nav::NavCommand;
-use super::pins::PinCommand;
+use super::chrome::language::LanguageCommand;
+use super::documents::encoding::{EncodingCommand, FixedEncoding};
+use super::documents::files::FileCommand;
 use super::search::SearchCommand;
-use super::split::SplitCommand;
-use super::tabs::{TabCommand, TabTool};
-use super::toolbox::TextTool;
-use super::view::ViewCommand;
-use crate::column::Motion;
+use super::search::marking::MarkCommand;
+use super::text::editing::{ColumnCommand, EditCommand};
+use super::text::toolbox::TextTool;
+use super::tools::compare::CompareCommand;
+use super::workspace::nav::NavCommand;
+use super::workspace::pins::PinCommand;
+use super::workspace::split::SplitCommand;
+use super::workspace::tabs::{TabCommand, TabTool};
+use super::workspace::view::ViewCommand;
+use crate::editor::column::Motion;
 use std::path::PathBuf;
 use stet_domain::actions::ActionId;
 use stet_domain::marks::MarkStyle;
@@ -28,7 +28,7 @@ impl Window {
         // Column mode closes its typing burst first, and ends for actions that don't know
         // about columns.
         if let Some(page) = self.current_page()
-            && crate::column::before_action(page.column_view(), id)
+            && crate::editor::column::before_action(page.column_view(), id)
         {
             return;
         }

@@ -4,7 +4,7 @@
 //! ([`FindBar::options`], [`FindBar::files_request`], [`FindBar::mark_options`]) and reacts to
 //! it through its `connect_*` callbacks.
 
-use crate::page_search::Compiled;
+use crate::editor::search::Compiled;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib, pango};

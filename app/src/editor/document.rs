@@ -2,13 +2,13 @@
 //! buffer-signal plumbing that keeps the marks and the revision in step with the text.
 
 use super::load::LoadStats;
+use super::marks::DocMarks;
 use super::page::EditorPage;
+use super::search::{OWN_MATCH_TAG, PageSearch};
+use super::session::TabSession;
 use super::state::DocState;
-use crate::marks::DocMarks;
 use crate::monitor::FileWatch;
-use crate::page_search::{OWN_MATCH_TAG, PageSearch};
 use crate::runtime::{Debounce, Notify};
-use crate::session::TabSession;
 use gtk4 as gtk;
 use gtk4::glib;
 use sourceview5::prelude::*;
@@ -40,7 +40,7 @@ pub enum IndentSource {
 pub(super) struct Document {
     pub(super) buffer: sourceview5::Buffer,
     /// What the buffer's views share (column mode's redo workaround and owner).
-    pub(super) shared: Rc<crate::column::edit::BufferShared>,
+    pub(super) shared: Rc<super::column::edit::BufferShared>,
     pub(super) state: RefCell<DocState>,
     pub(super) revision: Cell<u64>,
     pub(super) search: PageSearch,
@@ -79,9 +79,9 @@ impl Document {
         buffer.set_highlight_matching_brackets(true);
         buffer.create_tag(Some(OWN_MATCH_TAG), &[]);
         buffer.create_tag(Some(CURRENT_MATCH_TAG), &[]);
-        crate::marks::create_tags(&buffer);
+        super::marks::create_tags(&buffer);
         // Before any view: the buffer's hooks run ahead of the views'.
-        let shared = crate::column::edit::connect_history(&buffer);
+        let shared = super::column::edit::connect_history(&buffer);
         let document = Rc::new(Self {
             buffer,
             shared,

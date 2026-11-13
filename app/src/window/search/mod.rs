@@ -1,12 +1,15 @@
 //! Search in the window: the find bar ([`bar`]) and its commands ([`find`]), Count, Replace
-//! and Find All ([`replace`]), Find in Files and Replace in Files ([`files`]), and the results
-//! panel they fill ([`results`]).
+//! and Find All ([`replace`]), Find in Files and Replace in Files ([`files`]), the results
+//! panel they fill ([`results`]), bookmarks, Mark and style tokens ([`marking`]), and smart
+//! highlighting ([`smart`]).
 
 pub mod bar;
 mod files;
 mod find;
+pub(super) mod marking;
 mod replace;
 mod results;
+mod smart;
 
 use crate::window::Window;
 use bar::BarMode;

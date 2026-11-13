@@ -1,27 +1,20 @@
 mod actions;
 mod activation;
 mod application;
-mod banner;
 mod cli;
-mod column;
-mod compare;
 mod config;
 mod editor;
-mod edits;
-mod loader;
 mod logging;
-#[expect(unsafe_code, reason = "a GtkSourceView call the bindings lack")]
-mod marks;
 mod monitor;
-mod page_search;
 mod preferences;
 mod runtime;
-#[expect(unsafe_code, reason = "GtkSourceView's async search through its C API")]
-mod search;
 #[cfg(feature = "selftest")]
 mod selftest;
-mod session;
-mod tabstops;
+#[expect(
+    unsafe_code,
+    reason = "safe wrappers over the GTK and GtkSourceView C calls the bindings lack"
+)]
+mod sys;
 mod theme;
 mod window;
 

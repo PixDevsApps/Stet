@@ -47,6 +47,36 @@ notes/               repository root (this checkout's folder keeps the M0 workin
   tests/fixtures/    small committed fixtures (encodings and line endings, from M3)
 ```
 
+The app crate (`app/src/`): the top level is the application shell, `editor/` one document and its views, `window/` the window's features in groups, and `sys/` the only unsafe code ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13)):
+
+```
+main.rs cli.rs application.rs activation.rs config.rs logging.rs monitor.rs preferences.rs actions.rs style.css
+runtime/         the GTK thread's async plumbing: worker jobs, Latest tokens, debounce, Notify, one-shot signals
+theme/           the live Omarchy theme and font: the generated scheme, the CSS, the fixtures
+sys/             safe wrappers over the GTK and GtkSourceView C calls the bindings lack, the only module
+                 allowed `unsafe`: search.rs (async Find Next/Previous), source_marks.rs (next source mark),
+                 text_buffer.rs (an `insert-text` handler that may take over), accessible_text.rs
+                 (NULL-safe GtkAccessibleText.get_selection)
+editor/          one tab and its document: page.rs (EditorPage), document.rs, state.rs (DocState),
+                 load.rs (streaming a text in), edits.rs (domain edits on the buffer), search.rs (search
+                 contexts, our own matches, the current match), marks.rs (bookmarks and marks),
+                 comparison.rs (one side of a comparison), banners.rs (the banner widget and the stack),
+                 caret.rs, appearance.rs, session.rs (the tab's session record), tabstops.rs (ADR-015)
+  column/        the editor's view, StetView, with column mode (ADR-016): view.rs, edit.rs, keys.rs,
+                 paint.rs, clipboard.rs, dialog.rs (the Column Editor)
+window/          mod.rs (Window, layout, lifecycle), dispatch.rs (every action to its feature), probe.rs
+                 (the self-test's view), snapshot.rs (jobs on a text snapshot), dialogs.rs, focus.rs
+  documents/     files.rs (open, save), disk.rs (outside changes), encoding.rs, banners.rs, session.rs
+  workspace/     tabs.rs (the tab menu's commands), pins.rs, split.rs, view.rs (the View menu), nav.rs
+                 (Ctrl+Tab, back and forward), quick_open.rs
+  text/          editing.rs (undo, clipboard, column commands), toolbox.rs, tool_dialogs.rs
+  search/        bar.rs, find.rs, replace.rs, results.rs, files/ (Find and Replace in Files),
+                 marking.rs (bookmarks, Mark, style tokens), smart.rs (smart highlighting)
+  tools/         compare.rs, settings.rs (what config.toml and keys.toml do), updates.rs, default_editor.rs
+  chrome/        status.rs, language.rs, encoding_picker.rs, indentation.rs, palette.rs, a11y.rs
+selftest/        the `stet --self-test` harness (the `selftest` feature)
+```
+
 As built in M1 (2026-10-01):
 
 ```

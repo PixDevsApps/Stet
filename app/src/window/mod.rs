@@ -3,39 +3,18 @@
 //! bar below; the command palette and the language and encoding pickers as popovers. There
 //! is no toolbar and no title bar.
 
-mod a11y;
-mod banners;
-mod compare;
-mod default_editor;
+mod chrome;
 pub mod dialogs;
-mod disk;
 mod dispatch;
-mod editing;
-mod encoding;
-mod encoding_picker;
-mod files;
+mod documents;
 mod focus;
-mod indentation;
-mod language;
-mod marking;
-mod nav;
-mod palette;
-mod pins;
 #[cfg(feature = "selftest")]
 mod probe;
-mod quick_open;
 mod search;
-mod session;
-mod settings;
-mod smart;
 mod snapshot;
-mod split;
-mod status;
-mod tabs;
-mod tool_dialogs;
-mod toolbox;
-mod updates;
-mod view;
+mod text;
+mod tools;
+mod workspace;
 
 use crate::actions;
 use crate::config::AppConfig;
@@ -62,23 +41,23 @@ use stet_domain::document::{ReadOnly, next_untitled_number, tab_title, window_ti
 use stet_domain::nav::RecentFiles;
 use stet_domain::text::Position;
 
+pub use chrome::encoding_picker::{EncodingPicker, PickerMode};
 #[cfg(feature = "selftest")]
-pub use compare::CompareRun;
-pub use encoding::grouped_entries;
-pub use encoding_picker::{EncodingPicker, PickerMode};
-#[cfg(feature = "selftest")]
-pub use indentation::IndentChoice;
-pub use indentation::IndentPicker;
-pub use language::LanguagePicker;
-pub use palette::{Command as PaletteCommand, Palette};
+pub use chrome::indentation::IndentChoice;
+pub use chrome::indentation::IndentPicker;
+pub use chrome::language::LanguagePicker;
+pub use chrome::palette::{Command as PaletteCommand, Palette};
+pub use documents::encoding::grouped_entries;
 #[cfg(feature = "selftest")]
 pub use search::SearchCommand;
 #[cfg(feature = "selftest")]
 pub use search::bar::{BarMode, Field};
 pub use search::{FindBar, ResultsPanel};
+#[cfg(feature = "selftest")]
+pub use tools::compare::CompareRun;
 
-pub use session::Phase as SessionPhase;
-pub use status::StatusBar;
+pub use chrome::status::StatusBar;
+pub use documents::session::Phase as SessionPhase;
 
 /// A file to open, with an optional position.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -316,7 +295,7 @@ pub struct Inner {
     pub encodings: Rc<EncodingPicker>,
     pub indentation: Rc<IndentPicker>,
     /// The text toolbox's dialogs' values and last statistics.
-    pub tools: toolbox::ToolState,
+    pub tools: text::toolbox::ToolState,
     /// The tab whose context menu is open.
     menu_page: RefCell<Option<adw::TabPage>>,
     /// The tab the last press on a tab strip was on, to tell a double-click on a tab.
@@ -341,17 +320,17 @@ pub struct Inner {
     last_focus_check: Cell<Option<Instant>>,
     #[cfg(feature = "selftest")]
     last_toast: RefCell<String>,
-    session: session::WindowSession,
+    session: documents::session::WindowSession,
     /// Navigation, pinned tabs and quick open.
-    pub(crate) nav: nav::Nav,
+    pub(crate) nav: workspace::nav::Nav,
     /// Split view's synchronised scrolling.
-    pub(crate) split: split::SplitState,
+    pub(crate) split: workspace::split::SplitState,
     /// The comparison on screen.
-    pub(crate) comparing: compare::CompareState,
+    pub(crate) comparing: tools::compare::CompareState,
     /// Mark's options and the last Mark's statistics.
-    pub(crate) marking: marking::MarkState,
+    pub(crate) marking: search::marking::MarkState,
     /// Check for Updates.
-    updates: updates::UpdateState,
+    updates: tools::updates::UpdateState,
 }
 
 impl Window {
@@ -442,7 +421,7 @@ impl Window {
         toolbar.add_top_bar(&top);
         toolbar.add_bottom_bar(&status.root);
         // The Ctrl+Tab switcher floats over everything but the toasts.
-        let nav = nav::Nav::new();
+        let nav = workspace::nav::Nav::new();
         let overlay = gtk::Overlay::builder().child(&toolbar).build();
         overlay.add_overlay(&nav.switcher.root);
         let toasts = adw::ToastOverlay::new();
@@ -478,7 +457,7 @@ impl Window {
                 languages,
                 encodings,
                 indentation,
-                tools: toolbox::ToolState::default(),
+                tools: text::toolbox::ToolState::default(),
                 menu_page: RefCell::new(None),
                 pressed_tab: glib::WeakRef::new(),
                 closed: RefCell::new(Vec::new()),
@@ -494,12 +473,12 @@ impl Window {
                 last_focus_check: Cell::new(None),
                 #[cfg(feature = "selftest")]
                 last_toast: RefCell::new(String::new()),
-                session: session::WindowSession::default(),
+                session: documents::session::WindowSession::default(),
                 nav,
-                split: split::SplitState::default(),
-                comparing: compare::CompareState::default(),
-                marking: marking::MarkState::default(),
-                updates: updates::UpdateState::default(),
+                split: workspace::split::SplitState::default(),
+                comparing: tools::compare::CompareState::default(),
+                marking: search::marking::MarkState::default(),
+                updates: tools::updates::UpdateState::default(),
             }),
         };
         actions::install_window_actions(&this);
@@ -1099,7 +1078,8 @@ impl Window {
             |language| language.name().to_string(),
         ));
         let state = page.state();
-        let (encoding, eol) = encoding::format_labels(&state.save.format, state.eol.mixed);
+        let (encoding, eol) =
+            documents::encoding::format_labels(&state.save.format, state.eol.mixed);
         status.set_eol(eol);
         status.set_encoding(&encoding);
         status.set_overwrite(view.overwrites());
@@ -1531,14 +1511,14 @@ impl Window {
         self.inner.palette.open(&self.inner.content, items, text);
     }
 
-    fn palette_items(&self) -> Vec<palette::Item> {
+    fn palette_items(&self) -> Vec<chrome::palette::Item> {
         let keymap = self.keymap();
         // Pin Tab and Unpin Tab: only the one that applies.
         let applies = |id: ActionId| {
             !matches!(id, ActionId::PinTab | ActionId::UnpinTab)
                 || self.action(id).is_some_and(|action| action.is_enabled())
         };
-        let mut items: Vec<palette::Item> = ActionId::ALL
+        let mut items: Vec<chrome::palette::Item> = ActionId::ALL
             .into_iter()
             .filter(|id| id.spec().palette && applies(*id) && actions::available(*id))
             .map(|id| {
@@ -1548,7 +1528,7 @@ impl Window {
                         .and_then(|action| action.state())
                         .and_then(|state| state.get::<bool>())
                         .unwrap_or(false);
-                palette::Item {
+                chrome::palette::Item {
                     label: if on {
                         format!("{} (on)", id.label())
                     } else {
@@ -1576,7 +1556,7 @@ impl Window {
                 .parent()
                 .map(|dir| stet_domain::document::tilde(dir, home.as_deref()))
                 .unwrap_or_default();
-            palette::Item {
+            chrome::palette::Item {
                 label: name,
                 detail: format!("Open Recent › {dir}"),
                 keys: String::new(),

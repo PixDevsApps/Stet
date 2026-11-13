@@ -10,11 +10,11 @@
 
 use super::SearchCommand;
 use super::bar::{BarCommand, BarMode, Field, FieldKey, Tone};
+use super::marking::MarkCommand;
 use crate::editor::EditorPage;
-use crate::page_search::{Compiled, OwnMatches};
+use crate::editor::search::{Compiled, OwnMatches};
 use crate::runtime::worker;
 use crate::window::Window;
-use crate::window::marking::MarkCommand;
 use crate::window::snapshot::PageSnapshot;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -498,7 +498,7 @@ impl Window {
         context.set_highlight(self.shows_matches(&page));
         let from = page.buffer().iter_at_offset(from);
         self.spawn(async move {
-            match crate::search::find(&context, &from, forward).await {
+            match crate::sys::search::find(&context, &from, forward).await {
                 Some((start, end, wrapped)) => {
                     window.show_match(&page, start.offset(), end.offset(), forward, wrapped);
                 }

@@ -46,7 +46,7 @@ A fix would be for `gtk_text_history_redo` to move the barrier that follows the 
 
 ## What Stet does
 
-`app/src/column/edit.rs` (`connect_buffer`), for every editor buffer:
+`app/src/editor/column/edit.rs` (`connect_buffer`), for every editor buffer:
 
 - After a redo that leaves nothing to redo, an empty user action puts the barrier back at once. GTK clears the redo queue at the end of every user action; here it holds nothing but the stray barrier.
 - After a redo that leaves more to redo, nothing can be done without clearing the rest of the redo history. The next user action does it as it begins: the `begin-user-action` handler (emitted after the history has begun the user action, which has just joined the redone group) ends the user action and begins it again, as GtkTextView itself does between a deleted selection and the typed text. That closes the redone group with a barrier and starts a new one. The redo history it clears would have been cleared by that user action anyway. An edit outside any user action gets an empty user action before it instead.

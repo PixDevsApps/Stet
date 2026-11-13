@@ -343,7 +343,7 @@ impl Harness {
                 let page = self.page()?;
                 equal(
                     "tagged marks",
-                    tagged_ranges(&page, crate::marks::tag_name(style)),
+                    tagged_ranges(&page, crate::editor::marks::tag_name(style)),
                     number(arg(1))?,
                 )
             }),
@@ -432,7 +432,7 @@ impl Harness {
                 .and_then(|wanted| equal("comparing", self.window.comparing(), wanted)),
             "assert-compare-line" => self.compare_page(arg(0)).and_then(|(page, _, _)| {
                 let line = number(arg(1))?;
-                let kind = crate::compare::line_kind_at(&page, line.saturating_sub(1));
+                let kind = crate::editor::comparison::line_kind_at(&page, line.saturating_sub(1));
                 equal("line kind", kind_name(kind).to_owned(), arg(2).to_owned())
             }),
             "assert-compare-paint" => self.compare_page(arg(0)).and_then(|(page, _, _)| {
@@ -459,7 +459,8 @@ impl Harness {
             }),
             "assert-compare-inline" => self.compare_page(arg(0)).and_then(|(page, _, _)| {
                 let line = number(arg(1))?;
-                let ranges = crate::compare::inline_ranges_at(&page, line.saturating_sub(1));
+                let ranges =
+                    crate::editor::comparison::inline_ranges_at(&page, line.saturating_sub(1));
                 let shown = if ranges.is_empty() {
                     "none".to_owned()
                 } else {
@@ -506,7 +507,7 @@ impl Harness {
             "assert-compare-clean" => self.page().and_then(|page| {
                 let lines = page.buffer().line_count().max(1) as usize;
                 let coloured = (0..lines)
-                    .filter(|line| crate::compare::line_kind_at(&page, *line).is_some())
+                    .filter(|line| crate::editor::comparison::line_kind_at(&page, *line).is_some())
                     .count();
                 let view = page.view();
                 equal(
@@ -955,7 +956,7 @@ fn painted_kind(page: &EditorPage, line: usize) -> Result<(&'static str, [u8; 4]
     ];
     let painted = kinds.into_iter().find(|&kind| {
         scheme
-            .style(crate::compare::style_name(kind))
+            .style(crate::editor::comparison::style_name(kind))
             .and_then(|style| style.background())
             .and_then(|value| gtk::gdk::RGBA::parse(value.as_str()).ok())
             .is_some_and(|color| near(&color, pixel))

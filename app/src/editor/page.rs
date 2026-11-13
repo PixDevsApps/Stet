@@ -3,13 +3,13 @@
 //! a view, a caret and banners of its own.
 
 use super::appearance::ViewSettings;
+use super::banners::Banner;
+use super::column::StetView;
 use super::document::Document;
+use super::session::TabSession;
 use super::state::{Activity, DocState};
-use crate::banner::Banner;
-use crate::column::StetView;
+use super::tabstops::TabStops;
 use crate::monitor::FileWatch;
-use crate::session::TabSession;
-use crate::tabstops::TabStops;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::subclass::prelude::*;
@@ -147,7 +147,7 @@ impl EditorPage {
 
         // Bookmarks in the gutter, toggled by a click there.
         let attributes = sourceview5::MarkAttributes::new();
-        view.set_mark_attributes(crate::marks::BOOKMARK_CATEGORY, &attributes, 10);
+        view.set_mark_attributes(super::marks::BOOKMARK_CATEGORY, &attributes, 10);
         view.set_show_line_marks(true);
         // Line numbers and bookmarks at the top of their line, which a comparison pads below.
         let gutter = ViewExt::gutter(

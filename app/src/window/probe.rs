@@ -6,10 +6,10 @@
 //! Probes that need a feature's private state live with that feature, in a
 //! `#[cfg(feature = "selftest")]` block at the end of its module.
 
-use super::quick_open::QuickOpenStats;
-use super::toolbox::ToolStats;
+use super::text::toolbox::ToolStats;
+use super::workspace::quick_open::QuickOpenStats;
 use super::{BarMode, IndentChoice, PickerMode, Shared, ViewPane, Window};
-use crate::page_search::Compiled;
+use crate::editor::search::Compiled;
 use gtk4 as gtk;
 use gtk4::{gdk, gio, glib};
 use libadwaita as adw;

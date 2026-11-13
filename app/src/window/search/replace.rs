@@ -5,8 +5,8 @@
 use super::bar::{BarMode, Field, Tone};
 use super::results::{FileNode, FileTarget};
 use crate::editor::EditorPage;
-use crate::edits;
-use crate::page_search::Compiled;
+use crate::editor::edits;
+use crate::editor::search::Compiled;
 use crate::runtime::worker;
 use crate::window::Window;
 use crate::window::snapshot::{PageSnapshot, Stale};

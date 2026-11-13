@@ -4,7 +4,8 @@
 
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number};
-use crate::column::{StetView, a11y, dialog, keys};
+use crate::editor::column::{StetView, dialog, keys};
+use crate::sys::accessible_text;
 use gtk4 as gtk;
 use gtk4::glib::translate::IntoGlib;
 use gtk4::prelude::*;
@@ -150,7 +151,7 @@ impl Harness {
             }
             "assert-clipboard-mime" => {
                 let clipboard = self.window.window().clipboard();
-                match crate::column::clipboard::read(&clipboard, arg(0)).await {
+                match crate::editor::column::clipboard::read(&clipboard, arg(0)).await {
                     Ok(text) => equal(&format!("clipboard as {}", arg(0)), text, arg(1).to_owned()),
                     Err(error) => Err(format!("the clipboard has no {}: {error}", arg(0))),
                 }
@@ -590,14 +591,14 @@ impl Harness {
         let (start, end) = buffer
             .selection_bounds()
             .ok_or_else(|| "select something first".to_owned())?;
-        let (selected, count, _, ours) = a11y::probe_selection(&view, false);
+        let (selected, count, _, ours) = accessible_text::probe_selection(&view, false);
         equal("our get_selection in the vtable", ours, true)?;
         equal(
             "selection found (NULL ranges)",
             (selected, count),
             (true, 1),
         )?;
-        let (selected, count, ranges, _) = a11y::probe_selection(&view, true);
+        let (selected, count, ranges, _) = accessible_text::probe_selection(&view, true);
         let wanted = vec![(
             start.offset() as usize,
             (end.offset() - start.offset()) as usize,

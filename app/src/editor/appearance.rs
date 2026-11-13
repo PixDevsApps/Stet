@@ -3,8 +3,8 @@
 
 use super::document::{CURRENT_MATCH_TAG, IndentSource};
 use super::page::EditorPage;
-use crate::page_search::{OWN_MATCH_TAG, style_tag};
-use crate::tabstops::TabStops;
+use super::search::{OWN_MATCH_TAG, style_tag};
+use super::tabstops::TabStops;
 use crate::theme::scheme::{BOOKMARK_STYLE, SEARCH_CURRENT_STYLE};
 use gtk4 as gtk;
 use gtk4::subclass::prelude::*;
@@ -183,11 +183,11 @@ impl EditorPage {
             }
         }
         for style in stet_domain::marks::MarkStyle::ALL {
-            if let Some(tag) = table.lookup(crate::marks::tag_name(style)) {
-                style_tag(&tag, scheme, crate::marks::scheme_style(style));
+            if let Some(tag) = table.lookup(super::marks::tag_name(style)) {
+                style_tag(&tag, scheme, super::marks::scheme_style(style));
             }
         }
-        crate::compare::recolor(&buffer, scheme);
+        super::comparison::recolor(&buffer, scheme);
         self.document().search.set_scheme(scheme);
         let color = scheme
             .style(BOOKMARK_STYLE)
@@ -195,7 +195,7 @@ impl EditorPage {
             .and_then(|color| gtk::gdk::RGBA::parse(color.as_str()).ok())
             .unwrap_or_else(|| self.view().color());
         if let Some(attributes) = self.imp().bookmark.get() {
-            attributes.set_pixbuf(&crate::marks::bookmark_pixbuf(&color, 64));
+            attributes.set_pixbuf(&super::marks::bookmark_pixbuf(&color, 64));
         }
         self.view().queue_draw();
     }
