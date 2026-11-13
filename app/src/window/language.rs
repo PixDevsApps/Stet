@@ -6,7 +6,7 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-use stet_domain::palette;
+use stet_domain::fuzzy;
 
 /// Called with the chosen language id; `None` is Plain Text.
 type OnChosen = Box<dyn Fn(Option<String>)>;
@@ -151,19 +151,30 @@ impl LanguagePicker {
         }
     }
 
+    /// Shows the languages matching the query and selects the best one, so Enter chooses it.
     fn filter(&self) {
         let query = self.entry.text();
-        let mut first = None;
-        for entry in &self.entries {
-            let visible = palette::score(&query, &entry.search).is_some();
+        let ranked = self.rank(&query);
+        let mut visible = vec![false; self.entries.len()];
+        for found in &ranked {
+            visible[found.index] = true;
+        }
+        for (entry, visible) in self.entries.iter().zip(visible) {
             entry.row.set_visible(visible);
-            if visible && first.is_none() {
-                first = Some(entry.row.clone());
-            }
         }
         if !query.is_empty() {
-            self.list.select_row(first.as_ref());
+            self.list
+                .select_row(ranked.first().map(|best| &self.entries[best.index].row));
         }
+    }
+
+    fn rank(&self, query: &str) -> Vec<fuzzy::Ranked> {
+        let searches: Vec<&str> = self
+            .entries
+            .iter()
+            .map(|entry| entry.search.as_str())
+            .collect();
+        fuzzy::rank_labels(query, &searches)
     }
 
     fn move_selection(&self, step: i32) {
@@ -199,15 +210,11 @@ impl LanguagePicker {
         }
     }
 
-    /// Chooses the first language matching `query`, as typing it and pressing Enter would.
+    /// Chooses the best language matching `query`, as typing it and pressing Enter would.
     pub fn choose_matching(&self, query: &str) -> bool {
-        let best = palette::rank(
-            query,
-            self.entries.iter().map(|entry| entry.search.as_str()),
-        );
-        match best.first() {
-            Some(&index) => {
-                let row = self.entries[index].row.clone();
+        match self.rank(query).first() {
+            Some(best) => {
+                let row = self.entries[best.index].row.clone();
                 self.choose(&row);
                 true
             }

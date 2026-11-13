@@ -114,6 +114,123 @@ fn an_empty_query_keeps_the_given_order() {
     assert_eq!(indexes, [0, 1]);
 }
 
+fn labels<'a>(query: &str, labels: &[&'a str]) -> Vec<&'a str> {
+    rank_labels(query, labels)
+        .into_iter()
+        .map(|found| labels[found.index])
+        .collect()
+}
+
+#[test]
+fn labels_list_everything_in_order_for_an_empty_query() {
+    let items = ["Save", "Save As…", "Save All", "Open…", "Close"];
+    assert_eq!(labels("", &items), items);
+    assert_eq!(labels(" ", &items), items);
+    assert!(labels("x", &items).is_empty());
+    assert_eq!(labels("clo", &items), ["Close"]);
+}
+
+#[test]
+fn labels_rank_runs_and_word_starts_first() {
+    let items = ["Save File", "Save As… File", "Save All File", "Open… File"];
+    assert_eq!(
+        labels("save", &items),
+        ["Save File", "Save All File", "Save As… File"]
+    );
+    assert_eq!(labels("sa", &items)[0], "Save File");
+    assert_eq!(labels("all", &items), ["Save All File"]);
+    assert_eq!(
+        labels("zi", &["Zoom Out View", "Zoom In View"]),
+        ["Zoom In View", "Zoom Out View"]
+    );
+    assert!(labels("vs", &["Save"]).is_empty());
+}
+
+#[test]
+fn labels_ignore_case() {
+    assert_eq!(labels("SAVE", &["save all"]), ["save all"]);
+    assert_eq!(labels("sv", &["Save"]), ["Save"]);
+    assert_eq!(labels("Rust", &["rust rust Source"]).len(), 1);
+    assert_eq!(labels("ÆØ", &["xæyø"]).len(), 1);
+    assert!(score("SAVE", "save all").is_none());
+}
+
+#[test]
+fn a_slash_in_a_label_is_not_a_path() {
+    let mut matcher = Matcher::for_labels("add");
+    assert_eq!(
+        matcher.score("Add Prefix/Suffix…"),
+        Matcher::for_labels("add").score("Add Prefix Suffix…")
+    );
+    assert!(
+        matcher.score_of("Add Prefix/Suffix…") > Matcher::new("add").score_of("Add Prefix/Suffix…")
+    );
+    let recent = "lines.txt Open Recent › ~/notes/x";
+    assert!(Matcher::for_labels("lines").score_of(recent) > Matcher::new("lines").score_of(recent));
+    assert_eq!(labels("line", &["Go to Line… Search", recent])[0], recent);
+    assert_eq!(labels("c/objc", &["C/ObjC Header chdr Source"]).len(), 1);
+}
+
+/// The first rows that the self-test scripts assert for a palette query or choose in the
+/// language picker.
+#[test]
+fn the_self_tests_first_rows_stay_first() {
+    use crate::actions::ActionId;
+    let palette = |query: &str, pinned: bool, wrap_on: bool| -> String {
+        let items: Vec<String> = ActionId::ALL
+            .into_iter()
+            .filter(|&id| id.spec().palette)
+            .filter(|&id| {
+                id != if pinned {
+                    ActionId::PinTab
+                } else {
+                    ActionId::UnpinTab
+                }
+            })
+            .map(|id| {
+                let label = if id == ActionId::WordWrap && wrap_on {
+                    format!("{} (on)", id.label())
+                } else {
+                    id.label().to_owned()
+                };
+                format!("{label} {}", id.menu_path().unwrap_or_default())
+            })
+            .collect();
+        let first = rank_labels(query, &items).first().expect("a match").index;
+        items[first].clone()
+    };
+    for (query, first) in [
+        ("column editor", "Column Editor…"),
+        ("column select down", "Column Select Down"),
+        ("default editor", "Set as Default Editor…"),
+        ("convert to utf-8", "Convert to UTF-8"),
+        ("replace…", "Replace…"),
+        ("duplicate current line", "Duplicate Current Line"),
+        ("quick open", "Quick Open…"),
+        ("next recent tab", "Next Recent Tab"),
+        ("save all", "Save All"),
+        ("zoom in", "Zoom In"),
+        ("wrap", "Word Wrap"),
+    ] {
+        let found = palette(query, false, false);
+        assert!(found.starts_with(&format!("{first} ")), "{query}: {found}");
+    }
+    assert!(palette("pin tab", true, false).starts_with("Unpin Tab "));
+    assert!(palette("wrap", false, true).starts_with("Word Wrap (on) "));
+
+    let languages = [
+        "Plain Text text",
+        "Python python3 Script",
+        "Python 2 python Script",
+        "R r Scientific",
+        "reStructuredText rst Markup",
+        "Ruby ruby Script",
+        "Rust rust Source",
+    ];
+    assert_eq!(labels("rust", &languages)[0], "Rust rust Source");
+    assert_eq!(labels("python", &languages)[0], "Python python3 Script");
+}
+
 #[test]
 fn very_long_candidates_fall_back_to_greedy_positions() {
     let long = format!("{}needle", "x".repeat(400_000));

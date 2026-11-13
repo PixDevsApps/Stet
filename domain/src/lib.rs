@@ -11,7 +11,6 @@ pub mod location;
 pub mod marks;
 pub mod nav;
 pub mod ops;
-pub mod palette;
 pub mod quick_open;
 pub mod recent;
 pub mod replace_files;

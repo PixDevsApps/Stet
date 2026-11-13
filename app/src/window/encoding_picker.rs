@@ -8,7 +8,7 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use stet_domain::palette;
+use stet_domain::fuzzy;
 use stet_infrastructure::encoding::{ENCODINGS, EncodingEntry};
 
 /// What choosing an encoding does.
@@ -218,15 +218,19 @@ impl EncodingPicker {
     }
 
     fn filter(&self) {
-        let query = self.entry.text();
-        for row in &self.rows {
-            row.row
-                .set_visible(palette::score(&query, &row.search).is_some() || query.is_empty());
+        let searches: Vec<&str> = self.rows.iter().map(|row| row.search.as_str()).collect();
+        let ranked = fuzzy::rank_labels(&self.entry.text(), &searches);
+        let mut visible = vec![false; self.rows.len()];
+        for found in &ranked {
+            visible[found.index] = true;
+        }
+        for (row, visible) in self.rows.iter().zip(visible) {
+            row.row.set_visible(visible);
         }
         self.list.invalidate_headers();
         if self.list.selected_row().is_none_or(|row| !row.is_visible()) {
-            let first = self.rows.iter().find(|row| row.row.is_visible());
-            self.list.select_row(first.map(|row| &row.row));
+            let best = ranked.first().map(|best| &self.rows[best.index].row);
+            self.list.select_row(best);
         }
     }
 

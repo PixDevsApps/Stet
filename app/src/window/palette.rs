@@ -8,8 +8,8 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 use stet_domain::actions::ActionId;
+use stet_domain::fuzzy;
 use stet_domain::location::{LineCol, parse_line_col};
-use stet_domain::palette;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -190,9 +190,9 @@ impl Palette {
         } else {
             let items = self.items.borrow();
             let texts: Vec<String> = items.iter().map(Item::search_text).collect();
-            palette::rank(&query, texts.iter().map(String::as_str))
+            fuzzy::rank_labels(&query, &texts)
                 .into_iter()
-                .map(|index| items[index].clone())
+                .map(|ranked| items[ranked.index].clone())
                 .collect()
         };
         self.list.remove_all();

@@ -1,4 +1,5 @@
-//! Fuzzy matching for quick open (Ctrl+P) and the command palette (F1).
+//! Fuzzy matching for quick open (Ctrl+P), the command palette (F1) and the language and
+//! encoding pickers.
 //!
 //! A query matches a candidate when its characters appear in the candidate in order; whitespace
 //! in the query is ignored. Matching ignores case unless the query has an uppercase letter
@@ -8,7 +9,8 @@
 //!
 //! When the query matches inside the basename (after the last `/`), only the basename is scored
 //! and a bonus added, more for a prefix and most for the whole name, so file-name hits rank
-//! above hits spread over directories. Candidates without `/` (palette labels) are all basename.
+//! above hits spread over directories. Labels (commands, languages, encodings) are not paths:
+//! [`rank_labels`] scores the whole label as its name, `/` included.
 
 #[cfg(test)]
 mod tests;
@@ -58,9 +60,19 @@ pub fn score(query: &str, candidate: &str) -> Option<Match> {
 /// The best `limit` matches, best first. Equal scores rank the shorter candidate first, then
 /// the earlier one. An empty query returns the first `limit` candidates in their order.
 pub fn rank<S: AsRef<str>>(query: &str, candidates: &[S], limit: usize) -> Vec<Ranked> {
+    rank_with(Matcher::new(query), candidates, limit)
+}
+
+/// Every label that matches `query`, best first, ranked as [`rank`] ranks paths except that
+/// case never matters and a label has no directories: the whole label is its name. An empty
+/// query lists every label in its order.
+pub fn rank_labels<S: AsRef<str>>(query: &str, labels: &[S]) -> Vec<Ranked> {
+    rank_with(Matcher::for_labels(query), labels, labels.len())
+}
+
+fn rank_with<S: AsRef<str>>(mut matcher: Matcher, candidates: &[S], limit: usize) -> Vec<Ranked> {
     /// Higher is better: the score, then the shorter candidate, then the earlier one.
     type Key = (i32, Reverse<usize>, Reverse<usize>);
-    let mut matcher = Matcher::new(query);
     if matcher.is_empty() {
         return (0..candidates.len().min(limit))
             .map(|index| Ranked {
@@ -107,6 +119,7 @@ pub struct Matcher {
     query: Vec<char>,
     case_sensitive: bool,
     path_query: bool,
+    labels: bool,
     scratch: Scratch,
 }
 
@@ -133,7 +146,19 @@ impl Matcher {
             query,
             case_sensitive,
             path_query,
+            labels: false,
             scratch: Scratch::default(),
+        }
+    }
+
+    /// A query for labels rather than paths: case never matters, and the whole label is its
+    /// name, so a `/` in the label or the query is a character like any other.
+    pub(crate) fn for_labels(query: &str) -> Self {
+        let folded: String = query.chars().map(fold_char).collect();
+        Self {
+            path_query: false,
+            labels: true,
+            ..Self::new(&folded)
         }
     }
 
@@ -184,10 +209,14 @@ impl Matcher {
         };
 
         if !self.path_query {
-            let base = chars
-                .iter()
-                .rposition(|&c| c == '/')
-                .map_or(0, |slash| slash + 1);
+            let base = if self.labels {
+                0
+            } else {
+                chars
+                    .iter()
+                    .rposition(|&c| c == '/')
+                    .map_or(0, |slash| slash + 1)
+            };
             let name = &compared[base..];
             if is_subsequence(&self.query, name) {
                 let (found, positions) =
