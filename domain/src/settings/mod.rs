@@ -7,7 +7,7 @@ pub mod keymap;
 
 use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 use std::time::Duration;
 
 use toml::Spanned;
@@ -146,128 +146,213 @@ const fn spaces(width: u32) -> LanguageIndent {
     }
 }
 
-/// The settings in `config.toml`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Settings {
-    /// The editor font family; `None` follows Omarchy's monospace font (ADR-004).
-    pub font: Option<String>,
-    /// The editor font size in points, before zoom.
-    pub font_size: u32,
-    pub tab_width: u32,
-    pub insert_spaces: bool,
-    /// Follow the indentation an opened file already uses.
-    pub detect_indentation: bool,
-    pub word_wrap: bool,
-    pub show_whitespace: bool,
-    pub document_map: bool,
-    pub smart_highlight: bool,
-    /// Count words in the status bar.
-    pub word_count: bool,
-    /// Backups of unsaved work and how often they are written, in seconds.
-    pub backups: bool,
-    pub backup_interval: u32,
-    /// ADR-014's limits for highlighting a file when it opens.
-    pub highlight_max_bytes: usize,
-    pub highlight_max_lines: usize,
-    pub languages: BTreeMap<String, LanguageIndent>,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            font: None,
-            font_size: DEFAULT_FONT_SIZE_PT as u32,
-            tab_width: Indentation::DEFAULT.tab_width,
-            insert_spaces: Indentation::DEFAULT.insert_spaces,
-            detect_indentation: true,
-            word_wrap: false,
-            show_whitespace: false,
-            document_map: false,
-            smart_highlight: true,
-            word_count: false,
-            backups: true,
-            backup_interval: 7,
-            highlight_max_bytes: HIGHLIGHT_MAX_BYTES,
-            highlight_max_lines: HIGHLIGHT_MAX_LINES,
-            languages: BTreeMap::new(),
+/// Generates [`Settings`], its `Default`, the reader of each top-level setting and the
+/// entries of [`default_config_file`] from one table. A row is the field with its doc
+/// comment, type and default; how `config.toml` writes it: `Text(normalise)`, `Flag` or
+/// `Number(range)`; and what the default file says about it in braces: the comment lines
+/// that open its group (`heading`), what it shows in place of the default (`example`) and
+/// the comment after it (`note`).
+macro_rules! settings {
+    (@read $text:ident, $name:ident, $value:ident, Text($normalise:path)) => {
+        text_value($text, $name, $value).map($normalise)
+    };
+    (@read $text:ident, $name:ident, $value:ident, Flag) => {
+        flag_value($text, $name, $value)
+    };
+    (@read $text:ident, $name:ident, $value:ident, Number($range:expr)) => {
+        number_value($text, $name, $value, &$range)
+    };
+    (@or $fallback:expr, $given:expr) => {
+        $given
+    };
+    (@or $fallback:expr) => {
+        $fallback
+    };
+    ($(
+        $(#[$attr:meta])*
+        $field:ident: $ty:ty = $default:expr, $kind:ident $(($($arg:tt)*))? {
+            $(heading: [$($heading:literal),+ $(,)?],)?
+            $(example: $example:literal,)?
+            $(note: $note:literal,)?
         }
-    }
-}
+    )*) => {
+        /// The settings in `config.toml`.
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct Settings {
+            $($(#[$attr])* pub $field: $ty,)*
+            pub languages: BTreeMap<String, LanguageIndent>,
+        }
 
-/// The value a setting takes.
-#[derive(Debug, Clone, Copy)]
-enum Kind {
-    Text,
-    Flag,
-    Number { min: i64, max: i64 },
-}
-
-/// Every top-level setting with its kind, in the order the default file lists them.
-const SETTINGS: &[(&str, Kind)] = &[
-    ("font", Kind::Text),
-    ("font_size", Kind::Number { min: 4, max: 72 }),
-    ("tab_width", Kind::Number { min: 1, max: 16 }),
-    ("insert_spaces", Kind::Flag),
-    ("detect_indentation", Kind::Flag),
-    ("word_wrap", Kind::Flag),
-    ("show_whitespace", Kind::Flag),
-    ("document_map", Kind::Flag),
-    ("smart_highlight", Kind::Flag),
-    ("word_count", Kind::Flag),
-    ("backups", Kind::Flag),
-    ("backup_interval", Kind::Number { min: 1, max: 3600 }),
-    (
-        "highlight_max_bytes",
-        Kind::Number {
-            min: 0,
-            max: 1 << 40,
-        },
-    ),
-    (
-        "highlight_max_lines",
-        Kind::Number {
-            min: 0,
-            max: 1 << 32,
-        },
-    ),
-];
-
-/// A setting's value, checked against its kind.
-enum Value {
-    Text(String),
-    Flag(bool),
-    Number(i64),
-}
-
-fn value_of(
-    text: &str,
-    name: &str,
-    kind: Kind,
-    value: &Spanned<DeValue<'_>>,
-) -> Result<Value, FileError> {
-    let error = |message: String| FileError::spanned(text, value.span(), message);
-    match (kind, value.get_ref()) {
-        (Kind::Text, DeValue::String(string)) => Ok(Value::Text(string.to_string())),
-        (Kind::Flag, DeValue::Boolean(flag)) => Ok(Value::Flag(*flag)),
-        (Kind::Number { min, max }, DeValue::Integer(integer)) => {
-            match i64::from_str_radix(integer.as_str(), integer.radix()) {
-                Ok(number) if (min..=max).contains(&number) => Ok(Value::Number(number)),
-                _ => Err(error(format!("{name} must be from {min} to {max}"))),
+        impl Default for Settings {
+            fn default() -> Self {
+                Self {
+                    $($field: $default,)*
+                    languages: BTreeMap::new(),
+                }
             }
         }
-        (Kind::Text, other) => Err(error(format!(
-            "{name} takes a string in quotes, not {}",
-            article(other.type_str())
-        ))),
-        (Kind::Flag, other) => Err(error(format!(
-            "{name} takes true or false, not {}",
-            article(other.type_str())
-        ))),
-        (Kind::Number { .. }, other) => Err(error(format!(
-            "{name} takes a whole number, not {}",
-            article(other.type_str())
-        ))),
+
+        /// Every top-level setting, in the order the default file lists them.
+        const NAMES: &[&str] = &[$(stringify!($field)),*];
+
+        impl Settings {
+            /// Reads the top-level setting `name` into its field; `None` when there is none.
+            fn read(
+                &mut self,
+                text: &str,
+                name: &str,
+                value: &Spanned<DeValue<'_>>,
+            ) -> Option<Result<(), FileError>> {
+                match name {
+                    $(stringify!($field) => Some(
+                        settings!(@read text, name, value, $kind $(($($arg)*))?)
+                            .map(|read| self.$field = read),
+                    ),)*
+                    _ => None,
+                }
+            }
+
+            /// A field's value, by setting name, for tests that go through every setting.
+            #[cfg(test)]
+            fn field(&self, name: &str) -> Option<String> {
+                match name {
+                    $(stringify!($field) => Some(format!("{:?}", self.$field)),)*
+                    _ => None,
+                }
+            }
+        }
+
+        /// The default file's lines for the top-level settings, commented out.
+        fn default_entries(out: &mut String) {
+            let defaults = Settings::default();
+            $(
+                $(
+                    out.push('\n');
+                    $(let _ = writeln!(out, "# {}", $heading);)+
+                )?
+                default_entry(
+                    out,
+                    stringify!($field),
+                    &settings!(@or defaults.$field.to_string() $(, String::from($example))?),
+                    settings!(@or "" $(, $note)?),
+                );
+            )*
+        }
+    };
+}
+
+/// The tab widths `tab_width` takes, globally and per language.
+const TAB_WIDTHS: RangeInclusive<i64> = 1..=16;
+
+settings! {
+    /// The editor font family; `None` follows Omarchy's monospace font (ADR-004).
+    font: Option<String> = None, Text(font_family) {
+        heading: [
+            "The editor font: Omarchy's monospace font (fc-match monospace) unless you name one.",
+        ],
+        example: "\"JetBrainsMono Nerd Font\"",
     }
+    /// The editor font size in points, before zoom.
+    font_size: u32 = DEFAULT_FONT_SIZE_PT as u32, Number(4..=72) {
+        note: "points; zoom (Ctrl++ and Ctrl+-) adds to it",
+    }
+    tab_width: u32 = Indentation::DEFAULT.tab_width, Number(TAB_WIDTHS) {
+        heading: ["Indentation of new documents, and of files whose own can't be detected."],
+    }
+    insert_spaces: bool = Indentation::DEFAULT.insert_spaces, Flag {
+        note: "true: Tab inserts spaces",
+    }
+    /// Follow the indentation an opened file already uses.
+    detect_indentation: bool = true, Flag {
+        note: "follow the indentation a file already uses",
+    }
+    word_wrap: bool = false, Flag {
+        heading: ["What the View menu starts with."],
+    }
+    show_whitespace: bool = false, Flag {}
+    document_map: bool = false, Flag {
+        note: "never in large-file mode",
+    }
+    smart_highlight: bool = true, Flag {
+        note: "highlight the other places of a selected word",
+    }
+    /// Count words in the status bar.
+    word_count: bool = false, Flag {
+        note: "count words in the status bar",
+    }
+    /// Backups of unsaved work and how often they are written, in seconds.
+    backups: bool = true, Flag {
+        heading: [
+            "Backups of unsaved and untitled work. With backups off, unsaved changes are never",
+            "written anywhere: closing the window asks about them, and logging out loses them.",
+        ],
+    }
+    backup_interval: u32 = 7, Number(1..=3600) {
+        note: "seconds",
+    }
+    /// ADR-014's limits for highlighting a file when it opens.
+    highlight_max_bytes: usize = HIGHLIGHT_MAX_BYTES, Number(0..=1 << 40) {
+        heading: ["Syntax highlighting is off when a file over these sizes opens (ADR-014)."],
+    }
+    highlight_max_lines: usize = HIGHLIGHT_MAX_LINES, Number(0..=1 << 32) {}
+}
+
+/// The font a `font` string names: trimmed, and blank follows Omarchy's font.
+fn font_family(font: &str) -> Option<String> {
+    Some(font.trim().to_owned()).filter(|font| !font.is_empty())
+}
+
+fn text_value<'a>(
+    text: &str,
+    name: &str,
+    value: &'a Spanned<DeValue<'_>>,
+) -> Result<&'a str, FileError> {
+    match value.get_ref() {
+        DeValue::String(string) => Ok(string),
+        _ => Err(mismatch(text, name, value, "a string in quotes")),
+    }
+}
+
+fn flag_value(text: &str, name: &str, value: &Spanned<DeValue<'_>>) -> Result<bool, FileError> {
+    match value.get_ref() {
+        DeValue::Boolean(flag) => Ok(*flag),
+        _ => Err(mismatch(text, name, value, "true or false")),
+    }
+}
+
+/// A whole number in `range`, converted to the field's type; a number the type cannot hold
+/// is out of range too.
+fn number_value<T: TryFrom<i64>>(
+    text: &str,
+    name: &str,
+    value: &Spanned<DeValue<'_>>,
+    range: &RangeInclusive<i64>,
+) -> Result<T, FileError> {
+    let DeValue::Integer(integer) = value.get_ref() else {
+        return Err(mismatch(text, name, value, "a whole number"));
+    };
+    i64::from_str_radix(integer.as_str(), integer.radix())
+        .ok()
+        .filter(|number| range.contains(number))
+        .and_then(|number| T::try_from(number).ok())
+        .ok_or_else(|| {
+            FileError::spanned(
+                text,
+                value.span(),
+                format!("{name} must be from {} to {}", range.start(), range.end()),
+            )
+        })
+}
+
+fn mismatch(text: &str, name: &str, value: &Spanned<DeValue<'_>>, takes: &str) -> FileError {
+    FileError::spanned(
+        text,
+        value.span(),
+        format!(
+            "{name} takes {takes}, not {}",
+            article(value.get_ref().type_str())
+        ),
+    )
 }
 
 fn article(kind: &str) -> String {
@@ -289,53 +374,26 @@ impl Settings {
                 settings.read_languages(text, value, &mut errors);
                 continue;
             }
-            let Some(&(_, kind)) = SETTINGS.iter().find(|(setting, _)| *setting == name) else {
-                let names = SETTINGS.iter().map(|(name, _)| *name).chain(["language"]);
-                let hint = closest(name, names)
-                    .map(|near| format!("; did you mean {near}?"))
-                    .unwrap_or_default();
-                errors.push(FileError::spanned(
-                    text,
-                    key.span(),
-                    format!("unknown setting {name}{hint}"),
-                ));
-                continue;
-            };
-            match value_of(text, name, kind, value) {
-                Ok(value) => settings.set(name, value),
-                Err(error) => errors.push(error),
+            match settings.read(text, name, value) {
+                Some(Ok(())) => {}
+                Some(Err(error)) => errors.push(error),
+                None => {
+                    let names = NAMES.iter().copied().chain(["language"]);
+                    let hint = closest(name, names)
+                        .map(|near| format!("; did you mean {near}?"))
+                        .unwrap_or_default();
+                    errors.push(FileError::spanned(
+                        text,
+                        key.span(),
+                        format!("unknown setting {name}{hint}"),
+                    ));
+                }
             }
         }
         if errors.is_empty() {
             Ok(settings)
         } else {
             Err(errors)
-        }
-    }
-
-    fn set(&mut self, name: &str, value: Value) {
-        match (name, value) {
-            ("font", Value::Text(font)) => {
-                self.font = Some(font.trim().to_owned()).filter(|font| !font.is_empty());
-            }
-            ("font_size", Value::Number(size)) => self.font_size = size as u32,
-            ("tab_width", Value::Number(width)) => self.tab_width = width as u32,
-            ("insert_spaces", Value::Flag(on)) => self.insert_spaces = on,
-            ("detect_indentation", Value::Flag(on)) => self.detect_indentation = on,
-            ("word_wrap", Value::Flag(on)) => self.word_wrap = on,
-            ("show_whitespace", Value::Flag(on)) => self.show_whitespace = on,
-            ("document_map", Value::Flag(on)) => self.document_map = on,
-            ("smart_highlight", Value::Flag(on)) => self.smart_highlight = on,
-            ("word_count", Value::Flag(on)) => self.word_count = on,
-            ("backups", Value::Flag(on)) => self.backups = on,
-            ("backup_interval", Value::Number(seconds)) => self.backup_interval = seconds as u32,
-            ("highlight_max_bytes", Value::Number(bytes)) => {
-                self.highlight_max_bytes = bytes as usize;
-            }
-            ("highlight_max_lines", Value::Number(lines)) => {
-                self.highlight_max_lines = lines as usize;
-            }
-            _ => unreachable!("{name} is checked against SETTINGS"),
         }
     }
 
@@ -368,9 +426,12 @@ impl Settings {
             let mut indent = LanguageIndent::default();
             for (key, value) in entries(inner) {
                 let name = key.get_ref().as_ref();
-                let kind = match name {
-                    "tab_width" => Kind::Number { min: 1, max: 16 },
-                    "insert_spaces" => Kind::Flag,
+                let read = match name {
+                    "tab_width" => number_value(text, name, value, &TAB_WIDTHS)
+                        .map(|width| indent.tab_width = Some(width)),
+                    "insert_spaces" => {
+                        flag_value(text, name, value).map(|on| indent.insert_spaces = Some(on))
+                    }
                     _ => {
                         let hint = closest(name, ["tab_width", "insert_spaces"])
                             .map(|near| format!("; did you mean {near}?"))
@@ -386,11 +447,8 @@ impl Settings {
                         continue;
                     }
                 };
-                match value_of(text, name, kind, value) {
-                    Ok(Value::Number(width)) => indent.tab_width = Some(width as u32),
-                    Ok(Value::Flag(on)) => indent.insert_spaces = Some(on),
-                    Ok(Value::Text(_)) => {}
-                    Err(error) => errors.push(error),
+                if let Err(error) = read {
+                    errors.push(error);
                 }
             }
             self.languages.insert(id.get_ref().to_string(), indent);
@@ -440,82 +498,12 @@ impl Settings {
 /// The `config.toml` that Open Settings creates: every setting commented out with its
 /// default, so the file changes nothing until a line is uncommented.
 pub fn default_config_file() -> String {
-    let defaults = Settings::default();
     let mut out = String::from(
         "# Stet settings (config.toml). Uncomment a line and change it; Stet applies the file\n\
          # when you save it. A mistake is shown with its line and column, and the previous\n\
-         # settings stay until the file is fixed.\n\
-         \n\
-         # The editor font: Omarchy's monospace font (fc-match monospace) unless you name one.\n\
-         # font = \"JetBrainsMono Nerd Font\"\n",
+         # settings stay until the file is fixed.\n",
     );
-    let line = |out: &mut String, setting: String, note: &str| {
-        if note.is_empty() {
-            let _ = writeln!(out, "# {setting}");
-        } else {
-            let _ = writeln!(out, "# {setting:<34} # {note}");
-        }
-    };
-    line(
-        &mut out,
-        format!("font_size = {}", defaults.font_size),
-        "points; zoom (Ctrl++ and Ctrl+-) adds to it",
-    );
-    out.push_str("\n# Indentation of new documents, and of files whose own can't be detected.\n");
-    line(&mut out, format!("tab_width = {}", defaults.tab_width), "");
-    line(
-        &mut out,
-        format!("insert_spaces = {}", defaults.insert_spaces),
-        "true: Tab inserts spaces",
-    );
-    line(
-        &mut out,
-        format!("detect_indentation = {}", defaults.detect_indentation),
-        "follow the indentation a file already uses",
-    );
-    out.push_str("\n# What the View menu starts with.\n");
-    line(&mut out, format!("word_wrap = {}", defaults.word_wrap), "");
-    line(
-        &mut out,
-        format!("show_whitespace = {}", defaults.show_whitespace),
-        "",
-    );
-    line(
-        &mut out,
-        format!("document_map = {}", defaults.document_map),
-        "never in large-file mode",
-    );
-    line(
-        &mut out,
-        format!("smart_highlight = {}", defaults.smart_highlight),
-        "highlight the other places of a selected word",
-    );
-    line(
-        &mut out,
-        format!("word_count = {}", defaults.word_count),
-        "count words in the status bar",
-    );
-    out.push_str(
-        "\n# Backups of unsaved and untitled work. With backups off, unsaved changes are never\n\
-         # written anywhere: closing the window asks about them, and logging out loses them.\n",
-    );
-    line(&mut out, format!("backups = {}", defaults.backups), "");
-    line(
-        &mut out,
-        format!("backup_interval = {}", defaults.backup_interval),
-        "seconds",
-    );
-    out.push_str("\n# Syntax highlighting is off when a file over these sizes opens (ADR-014).\n");
-    line(
-        &mut out,
-        format!("highlight_max_bytes = {}", defaults.highlight_max_bytes),
-        "",
-    );
-    line(
-        &mut out,
-        format!("highlight_max_lines = {}", defaults.highlight_max_lines),
-        "",
-    );
+    default_entries(&mut out);
     out.push_str(
         "\n# Indentation per language, by GtkSourceView language id (the status bar's language\n\
          # picker lists the languages). These win over tab_width and insert_spaces; Stet's own\n\
@@ -531,6 +519,16 @@ pub fn default_config_file() -> String {
         }
     }
     out
+}
+
+/// One setting's line in the default file, with its note aligned after it.
+fn default_entry(out: &mut String, name: &str, shown: &str, note: &str) {
+    let setting = format!("{name} = {shown}");
+    if note.is_empty() {
+        let _ = writeln!(out, "# {setting}");
+    } else {
+        let _ = writeln!(out, "# {setting:<34} # {note}");
+    }
 }
 
 #[cfg(test)]
@@ -730,6 +728,47 @@ mod tests {
         assert_eq!(settings.languages.len(), LANGUAGE_INDENTS.len());
         for (id, indent) in LANGUAGE_INDENTS {
             assert_eq!(settings.languages[*id], *indent, "{id}");
+        }
+    }
+
+    /// Other values for what the default file shows: the other flag, another string, or a
+    /// neighbouring number.
+    fn other_values(shown: &str) -> Vec<String> {
+        match shown {
+            "true" => vec!["false".to_owned()],
+            "false" => vec!["true".to_owned()],
+            _ if shown.starts_with('"') => vec!["\"Iosevka\"".to_owned()],
+            _ => {
+                let number: i64 = shown.parse().unwrap();
+                vec![(number + 1).to_string(), (number - 1).to_string()]
+            }
+        }
+    }
+
+    #[test]
+    fn every_setting_is_in_the_default_file_and_reads_back() {
+        let file = default_config_file();
+        let defaults = Settings::default();
+        for name in NAMES {
+            let prefix = format!("# {name} = ");
+            let line = file
+                .lines()
+                .find(|line| line.starts_with(&prefix))
+                .unwrap_or_else(|| panic!("{name} is not in the default file"));
+            let shown = line[prefix.len()..].split(" #").next().unwrap().trim_end();
+            let (value, settings) = other_values(shown)
+                .into_iter()
+                .find_map(|value| {
+                    let settings = Settings::parse(&format!("{name} = {value}\n")).ok()?;
+                    Some((value, settings))
+                })
+                .unwrap_or_else(|| panic!("{name} takes no other value than {shown}"));
+            let read = settings.field(name).unwrap();
+            assert_ne!(read, defaults.field(name).unwrap(), "{name}");
+            assert!(read.contains(value.trim_matches('"')), "{name}: {read}");
+            for other in NAMES.iter().filter(|other| *other != name) {
+                assert_eq!(settings.field(other), defaults.field(other), "{name}");
+            }
         }
     }
 
