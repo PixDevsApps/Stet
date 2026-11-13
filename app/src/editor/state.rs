@@ -6,10 +6,8 @@ use std::path::PathBuf;
 use stet_domain::document::{DiskState, Loss, ReadOnly, TextOrigin, Unwritable};
 use stet_domain::session::Fingerprint;
 use stet_domain::text::{Eol, EolStats};
-use stet_infrastructure::encoding::Encoding;
-use stet_infrastructure::fs::{
-    DecodeReport, DocInfo, DocumentFormat, EncodingChoice, SaveOutcome, SizeClass,
-};
+use stet_infrastructure::encoding::{DocumentFormat, Encoding};
+use stet_infrastructure::fs::{DecodeReport, DocInfo, EncodingChoice, SaveOutcome, SizeClass};
 
 /// What the document is doing with its file. Loading and saving exclude each other: saving
 /// waits for a load, and a load that starts during a save takes over.

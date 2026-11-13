@@ -9,7 +9,7 @@ use std::ops::Range;
 use toml::de::{DeArray, DeValue};
 
 use super::{FileError, closest, entries, parse_toml};
-use crate::actions::{Accelerator, ActionId, ActionKind, KeyScope, Menu};
+use crate::actions::{Accelerator, ActionId, KeyScope, Menu};
 
 /// The registry's keys, with the user's lists in place of an action's own.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -83,7 +83,7 @@ impl Keymap {
                 errors.push(at(format!("unknown action {name}{hint}")));
                 continue;
             };
-            if id.kind() == ActionKind::WithString {
+            if id.kind().takes_parameter() {
                 errors.push(at(format!(
                     "{name} takes a parameter from its menu entries and has no keys"
                 )));
@@ -251,7 +251,7 @@ fn display(key: &str) -> String {
 
 /// Whether `keys.toml` can change the keys of `id`.
 pub fn is_rebindable(id: ActionId) -> bool {
-    id.kind() != ActionKind::WithString && !id.has_widget_keys()
+    !id.kind().takes_parameter() && !id.has_widget_keys()
 }
 
 /// The `keys.toml` that Open Keyboard Shortcuts creates: every action Stet lets you rebind,
@@ -332,7 +332,7 @@ mod tests {
         for menu in Menu::PLACES {
             for id in ActionId::ALL {
                 if id.spec().menu.is_some_and(|place| place.menu == menu)
-                    && id.kind() != ActionKind::WithString
+                    && !id.kind().takes_parameter()
                 {
                     ids.push(id);
                 }

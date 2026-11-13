@@ -124,7 +124,7 @@ actions! {
         Keys::app(&["<Control>p"]),
     ),
     OpenRecent => ActionSpec {
-        kind: ActionKind::WithString,
+        kind: ActionKind::WithPath,
         palette: false,
         ..command(
             "open-recent",
@@ -1730,17 +1730,18 @@ mod tests {
         );
         assert_eq!(ActionId::Reinterpret.kind(), ActionKind::WithString);
         assert_eq!(ActionId::ConvertEncoding.kind(), ActionKind::WithString);
+        assert_eq!(ActionId::OpenRecent.kind(), ActionKind::WithPath);
     }
 
     #[test]
     fn menu_and_palette_rules() {
         for id in ActionId::ALL {
             let spec = id.spec();
-            if spec.kind == ActionKind::WithString {
+            if spec.kind.takes_parameter() {
                 assert!(!spec.palette, "{id:?} is reached through its own entries");
             }
             assert!(
-                spec.menu.is_some() || spec.palette || spec.kind == ActionKind::WithString,
+                spec.menu.is_some() || spec.palette || spec.kind.takes_parameter(),
                 "{id:?} is unreachable"
             );
         }

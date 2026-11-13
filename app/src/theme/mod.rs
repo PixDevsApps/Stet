@@ -9,7 +9,7 @@ mod fixtures;
 pub mod scheme;
 
 use crate::monitor::{DirWatch, TriggerRule};
-use crate::runtime::{Latest, Notify, Ticket, wait_until, worker};
+use crate::runtime::{Latest, Listeners, Notify, Ticket, wait_until, worker};
 use gtk4 as gtk;
 use gtk4::{gdk, gio, glib};
 use libadwaita as adw;
@@ -23,8 +23,6 @@ use stet_infrastructure::omarchy::{CurrentTheme, font, read_current_theme};
 use stet_infrastructure::style_cache::write_scheme;
 
 const STATIC_CSS: &str = include_str!("../style.css");
-
-type SchemeListener = Rc<dyn Fn(&sourceview5::StyleScheme)>;
 
 /// Where the current palette came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,7 +56,7 @@ pub struct Appearance {
     applied: Notify,
     reloads: Cell<u32>,
     font_reloads: Cell<u32>,
-    scheme_listeners: RefCell<Vec<SchemeListener>>,
+    scheme_listeners: Listeners<sourceview5::StyleScheme>,
     theme_watch: RefCell<Option<Rc<DirWatch>>>,
     font_watch: RefCell<Option<Rc<DirWatch>>>,
 }
@@ -103,7 +101,7 @@ impl Appearance {
             applied: Notify::default(),
             reloads: Cell::new(0),
             font_reloads: Cell::new(0),
-            scheme_listeners: RefCell::new(Vec::new()),
+            scheme_listeners: Listeners::default(),
             theme_watch: RefCell::new(None),
             font_watch: RefCell::new(None),
         });
@@ -215,7 +213,7 @@ impl Appearance {
 
     /// Called with the new scheme after every theme change; set it on every buffer.
     pub fn connect_scheme_changed(&self, listener: impl Fn(&sourceview5::StyleScheme) + 'static) {
-        self.scheme_listeners.borrow_mut().push(Rc::new(listener));
+        self.scheme_listeners.connect(listener);
     }
 
     fn reload_theme(self: &Rc<Self>) {
@@ -316,10 +314,7 @@ impl Appearance {
             });
         }
         self.reloads.set(self.reloads.get() + 1);
-        let listeners = self.scheme_listeners.borrow().clone();
-        for listener in listeners {
-            listener(&scheme);
-        }
+        self.scheme_listeners.notify(&scheme);
     }
 
     fn reload_font(self: &Rc<Self>) {

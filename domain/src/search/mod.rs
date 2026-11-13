@@ -37,6 +37,22 @@ pub enum SearchMode {
     Regex,
 }
 
+/// Which way a search goes from the caret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Forward,
+    Backward,
+}
+
+/// What a search does when it reaches the end of the text (the start, going backward).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wrap {
+    /// Goes on from the other end.
+    Around,
+    /// Stops there.
+    Stop,
+}
+
 /// The find bar's options, named after its toggles and check boxes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SearchOptions {

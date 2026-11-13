@@ -1087,9 +1087,9 @@ impl FindBar {
     }
 
     /// The replace field read in the current mode, or why no text can hold it.
-    pub fn replace_template(&self) -> Result<Template, String> {
+    pub fn replace_template(&self) -> Result<Template, TranslateError> {
         Template::for_mode(self.search_mode(), &self.replace_entry.text())
-            .map_err(|error| TranslateError::from(error).to_string())
+            .map_err(TranslateError::from)
     }
 
     /// Styles the replace field for its template in the current mode: the error style for a

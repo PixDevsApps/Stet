@@ -4,7 +4,9 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use pcre2::bytes::{CaptureLocations, Regex, RegexBuilder};
-use stet_domain::search::{Captures, Query, TranslateError, Translated, translate};
+use stet_domain::search::{
+    Captures, Direction, Query, TranslateError, Translated, Wrap, translate,
+};
 
 use stet_domain::text::{CharCursor, LineCursor, char_to_byte, next_boundary};
 
@@ -209,8 +211,8 @@ impl Matcher {
         })
     }
 
-    /// The match after the caret at character `from`, or with `backward` the last one that
-    /// starts before it; with `wrap`, continues from the other end.
+    /// The match after the caret at character `from`, or going [`Direction::Backward`] the
+    /// last one that starts before it; with [`Wrap::Around`], continues from the other end.
     ///
     /// Forward, an empty match exactly at `from` is skipped: the caret is already there.
     /// Backward, the matches are those [`Matcher::find_all`] finds, but scanning starts at a
@@ -220,17 +222,16 @@ impl Matcher {
         &self,
         text: &str,
         from: usize,
-        backward: bool,
-        wrap: bool,
+        direction: Direction,
+        wrap: Wrap,
     ) -> Result<Option<NextMatch>, SearchError> {
         let from_byte = char_to_byte(text, 0, 0, from).ok_or_else(|| SearchError::Range {
             range: from..from,
             len: text.chars().count(),
         })?;
-        let found = if backward {
-            self.last_before(text, from_byte)?
-        } else {
-            self.find_after_empty(text.as_bytes(), from_byte)?
+        let found = match direction {
+            Direction::Backward => self.last_before(text, from_byte)?,
+            Direction::Forward => self.find_after_empty(text.as_bytes(), from_byte)?,
         };
         if let Some(found) = found {
             return Ok(Some(NextMatch {
@@ -238,13 +239,12 @@ impl Matcher {
                 wrapped: false,
             }));
         }
-        if !wrap {
+        if wrap == Wrap::Stop {
             return Ok(None);
         }
-        let found = if backward {
-            self.last_before(text, text.len() + 1)?
-        } else {
-            self.find(text.as_bytes(), 0)?
+        let found = match direction {
+            Direction::Backward => self.last_before(text, text.len() + 1)?,
+            Direction::Forward => self.find(text.as_bytes(), 0)?,
         };
         Ok(found.map(|found| NextMatch {
             found: to_match(text, found),

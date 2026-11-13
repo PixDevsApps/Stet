@@ -27,6 +27,7 @@ use crate::actions;
 use crate::config::AppConfig;
 use crate::editor::{EditorPage, ViewSettings};
 use crate::preferences::Preferences;
+use crate::runtime::Listeners;
 use crate::theme::Appearance;
 use dialogs::{Messages, SaveChoice};
 use gtk4 as gtk;
@@ -89,7 +90,7 @@ pub struct Shared {
     launches: RefCell<Option<Vec<Vec<OsString>>>>,
     /// The recent files, kept in the session.
     recent: RefCell<RecentFiles>,
-    recent_listeners: RefCell<Vec<Box<dyn Fn()>>>,
+    recent_listeners: Listeners<()>,
 }
 
 impl Shared {
@@ -105,7 +106,7 @@ impl Shared {
             #[cfg(feature = "selftest")]
             launches: RefCell::new(None),
             recent: RefCell::new(RecentFiles::default()),
-            recent_listeners: RefCell::new(Vec::new()),
+            recent_listeners: Listeners::default(),
         })
     }
 
@@ -128,7 +129,7 @@ impl Shared {
     }
 
     pub fn connect_recent_changed(&self, listener: impl Fn() + 'static) {
-        self.recent_listeners.borrow_mut().push(Box::new(listener));
+        self.recent_listeners.connect(move |()| listener());
     }
 
     pub fn add_recent(self: &Rc<Self>, path: PathBuf) {
@@ -150,9 +151,7 @@ impl Shared {
     }
 
     fn notify_recent(&self) {
-        for listener in self.recent_listeners.borrow().iter() {
-            listener();
-        }
+        self.recent_listeners.notify(&());
     }
 
     /// The next session commit writes the list.

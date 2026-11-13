@@ -15,9 +15,10 @@ expression: out
           <submenu>
             - 
               <section>
-                - action='win.open-recent' label='todo__list.txt' target='/home/user/notes/todo_list.txt'
-                - action='win.open-recent' label='a.md' target='/tmp/a.md'
-                - action='win.open-recent' label='/' target='/'
+                - action='win.open-recent' label='todo__list.txt' target=b'/home/user/notes/todo_list.txt'
+                - action='win.open-recent' label='a.md' target=b'/tmp/a.md'
+                - action='win.open-recent' label='bad�.txt' target=b'/tmp/bad\377.txt'
+                - action='win.open-recent' label='/' target=b'/'
             - 
               <section>
                 - action='win.clear-recent' label='Clear Recent Files'

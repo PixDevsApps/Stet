@@ -6,7 +6,7 @@ use gtk4 as gtk;
 use gtk4::{gio, glib};
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use stet_domain::actions::{
     ActionId, ActionKind, ActionScope, KeyScope, MenuItem, MenuList, MenuTree, Menus,
@@ -32,10 +32,39 @@ pub fn detailed_name(id: ActionId) -> String {
     format!("{prefix}.{}", id.name())
 }
 
+/// The parameter a [parameterized](ActionKind::takes_parameter) action runs with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActionParam {
+    /// A [`ActionKind::WithString`] action's string.
+    Text(String),
+    /// A [`ActionKind::WithPath`] action's path, byte for byte.
+    Path(PathBuf),
+}
+
+impl ActionParam {
+    /// `variant` as the parameter of an action of `kind`; `None` when the kind takes no
+    /// parameter or the variant has another type.
+    pub fn from_variant(kind: ActionKind, variant: &glib::Variant) -> Option<Self> {
+        match kind {
+            ActionKind::WithString => variant.get::<String>().map(Self::Text),
+            ActionKind::WithPath => variant.get::<PathBuf>().map(Self::Path),
+            ActionKind::Command | ActionKind::Toggle => None,
+        }
+    }
+}
+
+/// The target that runs a [`ActionKind::WithPath`] action on `path`.
+pub fn path_target(path: &Path) -> glib::Variant {
+    path.to_variant()
+}
+
 fn simple_action(id: ActionId) -> gio::SimpleAction {
     match id.kind() {
         ActionKind::Command => gio::SimpleAction::new(id.name(), None),
         ActionKind::WithString => gio::SimpleAction::new(id.name(), Some(glib::VariantTy::STRING)),
+        ActionKind::WithPath => {
+            gio::SimpleAction::new(id.name(), Some(glib::VariantTy::BYTE_STRING))
+        }
         ActionKind::Toggle => gio::SimpleAction::new_stateful(id.name(), None, &false.to_variant()),
     }
 }
@@ -51,7 +80,8 @@ pub fn install_window_actions(window: &Window) {
             #[weak]
             window,
             move |_, parameter| {
-                let parameter = parameter.and_then(glib::Variant::get::<String>);
+                let parameter =
+                    parameter.and_then(|variant| ActionParam::from_variant(id.kind(), variant));
                 window.run_action(id, parameter);
             }
         ));
@@ -230,21 +260,19 @@ fn append(menu: &gio::Menu, item: &MenuItem, shown: &Shown) {
         }
         MenuItem::List(id, MenuList::RecentFiles) => {
             for path in shown.recent {
-                let Some(target) = path.to_str() else {
-                    continue;
-                };
-                let name = path.file_name().map_or_else(
-                    || target.to_owned(),
-                    |name| name.to_string_lossy().into_owned(),
-                );
-                menu.append_item(&value_item(*id, &name, target));
+                let name = path
+                    .file_name()
+                    .unwrap_or(path.as_os_str())
+                    .to_string_lossy();
+                menu.append_item(&target_item(*id, &name, &path_target(path)));
             }
         }
         MenuItem::List(id, MenuList::Encodings) => {
             for (group, entries) in grouped_entries() {
                 let submenu = gio::Menu::new();
                 for entry in entries {
-                    submenu.append_item(&value_item(*id, &entry.short_label(), &entry.id()));
+                    let target = entry.id().to_variant();
+                    submenu.append_item(&target_item(*id, &entry.short_label(), &target));
                 }
                 menu.append_submenu(Some(group), &submenu);
             }
@@ -272,11 +300,11 @@ fn action_item(id: ActionId, keymap: &Keymap) -> gio::MenuItem {
     item
 }
 
-/// An entry running `id` with `value`, labelled `label`; underscores are doubled, as menus
+/// An entry running `id` with `target`, labelled `label`; underscores are doubled, as menus
 /// would otherwise read them as mnemonics.
-fn value_item(id: ActionId, label: &str, value: &str) -> gio::MenuItem {
+fn target_item(id: ActionId, label: &str, target: &glib::Variant) -> gio::MenuItem {
     let item = gio::MenuItem::new(Some(&label.replace('_', "__")), None);
-    item.set_action_and_target_value(Some(&detailed_name(id)), Some(&value.to_variant()));
+    item.set_action_and_target_value(Some(&detailed_name(id)), Some(target));
     item
 }
 
@@ -309,6 +337,27 @@ mod tests {
                 let _ = writeln!(out, "{indent}  <{name}>");
                 dump(&child, depth + 2, out);
             }
+        }
+    }
+
+    /// A recent file's path reaches Open Recent byte for byte, UTF-8 or not.
+    #[test]
+    fn path_parameters_survive_any_bytes() {
+        use super::{ActionParam, path_target};
+        use std::os::unix::ffi::OsStrExt as _;
+        use std::path::PathBuf;
+        use stet_domain::actions::ActionKind;
+        for bytes in [&b"/tmp/a.md"[..], b"/tmp/bad\xff.txt", b"/"] {
+            let path = PathBuf::from(std::ffi::OsStr::from_bytes(bytes));
+            let target = path_target(&path);
+            assert_eq!(
+                ActionParam::from_variant(ActionKind::WithPath, &target),
+                Some(ActionParam::Path(path))
+            );
+            assert_eq!(
+                ActionParam::from_variant(ActionKind::WithString, &target),
+                None
+            );
         }
     }
 

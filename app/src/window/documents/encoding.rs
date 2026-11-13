@@ -11,9 +11,9 @@ use crate::window::{PickerMode, Window};
 use stet_domain::document::ReadOnly;
 use stet_domain::text::Eol;
 use stet_infrastructure::encoding::{
-    ENCODINGS, EncodingEntry, check_encodable, entry_for_id, status_label,
+    DocumentFormat, ENCODINGS, EncodingEntry, check_encodable, entry_for_id, status_label,
 };
-use stet_infrastructure::fs::{DocumentFormat, EncodingChoice};
+use stet_infrastructure::fs::EncodingChoice;
 
 /// The encodings the Encoding menu names by item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

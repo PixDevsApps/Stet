@@ -28,8 +28,8 @@ use stet_domain::document::{
 };
 use stet_domain::session::{Fingerprint, RecordId, TabRecord};
 use stet_domain::text::Eol;
-use stet_infrastructure::encoding::Encoding;
-use stet_infrastructure::fs::{DocInfo, DocumentFormat, EncodingChoice, SaveOutcome};
+use stet_infrastructure::encoding::{DocumentFormat, Encoding};
+use stet_infrastructure::fs::{DocInfo, EncodingChoice, SaveOutcome};
 
 mod imp {
     use super::*;

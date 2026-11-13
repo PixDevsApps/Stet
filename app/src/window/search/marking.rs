@@ -32,7 +32,7 @@ use stet_domain::ops::Change;
 use stet_domain::search::{Query, SearchMode, SearchOptions};
 use stet_domain::text::counted;
 use stet_domain::text::{BULK_EDIT_THRESHOLD, is_word_char};
-use stet_domain::text::{LineIndex, TextEdit};
+use stet_domain::text::{LineIndex, Selection, TextEdit};
 use stet_infrastructure::search::{Matcher, SearchError};
 
 /// Mark and the style tokens stop after this many matches in a document.
@@ -346,9 +346,11 @@ impl Window {
         }
         let buffer = page.buffer();
         page.clear_current_match();
-        let mut applied = None;
-        page.track_edit(text, &edit.edits, Some(edit.bookmarks.clone()), || {
-            let done = match bulk {
+        let applied = page.track_edit(
+            text,
+            &edit.edits,
+            Some(edit.bookmarks.clone()),
+            || match bulk {
                 Some(bulk) => edits::apply_coalesced(&buffer, &edit.edits, bulk),
                 None => edits::apply_change(
                     &buffer,
@@ -358,19 +360,15 @@ impl Window {
                     },
                     text,
                 ),
-            };
-            applied = Some(done);
-            done.footprint
-        });
+            },
+        );
         page.view().scroll_mark_onscreen(&buffer.get_insert());
-        if let Some(applied) = applied {
-            self.inner.marking.line_stats.set(Some(LineOpStats {
-                edits: applied.edits,
-                bulk: applied.bulk,
-                worker,
-                took: started.elapsed(),
-            }));
-        }
+        self.inner.marking.line_stats.set(Some(LineOpStats {
+            edits: applied.edits,
+            bulk: applied.bulk,
+            worker,
+            took: started.elapsed(),
+        }));
         self.update_mark_actions();
     }
 
@@ -624,7 +622,7 @@ impl Window {
             return;
         };
         let buffer = page.buffer();
-        let (selection, _) = edits::selection(&buffer);
+        let selection = edits::selection(&buffer).range();
         let target = {
             let marks = page.marks().marks();
             if down {
@@ -638,7 +636,7 @@ impl Window {
             return;
         };
         self.note_jump();
-        edits::select(&buffer, target, false);
+        edits::select(&buffer, Selection::forward(target));
         page.view()
             .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);
         page.view().grab_focus();

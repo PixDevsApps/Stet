@@ -5,7 +5,6 @@
 
 use crate::convert::{BufferPositions, IterPosition};
 use gtk4::prelude::*;
-use std::ops::Range;
 use std::time::{Duration, Instant};
 use stet_domain::marks::Footprint;
 use stet_domain::ops::Change;
@@ -26,8 +25,8 @@ pub struct Applied {
     pub footprint: Footprint,
 }
 
-/// The buffer's caret and selection.
-fn read_selection(buffer: &sourceview5::Buffer) -> Selection {
+/// The buffer's caret and selection, in character offsets.
+pub fn selection(buffer: &sourceview5::Buffer) -> Selection {
     let offset = |mark: &gtk4::TextMark| buffer.iter_at_mark(mark).char_offset();
     Selection {
         cursor: offset(&buffer.get_insert()),
@@ -35,7 +34,8 @@ fn read_selection(buffer: &sourceview5::Buffer) -> Selection {
     }
 }
 
-fn restore_selection(buffer: &sourceview5::Buffer, selection: Selection) {
+/// Selects `selection` (character offsets).
+pub fn select(buffer: &sourceview5::Buffer, selection: Selection) {
     let cursor = buffer.iter_at_char_offset(selection.cursor);
     let anchor = buffer.iter_at_char_offset(selection.anchor);
     buffer.select_range(&cursor, &anchor);
@@ -45,13 +45,13 @@ fn restore_selection(buffer: &sourceview5::Buffer, selection: Selection) {
 /// first, in one user action.
 pub fn apply_edits(buffer: &sourceview5::Buffer, edits: &[TextEdit]) -> Applied {
     let started = Instant::now();
-    let selection = read_selection(buffer).map(edits);
+    let selection = selection(buffer).map(edits);
     buffer.begin_user_action();
     for edit in edits.iter().rev() {
         replace_range(buffer, edit);
     }
     buffer.end_user_action();
-    restore_selection(buffer, selection);
+    select(buffer, selection);
     Applied {
         edits: edits.len(),
         bulk: false,
@@ -68,11 +68,11 @@ pub fn apply_coalesced(
     bulk: &TextEdit,
 ) -> Applied {
     let started = Instant::now();
-    let selection = read_selection(buffer).map(edits);
+    let selection = selection(buffer).map(edits);
     buffer.begin_user_action();
     replace_range(buffer, bulk);
     buffer.end_user_action();
-    restore_selection(buffer, selection);
+    select(buffer, selection);
     Applied {
         edits: edits.len(),
         bulk: true,
@@ -96,11 +96,11 @@ pub fn apply_replace_all(buffer: &sourceview5::Buffer, result: &ReplaceAll, text
         };
     };
     let started = Instant::now();
-    let selection = read_selection(buffer).map(&result.edits);
+    let selection = selection(buffer).map(&result.edits);
     buffer.begin_user_action();
     let deleted = replace_range(buffer, &edit);
     buffer.end_user_action();
-    restore_selection(buffer, selection);
+    select(buffer, selection);
     debug_assert!(result.edits.len() > BULK_EDIT_THRESHOLD);
     tracing::info!(
         edits = result.edits.len(),
@@ -116,24 +116,13 @@ pub fn apply_replace_all(buffer: &sourceview5::Buffer, result: &ReplaceAll, text
     }
 }
 
-/// The selection in character offsets, ordered, and whether the caret is at its start.
-pub fn selection(buffer: &sourceview5::Buffer) -> (Range<usize>, bool) {
-    let selection = read_selection(buffer);
-    (selection.range(), selection.is_backward())
-}
-
-/// Selects `range` (character offsets), with the caret at its start when `backward`.
-pub fn select(buffer: &sourceview5::Buffer, range: Range<usize>, backward: bool) {
-    restore_selection(buffer, Selection::new(range, backward));
-}
-
 /// Applies a text tool's `change`, computed on `text` (still the buffer's text), in one user
 /// action, as one bulk edit above [`BULK_EDIT_THRESHOLD`] edits (ADR-003), then selects what
 /// the operation asks for.
 pub fn apply_change(buffer: &sourceview5::Buffer, change: &Change, text: &str) -> Applied {
     let started = Instant::now();
-    let (selected, backward) = selection(buffer);
-    let after = change.selection_after(selected);
+    let before = selection(buffer);
+    let after = change.selection_after(before.range());
     let bulk = change.is_bulk();
     let mut footprint = Footprint::of(&change.edits);
     buffer.begin_user_action();
@@ -148,7 +137,7 @@ pub fn apply_change(buffer: &sourceview5::Buffer, change: &Change, text: &str) -
         }
     }
     buffer.end_user_action();
-    select(buffer, after, backward);
+    select(buffer, before.with_range(after));
     Applied {
         edits: change.edits.len(),
         bulk,

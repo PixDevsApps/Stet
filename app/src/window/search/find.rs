@@ -24,7 +24,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use stet_domain::search::SearchHistory;
+use stet_domain::search::{Direction, SearchHistory, Wrap};
 
 /// Matches our own matcher collects for counting and highlighting in one document.
 const OWN_MATCH_LIMIT: usize = 1_000_000;
@@ -466,9 +466,15 @@ impl Window {
         if compiled.own() {
             let (snapshot, text) = PageSnapshot::take(&page);
             let matcher = Arc::clone(&compiled.matcher);
+            let direction = if forward {
+                Direction::Forward
+            } else {
+                Direction::Backward
+            };
+            let wrap_mode = if wrap { Wrap::Around } else { Wrap::Stop };
             self.spawn(async move {
                 let found =
-                    worker::run(move || matcher.find_next(&text, from, !forward, wrap)).await;
+                    worker::run(move || matcher.find_next(&text, from, direction, wrap_mode)).await;
                 if snapshot.edited() {
                     return;
                 }

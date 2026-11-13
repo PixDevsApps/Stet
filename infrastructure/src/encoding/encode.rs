@@ -6,6 +6,31 @@ use stet_domain::text::Eol;
 
 use super::{PLACEHOLDER_UTF8, bom_bytes, is_utf16};
 
+/// How a document is written back: what the status bar shows and Convert changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DocumentFormat {
+    pub encoding: &'static Encoding,
+    /// Starts with the byte order mark of UTF-8 or UTF-16; ignored for encodings that have
+    /// none.
+    pub bom: bool,
+    pub eol: Eol,
+    /// Write every placeholder as NUL. Off when the file already had real U+2400
+    /// characters, which then stay as they are.
+    pub map_placeholder: bool,
+}
+
+impl Default for DocumentFormat {
+    /// UTF-8 without a BOM and LF, for new documents.
+    fn default() -> Self {
+        Self {
+            encoding: UTF_8,
+            bom: false,
+            eol: Eol::Lf,
+            map_placeholder: true,
+        }
+    }
+}
+
 /// How many characters [`Unmappable`] lists; its `count` has the total.
 pub const MAX_LISTED_UNMAPPABLE: usize = 100;
 
@@ -40,29 +65,18 @@ impl fmt::Display for Unmappable {
 
 impl std::error::Error for Unmappable {}
 
-/// Encodes `text` strictly: any character `encoding` cannot represent fails the whole
-/// encode instead of being replaced. With `map_placeholder`, every [`super::PLACEHOLDER`]
-/// is written as NUL. `bom` prefixes the byte order mark of UTF-8 and UTF-16, and is
-/// ignored for encodings that have none. UTF-16 is encoded here, since encoding_rs only
-/// decodes it.
-pub fn encode(
-    text: &str,
-    encoding: &'static Encoding,
-    bom: bool,
-    map_placeholder: bool,
-) -> Result<Vec<u8>, Unmappable> {
-    encode_with_eol(text, encoding, bom, map_placeholder, Eol::Lf)
-}
-
-/// [`encode`] for LF-normalized buffer text, writing every LF as `eol` in the same pass
-/// (ADR-008). Offsets in [`Unmappable`] count characters of `text`, like `GtkTextIter`.
-pub fn encode_with_eol(
-    text: &str,
-    encoding: &'static Encoding,
-    bom: bool,
-    map_placeholder: bool,
-    eol: Eol,
-) -> Result<Vec<u8>, Unmappable> {
+/// Encodes `text` in `format`, strictly: any character the encoding cannot represent fails
+/// the whole encode instead of being replaced. Every LF is written as the format's line
+/// ending in the same pass (ADR-008), and with `map_placeholder` every
+/// [`super::PLACEHOLDER`] as NUL. Offsets in [`Unmappable`] count characters of `text`, like
+/// `GtkTextIter`. UTF-16 is encoded here, since encoding_rs only decodes it.
+pub fn encode(text: &str, format: &DocumentFormat) -> Result<Vec<u8>, Unmappable> {
+    let &DocumentFormat {
+        encoding,
+        bom,
+        eol,
+        map_placeholder,
+    } = format;
     let mut out = Vec::with_capacity(estimated_len(encoding, text.len()));
     if bom {
         out.extend_from_slice(bom_bytes(encoding));
@@ -258,6 +272,20 @@ impl<'t> Collector<'t> {
 mod tests {
     use super::*;
     use crate::encoding::{ENCODINGS, PLACEHOLDER, decode};
+
+    fn format(
+        encoding: &'static Encoding,
+        bom: bool,
+        map_placeholder: bool,
+        eol: Eol,
+    ) -> DocumentFormat {
+        DocumentFormat {
+            encoding,
+            bom,
+            eol,
+            map_placeholder,
+        }
+    }
     use encoding_rs::{ISO_2022_JP, SHIFT_JIS, UTF_16BE, WINDOWS_1252};
     use proptest::prelude::*;
 
@@ -265,11 +293,11 @@ mod tests {
     fn utf16_is_encoded_by_hand_with_its_bom() {
         let text = "a\u{0}é🎉";
         assert_eq!(
-            encode(text, UTF_16LE, true, false).unwrap(),
+            encode(text, &format(UTF_16LE, true, false, Eol::Lf)).unwrap(),
             b"\xFF\xFEa\0\0\0\xE9\0\x3C\xD8\x89\xDF"
         );
         assert_eq!(
-            encode(text, UTF_16BE, true, false).unwrap(),
+            encode(text, &format(UTF_16BE, true, false, Eol::Lf)).unwrap(),
             b"\xFE\xFF\0a\0\0\0\xE9\xD8\x3C\xDF\x89"
         );
     }
@@ -277,11 +305,23 @@ mod tests {
     #[test]
     fn placeholders_map_back_to_nul_only_when_asked() {
         let text = "a␀b";
-        assert_eq!(encode(text, UTF_8, false, true).unwrap(), b"a\0b");
-        assert_eq!(encode(text, UTF_8, false, false).unwrap(), "a␀b".as_bytes());
-        assert_eq!(encode(text, UTF_16BE, false, true).unwrap(), b"\0a\0\0\0b");
-        assert_eq!(encode(text, WINDOWS_1252, false, true).unwrap(), b"a\0b");
-        let error = encode(text, WINDOWS_1252, false, false).unwrap_err();
+        assert_eq!(
+            encode(text, &format(UTF_8, false, true, Eol::Lf)).unwrap(),
+            b"a\0b"
+        );
+        assert_eq!(
+            encode(text, &format(UTF_8, false, false, Eol::Lf)).unwrap(),
+            "a␀b".as_bytes()
+        );
+        assert_eq!(
+            encode(text, &format(UTF_16BE, false, true, Eol::Lf)).unwrap(),
+            b"\0a\0\0\0b"
+        );
+        assert_eq!(
+            encode(text, &format(WINDOWS_1252, false, true, Eol::Lf)).unwrap(),
+            b"a\0b"
+        );
+        let error = encode(text, &format(WINDOWS_1252, false, false, Eol::Lf)).unwrap_err();
         assert_eq!(error.chars, vec![(1, PLACEHOLDER)]);
     }
 
@@ -289,22 +329,22 @@ mod tests {
     fn line_endings_are_written_in_the_same_pass() {
         let text = "a\nb␀\n";
         assert_eq!(
-            encode_with_eol(text, UTF_8, true, true, Eol::CrLf).unwrap(),
+            encode(text, &format(UTF_8, true, true, Eol::CrLf)).unwrap(),
             b"\xEF\xBB\xBFa\r\nb\0\r\n"
         );
         assert_eq!(
-            encode_with_eol(text, UTF_16LE, false, true, Eol::Cr).unwrap(),
+            encode(text, &format(UTF_16LE, false, true, Eol::Cr)).unwrap(),
             b"a\0\r\0b\0\0\0\r\0"
         );
         assert_eq!(
-            encode_with_eol(text, SHIFT_JIS, false, true, Eol::CrLf).unwrap(),
+            encode(text, &format(SHIFT_JIS, false, true, Eol::CrLf)).unwrap(),
             b"a\r\nb\0\r\n"
         );
     }
 
     #[test]
     fn unmappable_characters_are_all_reported_with_character_offsets() {
-        let error = encode("ab€✓\nc✓", WINDOWS_1252, false, true).unwrap_err();
+        let error = encode("ab€✓\nc✓", &format(WINDOWS_1252, false, true, Eol::Lf)).unwrap_err();
         assert_eq!(error.encoding, WINDOWS_1252);
         assert_eq!(error.chars, vec![(3, '✓'), (6, '✓')]);
         assert_eq!(error.count, 2);
@@ -316,14 +356,14 @@ mod tests {
 
     #[test]
     fn offsets_count_characters_of_the_lf_text_when_converting_eol() {
-        let error = encode_with_eol("é\n\nж", WINDOWS_1252, false, true, Eol::CrLf).unwrap_err();
+        let error = encode("é\n\nж", &format(WINDOWS_1252, false, true, Eol::CrLf)).unwrap_err();
         assert_eq!(error.chars, vec![(3, 'ж')]);
     }
 
     #[test]
     fn the_list_is_capped_but_the_count_is_not() {
         let text = "Ω".repeat(MAX_LISTED_UNMAPPABLE + 5);
-        let error = encode(&text, WINDOWS_1252, false, true).unwrap_err();
+        let error = encode(&text, &format(WINDOWS_1252, false, true, Eol::Lf)).unwrap_err();
         assert_eq!(error.chars.len(), MAX_LISTED_UNMAPPABLE);
         assert_eq!(error.count, MAX_LISTED_UNMAPPABLE + 5);
         assert_eq!(error.chars[99], (99, 'Ω'));
@@ -331,7 +371,7 @@ mod tests {
 
     #[test]
     fn iso_2022_jp_ends_in_ascii() {
-        let bytes = encode("日本", ISO_2022_JP, false, true).unwrap();
+        let bytes = encode("日本", &format(ISO_2022_JP, false, true, Eol::Lf)).unwrap();
         assert_eq!(bytes, b"\x1b$BF|K\\\x1b(B");
     }
 
@@ -358,7 +398,7 @@ mod tests {
             let conflict = text.contains(PLACEHOLDER);
             let nuls = text.matches('\0').count();
             for encoding in [UTF_8, UTF_16LE, UTF_16BE] {
-                let bytes = encode(&text, encoding, bom, false).unwrap();
+                let bytes = encode(&text, &format(encoding, bom, false, Eol::Lf)).unwrap();
                 let decoded = decode(&bytes, encoding, bom);
                 prop_assert_eq!(&decoded.text, &expected);
                 prop_assert!(!decoded.had_errors);
@@ -375,7 +415,7 @@ mod tests {
         ) {
             let entry = &ENCODINGS[index];
             let decoded = decode(&bytes, entry.encoding, false);
-            let saved = encode(&decoded.text, entry.encoding, false, decoded.map_placeholder());
+            let saved = encode(&decoded.text, &format(entry.encoding, false, decoded.map_placeholder(), Eol::Lf));
             prop_assert_eq!(
                 decoded.lossy_roundtrip,
                 saved.as_deref() != Ok(bytes.as_slice()),

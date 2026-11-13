@@ -4,7 +4,7 @@
 //! what is wrong, with the line and column.
 
 use crate::monitor::{DirWatch, TriggerRule};
-use crate::runtime::{Latest, Notify, wait_until, worker};
+use crate::runtime::{Latest, Listeners, Notify, wait_until, worker};
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::glib::translate::IntoGlib;
@@ -25,8 +25,6 @@ pub struct Update {
     pub problems: Vec<String>,
 }
 
-type Listener = Rc<dyn Fn(&Update)>;
-
 pub struct Preferences {
     config_file: PathBuf,
     keys_file: PathBuf,
@@ -40,7 +38,7 @@ pub struct Preferences {
     first_read: Notify,
     /// A ticket per reload: the newest wins.
     reads: Latest,
-    listeners: RefCell<Vec<Listener>>,
+    listeners: Listeners<Update>,
     watch: RefCell<Option<Rc<DirWatch>>>,
 }
 
@@ -57,7 +55,7 @@ impl Preferences {
             loaded: Cell::new(false),
             first_read: Notify::default(),
             reads: Latest::default(),
-            listeners: RefCell::new(Vec::new()),
+            listeners: Listeners::default(),
             watch: RefCell::new(None),
         });
         let rule: TriggerRule = Box::new(|_, file, other| {
@@ -99,7 +97,7 @@ impl Preferences {
     }
 
     pub fn connect_changed(&self, listener: impl Fn(&Update) + 'static) {
-        self.listeners.borrow_mut().push(Rc::new(listener));
+        self.listeners.connect(listener);
     }
 
     /// Resolves once the files have been read the first time, or after `timeout`.
@@ -185,10 +183,7 @@ impl Preferences {
         self.first_read.notify();
         if update.settings_before.is_some() || update.keymap_changed || !update.problems.is_empty()
         {
-            let listeners = self.listeners.borrow().clone();
-            for listener in listeners {
-                listener(&update);
-            }
+            self.listeners.notify(&update);
         }
     }
 }

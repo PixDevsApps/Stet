@@ -13,6 +13,7 @@
 //!   the lines the views show, as the find bar's own matches are. Stet's own steps keep
 //!   them from before and after too, as GTK's replay of such a step would drop them.
 
+use super::edits::Applied;
 use super::page::EditorPage;
 use crate::convert::{BufferPositions, IterPosition, to_i32, to_usize, unit_to_u8};
 use crate::sys;
@@ -188,24 +189,32 @@ impl DocMarks {
     }
 
     /// Runs one of Stet's own operations on `buffer`: `apply` makes `edits` (sorted, in the
-    /// offsets of `text`, the buffer's text before) and returns the footprint of what reached
-    /// the buffer. Afterwards the bookmarks are `after`, or follow `edits` by the domain's
-    /// rules; the marks follow `edits`; and the step is kept for Undo and Redo when bookmarks
-    /// or marks were involved.
+    /// offsets of `text`, the buffer's text before) and returns how they reached the buffer,
+    /// which this returns too. Afterwards the bookmarks are `after`, or follow `edits` by the
+    /// domain's rules; the marks follow `edits`; and the step is kept for Undo and Redo when
+    /// bookmarks or marks were involved.
     pub fn track(
         &self,
         buffer: &sourceview5::Buffer,
         text: &str,
         edits: &[TextEdit],
         after: Option<Bookmarks>,
-        apply: impl FnOnce() -> Footprint,
-    ) {
+        apply: impl FnOnce() -> Applied,
+    ) -> Applied {
         let begun = self.begin(buffer);
-        let footprint = apply();
+        let applied = apply();
         let bookmarked =
             !begun.bookmarks.is_empty() || after.as_ref().is_some_and(|after| !after.is_empty());
         let index = bookmarked.then(|| LineIndex::new(text));
-        self.finish(buffer, begun, index.as_ref(), edits, after, footprint);
+        self.finish(
+            buffer,
+            begun,
+            index.as_ref(),
+            edits,
+            after,
+            applied.footprint,
+        );
+        applied
     }
 
     /// Starts one of Stet's own operations, which may change the buffer across main-loop
@@ -532,18 +541,19 @@ impl EditorPage {
     }
 
     /// Runs one of Stet's own edits through the document's bookmark and mark tracking
-    /// ([`DocMarks::track`]).
+    /// ([`DocMarks::track`]), and returns how it reached the buffer.
     pub fn track_edit(
         &self,
         text: &str,
         edits: &[TextEdit],
         after: Option<Bookmarks>,
-        apply: impl FnOnce() -> Footprint,
-    ) {
+        apply: impl FnOnce() -> Applied,
+    ) -> Applied {
         let document = self.document();
-        document
+        let applied = document
             .marks
             .track(&document.buffer, text, edits, after, apply);
         document.schedule_retag();
+        applied
     }
 }

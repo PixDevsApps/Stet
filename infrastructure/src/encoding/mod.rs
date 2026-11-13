@@ -10,7 +10,7 @@ mod table;
 
 pub use decode::{decode, decode_to_lf};
 pub use detect::{Detection, DetectionSource, detect};
-pub use encode::{Unmappable, check_encodable, encode, encode_with_eol};
+pub use encode::{DocumentFormat, Unmappable, check_encodable, encode};
 pub use encoding_rs::Encoding;
 pub use table::{
     ENCODINGS, EncodingEntry, encoding_for_name, entry_for, entry_for_id, status_label,

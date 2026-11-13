@@ -1,38 +1,13 @@
 use std::path::Path;
 
-use encoding_rs::{Encoding, UTF_8};
+use encoding_rs::Encoding;
 use stet_domain::text::{Eol, EolStats};
 
 use super::load::{LoadError, load};
 use super::meta::FileMeta;
 use super::save::{SaveError, SaveOptions, SaveOutcome, safe_save};
 use super::size::{SizeClass, SizePolicy};
-use crate::encoding::{
-    Detection, EncodingEntry, Unmappable, decode_to_lf, detect, encode_with_eol,
-};
-
-/// How a document is written back: what the status bar shows and Convert changes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DocumentFormat {
-    pub encoding: &'static Encoding,
-    pub bom: bool,
-    pub eol: Eol,
-    /// Write every placeholder as NUL. Off when the file already had real U+2400
-    /// characters, which then stay as they are.
-    pub map_placeholder: bool,
-}
-
-impl Default for DocumentFormat {
-    /// UTF-8 without a BOM and LF, for new documents.
-    fn default() -> Self {
-        Self {
-            encoding: UTF_8,
-            bom: false,
-            eol: Eol::Lf,
-            map_placeholder: true,
-        }
-    }
-}
+use crate::encoding::{Detection, DocumentFormat, EncodingEntry, decode_to_lf, detect, encode};
 
 /// An encoding the user picked over the detected one (Reinterpret).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,19 +117,6 @@ pub fn decode_document(bytes: &[u8], choice: Option<EncodingChoice>) -> DecodedD
     }
 }
 
-/// Encodes LF-normalized buffer text in `format`: LF becomes the document's line ending,
-/// placeholders become NUL when the format says so, and characters the encoding lacks fail
-/// the encode, with character offsets into `text`.
-pub fn encode_document(text: &str, format: &DocumentFormat) -> Result<Vec<u8>, Unmappable> {
-    encode_with_eol(
-        text,
-        format.encoding,
-        format.bom,
-        format.map_placeholder,
-        format.eol,
-    )
-}
-
 /// Loads and decodes a file for a new tab. Call it on a worker thread.
 pub fn open_document(path: &Path, policy: &SizePolicy) -> Result<OpenedDocument, LoadError> {
     open(path, policy, None)
@@ -193,7 +155,7 @@ pub fn save_document(
     format: &DocumentFormat,
     options: &SaveOptions,
 ) -> Result<SaveOutcome, SaveError> {
-    let bytes = encode_document(text, format)?;
+    let bytes = encode(text, format)?;
     safe_save(path, &bytes, options)
 }
 
@@ -228,7 +190,7 @@ mod tests {
     use crate::encoding::fixtures::{fixtures, legacy};
     use crate::encoding::{ENCODINGS, PLACEHOLDER, decode_to_lf};
     use crate::fs::SaveMethod;
-    use encoding_rs::{ISO_8859_15, SHIFT_JIS, UTF_16LE, WINDOWS_1252};
+    use encoding_rs::{ISO_8859_15, SHIFT_JIS, UTF_8, UTF_16LE, WINDOWS_1252};
     use proptest::prelude::*;
     use std::fs;
     use std::time::{Duration, Instant};
@@ -366,15 +328,12 @@ mod tests {
         let decoded = decode_document("a␀b\n".as_bytes(), None);
         assert!(decoded.report.placeholder_conflict && !decoded.report.format().map_placeholder);
         assert_eq!(
-            encode_document(&decoded.text, &decoded.report.format()).unwrap(),
+            encode(&decoded.text, &decoded.report.format()).unwrap(),
             "a␀b\n".as_bytes()
         );
         let nul = decode_document(b"a\0b\n", None);
         assert_eq!(nul.text, format!("a{PLACEHOLDER}b\n"));
-        assert_eq!(
-            encode_document(&nul.text, &nul.report.format()).unwrap(),
-            b"a\0b\n"
-        );
+        assert_eq!(encode(&nul.text, &nul.report.format()).unwrap(), b"a\0b\n");
     }
 
     #[test]
@@ -387,7 +346,7 @@ mod tests {
                 eol: Eol::CrLf,
                 map_placeholder: true,
             };
-            let bytes = encode_document(text, &format).unwrap();
+            let bytes = encode(text, &format).unwrap();
             let decoded = decode_document(&bytes, Some(entry.into()));
             assert_eq!(decoded.text, text, "{}", entry.label);
             assert_eq!(decoded.report.eol(), Eol::CrLf, "{}", entry.label);
@@ -423,14 +382,14 @@ mod tests {
         ) {
             let entry = &ENCODINGS[index];
             let format = DocumentFormat { encoding: entry.encoding, bom: entry.bom, eol, map_placeholder: true };
-            let bytes = encode_document(&text, &format).unwrap();
+            let bytes = encode(&text, &format).unwrap();
             let decoded = decode_document(&bytes, Some(entry.into()));
             prop_assert_eq!(&decoded.text, &text);
             prop_assert!(decoded.report.round_trips());
             if text.contains('\n') {
                 prop_assert_eq!(decoded.report.eol(), eol);
             }
-            prop_assert_eq!(encode_document(&decoded.text, &decoded.report.format()).unwrap(), bytes);
+            prop_assert_eq!(encode(&decoded.text, &decoded.report.format()).unwrap(), bytes);
         }
     }
 
@@ -517,14 +476,14 @@ mod tests {
             time,
         );
         let format = opened.report.format();
-        let (time, _) = best_of(3, || encode_document(&opened.text, &format).unwrap());
-        report("encode_document, UTF-8 LF", utf8.len(), time);
+        let (time, _) = best_of(3, || encode(&opened.text, &format).unwrap());
+        report("encode, UTF-8 LF", utf8.len(), time);
         let crlf_format = DocumentFormat {
             eol: Eol::CrLf,
             ..format
         };
-        let (time, _) = best_of(3, || encode_document(&opened.text, &crlf_format).unwrap());
-        report("encode_document, UTF-8 to CRLF", utf8.len(), time);
+        let (time, _) = best_of(3, || encode(&opened.text, &crlf_format).unwrap());
+        report("encode, UTF-8 to CRLF", utf8.len(), time);
         let options = save_options(dir.path());
         let (time, outcome) = best_of(3, || {
             save_document(&path, &opened.text, &format, &options).unwrap()

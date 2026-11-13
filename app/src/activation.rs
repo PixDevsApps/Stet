@@ -152,6 +152,8 @@ fn spawn_service(connection: &gio::DBusConnection, name: &str) -> Result<(), Str
         if let Ok(Some(status)) = child.try_wait() {
             return Err(format!("it exited with {status}"));
         }
+        // No main loop runs yet and the child's exit must be noticed too, so a bounded poll is
+        // simpler than a NameOwnerChanged watch plus a child watch on a private main context.
         std::thread::sleep(POLL);
     }
     let _ = child.kill();

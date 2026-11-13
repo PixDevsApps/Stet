@@ -18,10 +18,10 @@ use super::workspace::pins::PinCommand;
 use super::workspace::split::SplitCommand;
 use super::workspace::tabs::{TabCommand, TabTool};
 use super::workspace::view::ViewCommand;
+use crate::actions::ActionParam;
 use crate::editor::column::Motion;
 use gtk4::gio;
 use gtk4::prelude::*;
-use std::path::PathBuf;
 use stet_domain::actions::ActionId;
 use stet_domain::document::ReadOnly;
 use stet_domain::marks::MarkStyle;
@@ -95,13 +95,13 @@ impl Window {
         self.update_compare_actions();
     }
 
-    /// Runs a window action. `param` is the string parameter of `WithString` actions.
+    /// Runs a window action. `param` is the parameter of the actions that take one.
     #[expect(
         clippy::too_many_lines,
         reason = "one flat, exhaustive table from every window action to its feature; split up, \
                   it would need wildcards, and a new ActionId would compile unrouted"
     )]
-    pub fn run_action(&self, id: ActionId, param: Option<String>) {
+    pub fn run_action(&self, id: ActionId, param: Option<ActionParam>) {
         // Column mode closes its typing burst first, and ends for actions that don't know
         // about columns.
         if let Some(page) = self.current_page()
@@ -109,6 +109,11 @@ impl Window {
         {
             return;
         }
+        let (text, path) = match param {
+            Some(ActionParam::Text(text)) => (Some(text), None),
+            Some(ActionParam::Path(path)) => (None, Some(path)),
+            None => (None, None),
+        };
         match id {
             ActionId::NewTab => self.run_file(FileCommand::NewTab),
             ActionId::Open => self.run_file(FileCommand::Open),
@@ -120,8 +125,8 @@ impl Window {
             ActionId::PinTab => self.run_pin(PinCommand::Pin),
             ActionId::UnpinTab => self.run_pin(PinCommand::Unpin),
             ActionId::OpenRecent => {
-                if let Some(path) = param {
-                    self.run_file(FileCommand::OpenRecent(PathBuf::from(path)));
+                if let Some(path) = path {
+                    self.run_file(FileCommand::OpenRecent(path));
                 }
             }
             ActionId::ClearRecent => self.run_file(FileCommand::ClearRecent),
@@ -175,7 +180,7 @@ impl Window {
             ActionId::MoveTabBackward => self.run_tab(TabCommand::MoveBackward),
             ActionId::CommandPalette => self.open_palette(""),
             ActionId::ChooseLanguage => self.run_language(LanguageCommand::Choose),
-            ActionId::SetLanguage => self.run_language(LanguageCommand::Set(param)),
+            ActionId::SetLanguage => self.run_language(LanguageCommand::Set(text)),
             ActionId::ReloadFromDisk => self.run_file(FileCommand::ReloadFromDisk),
             ActionId::EolCrLf => self.run_encoding(EncodingCommand::SetEol(Eol::CrLf)),
             ActionId::EolLf => self.run_encoding(EncodingCommand::SetEol(Eol::Lf)),
@@ -190,7 +195,7 @@ impl Window {
             ActionId::EncodeUtf16LeBom => {
                 self.run_encoding(EncodingCommand::Encode(FixedEncoding::Utf16LeBom));
             }
-            ActionId::Reinterpret => self.run_encoding(EncodingCommand::Reinterpret(param)),
+            ActionId::Reinterpret => self.run_encoding(EncodingCommand::Reinterpret(text)),
             ActionId::ConvertToAnsi => {
                 self.run_encoding(EncodingCommand::ConvertTo(FixedEncoding::Ansi));
             }
@@ -206,7 +211,7 @@ impl Window {
             ActionId::ConvertToUtf16LeBom => {
                 self.run_encoding(EncodingCommand::ConvertTo(FixedEncoding::Utf16LeBom));
             }
-            ActionId::ConvertEncoding => self.run_encoding(EncodingCommand::Convert(param)),
+            ActionId::ConvertEncoding => self.run_encoding(EncodingCommand::Convert(text)),
             ActionId::ChooseEncoding => self.run_encoding(EncodingCommand::Choose),
             ActionId::About => self.show_about(),
             ActionId::CheckForUpdates => self.check_for_updates(),

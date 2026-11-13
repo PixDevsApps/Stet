@@ -7,8 +7,9 @@ use std::path::Path;
 use encoding_rs::Encoding;
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{LfText, RawEdit, Skip, apply_raw, raw_edits};
+use stet_domain::text::Eol;
 
-use crate::encoding::{bom_bytes, decode, detect, encode};
+use crate::encoding::{DocumentFormat, bom_bytes, decode, detect, encode};
 use crate::files::{CancelToken, FileError};
 use crate::fs::{
     LoadError, SaveError, SaveMethod, SaveOptions, SizePolicy, fingerprint, load, safe_save,
@@ -135,6 +136,13 @@ fn splice(
     let not_kept = || Skip::BytesNotKept {
         encoding: encoding.name().to_owned(),
     };
+    // `raw` keeps the file's own line endings, so LF stays LF.
+    let format = DocumentFormat {
+        encoding,
+        bom: false,
+        eol: Eol::Lf,
+        map_placeholder,
+    };
     let mut out = Vec::with_capacity(head.len() + content.len() + content.len() / 16);
     out.extend_from_slice(head);
     let mut consumed = 0;
@@ -142,7 +150,7 @@ fn splice(
         if text.is_empty() {
             return Ok(());
         }
-        let encoded = encode(text, encoding, false, map_placeholder).map_err(|_| not_kept())?;
+        let encoded = encode(text, &format).map_err(|_| not_kept())?;
         let end = consumed + encoded.len();
         if content.get(consumed..end) != Some(encoded.as_slice()) {
             return Err(not_kept());
@@ -159,7 +167,7 @@ fn splice(
     for edit in edits {
         take(&raw[kept..edit.range.start], true, &mut out)?;
         take(&raw[edit.range.clone()], false, &mut out)?;
-        match encode(&edit.insert, encoding, false, map_placeholder) {
+        match encode(&edit.insert, &format) {
             Ok(bytes) => out.extend_from_slice(&bytes),
             Err(error) => {
                 unmappable_count += error.count;

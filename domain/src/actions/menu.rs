@@ -2,7 +2,7 @@
 //! strip's and the editor's context menus and the status bar's line-ending menu. [`Menus`] holds
 //! their structure and every ordering rule; the app only turns it into GTK's menu models.
 
-use super::{ActionId, ActionKind};
+use super::ActionId;
 use std::collections::BTreeMap;
 
 /// The hamburger menu's submenus, in the order the menu lists them, and its first page.
@@ -231,9 +231,10 @@ pub enum MenuItem {
         label: &'static str,
         menu: MenuTree,
     },
-    /// One entry per value of a list known only at run time, each running the action (an
-    /// [`ActionKind::WithString`] one) with its value. A submenu that holds a list is left out
-    /// while the list is empty, and a section the list leaves empty is not drawn.
+    /// One entry per value of a list known only at run time, each running the action (one
+    /// that [takes a parameter](super::ActionKind::takes_parameter)) with its value. A submenu
+    /// that holds a list is left out while the list is empty, and a section the list leaves
+    /// empty is not drawn.
     List(ActionId, MenuList),
 }
 
@@ -390,7 +391,7 @@ fn placed(available: &dyn Fn(ActionId) -> bool) -> impl Iterator<Item = (ActionI
 /// What the menus show for `id`: the action, or the run-time list a parameterized action
 /// runs with.
 fn entry(id: ActionId) -> Option<MenuItem> {
-    if id.kind() != ActionKind::WithString {
+    if !id.kind().takes_parameter() {
         return Some(MenuItem::Action(id));
     }
     match id {
@@ -451,7 +452,7 @@ fn nested_menu(name: &str, available: &dyn Fn(ActionId) -> bool) -> MenuTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::actions::{ActionScope, KeyScope};
+    use crate::actions::{ActionKind, ActionScope, KeyScope};
     use std::fmt::Write as _;
 
     /// `tree` as indented text: one line per item, `--` between sections.
@@ -556,7 +557,7 @@ mod tests {
     #[test]
     fn parameterized_actions_in_menus_have_a_list() {
         for id in ActionId::ALL {
-            if id.kind() == ActionKind::WithString && id.spec().menu.is_some() {
+            if id.kind().takes_parameter() && id.spec().menu.is_some() {
                 assert!(
                     matches!(entry(id), Some(MenuItem::List(..))),
                     "{id:?} has a menu place but no list"

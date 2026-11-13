@@ -11,8 +11,8 @@ mod save;
 mod size;
 
 pub use document::{
-    DecodeReport, DocumentFormat, EncodingChoice, OpenedDocument, open_document, open_document_as,
-    save_document, text_chunks,
+    DecodeReport, EncodingChoice, OpenedDocument, open_document, open_document_as, save_document,
+    text_chunks,
 };
 pub use load::{LoadError, load};
 pub use meta::{FileMeta, file_meta, fingerprint, fingerprint_of};

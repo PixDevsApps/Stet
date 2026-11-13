@@ -219,7 +219,7 @@ impl Window {
         };
         tools.numbering.replace(numbering);
         let buffer = page.buffer();
-        let (selected, _) = edits::selection(&buffer);
+        let selected = edits::selection(&buffer).range();
         if numbering.check(numbered_lines(&buffer, &selected)).is_err() {
             self.show_error("Can't insert numbers", NUMBERS_OVERFLOW)
                 .await;

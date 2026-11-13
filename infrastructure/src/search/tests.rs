@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use proptest::prelude::*;
-use stet_domain::search::{Query, SearchMode, SearchOptions, Template};
+use stet_domain::search::{Direction, Query, SearchMode, SearchOptions, Template, Wrap};
 use stet_domain::text::{TextEdit, apply};
 
 use super::*;
@@ -128,17 +128,28 @@ fn cancelling_stops_find_all_and_replace_all() {
 #[test]
 fn find_next_skips_an_empty_match_at_the_caret_and_wraps() {
     let caret = regex("^");
-    let next = caret.find_next("a\nb\nc", 0, false, true).unwrap().unwrap();
+    let next = caret
+        .find_next("a\nb\nc", 0, Direction::Forward, Wrap::Around)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         (next.found.start, next.found.line, next.wrapped),
         (2, 1, false)
     );
-    let wrapped = caret.find_next("a\nb\nc", 4, false, true).unwrap().unwrap();
+    let wrapped = caret
+        .find_next("a\nb\nc", 4, Direction::Forward, Wrap::Around)
+        .unwrap()
+        .unwrap();
     assert_eq!((wrapped.found.start, wrapped.wrapped), (0, true));
-    assert_eq!(caret.find_next("a\nb\nc", 4, false, false).unwrap(), None);
+    assert_eq!(
+        caret
+            .find_next("a\nb\nc", 4, Direction::Forward, Wrap::Stop)
+            .unwrap(),
+        None
+    );
     let word = regex("ab");
     let found = |from| {
-        word.find_next("ab ab", from, false, true)
+        word.find_next("ab ab", from, Direction::Forward, Wrap::Around)
             .unwrap()
             .map(|next| (next.found.start, next.found.end, next.wrapped))
     };
@@ -151,23 +162,23 @@ fn find_next_skips_an_empty_match_at_the_caret_and_wraps() {
 fn find_previous_and_its_window() {
     let word = regex("ab");
     let found = |from, wrap| {
-        word.find_next("ab ab ab", from, true, wrap)
+        word.find_next("ab ab ab", from, Direction::Backward, wrap)
             .unwrap()
             .map(|next| (next.found.start, next.wrapped))
     };
-    assert_eq!(found(8, false), Some((6, false)));
-    assert_eq!(found(6, false), Some((3, false)));
-    assert_eq!(found(0, false), None);
-    assert_eq!(found(0, true), Some((6, true)));
+    assert_eq!(found(8, Wrap::Stop), Some((6, false)));
+    assert_eq!(found(6, Wrap::Stop), Some((3, false)));
+    assert_eq!(found(0, Wrap::Stop), None);
+    assert_eq!(found(0, Wrap::Around), Some((6, true)));
     let long = format!("needle\n{}\nend", "x".repeat(300_000));
     let len = long.chars().count();
     let previous = regex("needle")
-        .find_next(&long, len, true, false)
+        .find_next(&long, len, Direction::Backward, Wrap::Stop)
         .unwrap()
         .unwrap();
     assert_eq!(previous.found.start, 0);
     let spanning = regex(r"x\nend")
-        .find_next(&long, len, true, false)
+        .find_next(&long, len, Direction::Backward, Wrap::Stop)
         .unwrap()
         .unwrap();
     assert_eq!(spanning.found.line, 1);
@@ -177,7 +188,7 @@ fn find_previous_and_its_window() {
 fn find_next_sees_the_text_before_the_caret() {
     let at = |pattern: &str, text: &str, from| {
         let next = regex(pattern)
-            .find_next(text, from, false, false)
+            .find_next(text, from, Direction::Forward, Wrap::Stop)
             .unwrap()
             .unwrap();
         (next.found.start, next.found.end)
@@ -192,7 +203,7 @@ fn replace_one_rechecks_the_match() {
     let matcher = regex(r"user=(\w+)");
     let text = "user=alice user=Bob";
     let found = matcher
-        .find_next(text, 0, false, false)
+        .find_next(text, 0, Direction::Forward, Wrap::Stop)
         .unwrap()
         .unwrap()
         .found;
@@ -470,14 +481,14 @@ proptest! {
         let all = spans(&matcher, &text);
         let mut visited = Vec::new();
         let mut from = 0;
-        while let Some(next) = matcher.find_next(&text, from, false, false).unwrap() {
+        while let Some(next) = matcher.find_next(&text, from, Direction::Forward, Wrap::Stop).unwrap() {
             visited.push((next.found.start, next.found.end));
             from = next.found.end;
         }
         prop_assert_eq!(&visited, &all);
         let mut backward = Vec::new();
         let mut from = text.chars().count();
-        while let Some(previous) = matcher.find_next(&text, from, true, false).unwrap() {
+        while let Some(previous) = matcher.find_next(&text, from, Direction::Backward, Wrap::Stop).unwrap() {
             backward.push((previous.found.start, previous.found.end));
             from = previous.found.start;
         }

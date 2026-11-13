@@ -12,18 +12,29 @@ pub struct Selection {
 }
 
 impl Selection {
-    /// `range` selected, with the caret at its start when `backward` and at its end otherwise.
-    pub fn new(range: Range<usize>, backward: bool) -> Self {
-        if backward {
-            Self {
-                cursor: range.start,
-                anchor: range.end,
-            }
+    /// `range` selected with the caret at its end.
+    pub fn forward(range: Range<usize>) -> Self {
+        Self {
+            cursor: range.end,
+            anchor: range.start,
+        }
+    }
+
+    /// `range` selected with the caret at its start.
+    pub fn backward(range: Range<usize>) -> Self {
+        Self {
+            cursor: range.start,
+            anchor: range.end,
+        }
+    }
+
+    /// `range` selected with the caret at the same end as in this selection.
+    #[must_use]
+    pub fn with_range(self, range: Range<usize>) -> Self {
+        if self.is_backward() {
+            Self::backward(range)
         } else {
-            Self {
-                cursor: range.end,
-                anchor: range.start,
-            }
+            Self::forward(range)
         }
     }
 
@@ -52,7 +63,7 @@ impl Selection {
         let range = self.range();
         let start = map_offset(range.start, edits, Bias::Before);
         let end = map_offset(range.end, edits, Bias::After).max(start);
-        Self::new(start..end, self.is_backward())
+        self.with_range(start..end)
     }
 }
 
@@ -64,7 +75,7 @@ mod tests {
     use proptest::prelude::*;
 
     fn caret(offset: usize) -> Selection {
-        Selection::new(offset..offset, false)
+        Selection::forward(offset..offset)
     }
 
     /// The edit that undoes `edit` on `text`, in the edited text's offsets.
@@ -82,11 +93,11 @@ mod tests {
 
     #[test]
     fn the_caret_and_the_range() {
-        let forward = Selection::new(2..5, false);
+        let forward = Selection::forward(2..5);
         assert_eq!((forward.cursor, forward.anchor), (5, 2));
         assert_eq!(forward.range(), 2..5);
         assert!(!forward.is_backward());
-        let backward = Selection::new(2..5, true);
+        let backward = Selection::backward(2..5);
         assert_eq!((backward.cursor, backward.anchor), (2, 5));
         assert_eq!(backward.range(), 2..5);
         assert!(backward.is_backward());
@@ -97,12 +108,12 @@ mod tests {
     #[test]
     fn a_replaced_selection_stays_selected() {
         let edits = [TextEdit::new(2..5, "abcdef")];
-        assert_eq!(Selection::new(2..5, false).map(&edits).range(), 2..8);
-        let backward = Selection::new(2..5, true).map(&edits);
+        assert_eq!(Selection::forward(2..5).map(&edits).range(), 2..8);
+        let backward = Selection::backward(2..5).map(&edits);
         assert_eq!(backward.range(), 2..8);
         assert!(backward.is_backward());
         let at_edges = [TextEdit::insert(2, "<"), TextEdit::insert(5, ">")];
-        assert_eq!(Selection::new(2..5, false).map(&at_edges).range(), 2..7);
+        assert_eq!(Selection::forward(2..5).map(&at_edges).range(), 2..7);
     }
 
     #[test]
@@ -117,7 +128,7 @@ mod tests {
 
     #[test]
     fn a_deleted_selection_collapses_to_a_caret() {
-        let mapped = Selection::new(3..6, true).map(&[TextEdit::delete(2..8)]);
+        let mapped = Selection::backward(3..6).map(&[TextEdit::delete(2..8)]);
         assert_eq!(mapped, caret(2));
     }
 
@@ -158,7 +169,7 @@ mod tests {
             let (low, high) = (a.min(b), a.max(b));
             let (low_caret, high_caret) = (caret(low).map(&edits), caret(high).map(&edits));
             prop_assert!(low_caret.cursor <= high_caret.cursor);
-            let selected = Selection::new(low..high, false).map(&edits).range();
+            let selected = Selection::forward(low..high).map(&edits).range();
             prop_assert!(selected.start <= low_caret.cursor);
             prop_assert!(selected.end >= high_caret.cursor);
         }

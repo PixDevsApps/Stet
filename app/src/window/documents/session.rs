@@ -45,9 +45,9 @@ use stet_domain::session::{
 };
 use stet_domain::text::line_count;
 use stet_domain::view::Zoom;
-use stet_infrastructure::encoding::{encoding_for_name, entry_for, entry_for_id};
+use stet_infrastructure::encoding::{DocumentFormat, encoding_for_name, entry_for, entry_for_id};
 use stet_infrastructure::fs::{
-    DocumentFormat, EncodingChoice, LoadError, SizeClass, SizePolicy, file_meta, read_file,
+    EncodingChoice, LoadError, SizeClass, SizePolicy, file_meta, read_file,
 };
 use stet_infrastructure::recent as recent_store;
 #[cfg(feature = "selftest")]

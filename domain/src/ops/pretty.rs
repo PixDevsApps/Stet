@@ -1,7 +1,7 @@
 //! Pretty-printing a file whose lines are too long to show: JSON or XML, guessed from the
 //! text.
 
-use super::{Indent, json, xml};
+use super::{Indent, SyntaxError, json, xml};
 
 /// A language the long-line path can pretty-print.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,14 +36,13 @@ impl FormatKind {
     }
 }
 
-/// Pretty-prints `text`, keeping every token as written. Errors read as "expected `,` at
-/// line 1, column 42".
-pub fn format(text: &str, kind: FormatKind) -> Result<String, String> {
-    let formatted = match kind {
+/// Pretty-prints `text`, keeping every token as written. An error says where the text stops
+/// being valid, and reads as "expected `,` at line 1, column 42".
+pub fn format(text: &str, kind: FormatKind) -> Result<String, SyntaxError> {
+    match kind {
         FormatKind::Json => json::format(text, Indent::default()),
         FormatKind::Xml => xml::format(text, Indent::default()),
-    };
-    formatted.map_err(|error| error.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -69,7 +68,11 @@ mod tests {
             "{\n  \"a\": [\n    1,\n    2\n  ]\n}"
         );
         let error = format("{\"a\":}", FormatKind::Json).unwrap_err();
-        assert!(error.contains("line 1"), "{error}");
+        assert_eq!((error.line, error.column, error.offset), (1, 6, 5));
+        assert!(
+            error.to_string().ends_with(" at line 1, column 6"),
+            "{error}"
+        );
         assert!(
             format("<a><b/></a>", FormatKind::Xml)
                 .unwrap()

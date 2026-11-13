@@ -188,8 +188,8 @@ impl Window {
         let find = &self.inner.find;
         let template = match find.replace_template() {
             Ok(template) => template,
-            Err(message) => {
-                find.set_message(&message, Tone::Error);
+            Err(error) => {
+                find.set_message(&error.to_string(), Tone::Error);
                 return;
             }
         };
@@ -254,8 +254,8 @@ impl Window {
         let find = &self.inner.find;
         let template = match find.replace_template() {
             Ok(template) => template,
-            Err(message) => {
-                find.set_message(&message, Tone::Error);
+            Err(error) => {
+                find.set_message(&error.to_string(), Tone::Error);
                 return;
             }
         };
@@ -351,8 +351,8 @@ impl Window {
         let find = &self.inner.find;
         let template = match find.replace_template() {
             Ok(template) => template,
-            Err(message) => {
-                find.set_message(&message, Tone::Error);
+            Err(error) => {
+                find.set_message(&error.to_string(), Tone::Error);
                 return;
             }
         };
@@ -559,13 +559,9 @@ pub(in crate::window) fn apply_tracked(
     text: &str,
 ) -> edits::Applied {
     let buffer = page.buffer();
-    let mut applied = None;
     page.track_edit(text, &result.edits, None, || {
-        let done = edits::apply_replace_all(&buffer, result, text);
-        applied = Some(done);
-        done.footprint
-    });
-    applied.expect("the edit ran")
+        edits::apply_replace_all(&buffer, result, text)
+    })
 }
 
 /// Drops the selection the bar opened with.

@@ -35,10 +35,21 @@ pub enum ActionKind {
     /// A plain command.
     Command,
     /// A command with a string parameter (GVariant type `s`). Its menu entries, if any, are
-    /// generated at run time, one per value (for example one per recent file).
+    /// generated at run time, one per value (for example one per encoding).
     WithString,
+    /// A command with a file path parameter, carried as bytes (GVariant type `ay`) so a name
+    /// that isn't UTF-8 survives. Its menu entries are generated at run time, one per path.
+    WithPath,
     /// An on/off setting with a boolean state, shown with a check mark.
     Toggle,
+}
+
+impl ActionKind {
+    /// Whether the action runs with a parameter, given by its own menu entries or pickers; such
+    /// an action has no keys and no plain palette entry.
+    pub const fn takes_parameter(self) -> bool {
+        matches!(self, Self::WithString | Self::WithPath)
+    }
 }
 
 /// Default keys, as GTK accelerator strings.

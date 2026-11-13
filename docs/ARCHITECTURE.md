@@ -65,7 +65,8 @@ app/src/
   preferences.rs monitor.rs config.rs logging.rs settings files, file monitors, environment, diagnostics
   theme/                                         the Omarchy theme as GtkSourceView schemes and CSS
   convert.rs                                     GTK's i32 offsets and sizes ↔ usize, once
-  runtime/                                       worker jobs, Latest tickets, Notify, Debounce, Flag, connect_once
+  runtime/                                       worker jobs, Latest and SharedLatest tickets, Notify, Listeners,
+                                                 Debounce, Flag, connect_once
   sys/                                           safe wrappers over the C calls the bindings lack (the only unsafe)
   editor/                                        one document: EditorPage (the tab's widget), Document and DocState,
                                                  loading, edits, marks, the page's search, the comparison view,
@@ -86,7 +87,7 @@ Nothing blocks the GTK thread (ADR-003). The pattern:
 
 1. Take an owned snapshot on the GTK thread (`window::snapshot::PageSnapshot`: the text and the page's revision).
 2. Run the work on GLib's thread pool (`runtime::worker::run`) or, for a small text, inline.
-3. Back on the GTK thread, drop the result if the page was closed or edited meanwhile, or if a newer request superseded it (`runtime::Latest`).
+3. Back on the GTK thread, drop the result if the page was closed or edited meanwhile, or if a newer request superseded it (`runtime::Latest`; `runtime::SharedLatest` when the ticket must travel to a thread of its own, as quick open's ranking and walk do).
 4. Apply edits to the buffer in one user action; more than 2,000 edits become one bulk edit (`text::BULK_EDIT_THRESHOLD`).
 
 Waiting is event-driven: `EditorPage::loaded()`, `runtime::Notify`, signals. Polling loops and hand-made generation counters are not used.

@@ -351,13 +351,11 @@ impl Window {
                 }
             }
             Command::OpenRecent(path) => {
-                if let Some(path) = path.to_str() {
-                    let _ = WidgetExt::activate_action(
-                        &self.inner.window,
-                        &actions::detailed_name(ActionId::OpenRecent),
-                        Some(&path.to_variant()),
-                    );
-                }
+                let _ = WidgetExt::activate_action(
+                    &self.inner.window,
+                    &actions::detailed_name(ActionId::OpenRecent),
+                    Some(&actions::path_target(&path)),
+                );
             }
             Command::GoTo(target) => {
                 if let Some(page) = self.current_page() {

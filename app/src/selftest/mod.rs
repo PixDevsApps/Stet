@@ -41,7 +41,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime};
-use stet_domain::actions::{ActionId, ActionScope};
+use stet_domain::actions::{ActionId, ActionKind, ActionScope};
 use stet_domain::theme::Rgb;
 use stet_infrastructure::xdg::StetDirs;
 
@@ -350,7 +350,10 @@ impl Harness {
 
     fn activate(&self, name: &str, parameter: Option<&str>) -> StepResult {
         let id = ActionId::from_name(name).ok_or_else(|| format!("no action {name}"))?;
-        let parameter = parameter.map(ToVariant::to_variant);
+        let parameter = parameter.map(|parameter| match id.kind() {
+            ActionKind::WithPath => crate::actions::path_target(Path::new(parameter)),
+            _ => parameter.to_variant(),
+        });
         match id.scope() {
             ActionScope::App => {
                 self.app.activate_action(id.name(), parameter.as_ref());

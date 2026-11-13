@@ -9,7 +9,7 @@ use crate::actions::detailed_name;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
-use stet_domain::actions::{ActionId, ActionKind, ActionScope};
+use stet_domain::actions::{ActionId, ActionScope};
 use stet_domain::document::language::hint_ids;
 
 pub(super) const COMMANDS: &[Command] = commands![
@@ -192,7 +192,7 @@ impl Harness {
                 continue;
             };
             let hidden_recent = no_recent && place.submenu == recent_submenu;
-            if hidden_recent || spec.kind == ActionKind::WithString {
+            if hidden_recent || spec.kind.takes_parameter() {
                 continue;
             }
             let found = items

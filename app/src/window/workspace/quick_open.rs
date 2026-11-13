@@ -11,7 +11,7 @@
 
 use crate::convert::to_i32;
 use crate::editor::EditorPage;
-use crate::runtime::Debounce;
+use crate::runtime::{Debounce, SharedLatest, Stamp};
 use crate::window::{Location, Window};
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -72,7 +72,7 @@ pub struct QuickOpenStats {
 }
 
 struct RankRequest {
-    generation: u64,
+    stamp: Stamp,
     pattern: String,
     open: Arc<Vec<String>>,
     recent: Arc<Vec<String>>,
@@ -80,15 +80,15 @@ struct RankRequest {
 }
 
 struct RankReply {
-    generation: u64,
+    stamp: Stamp,
     pattern: String,
     rows: Vec<Row>,
     took: Duration,
 }
 
 enum WalkMessage {
-    Batch(u64, Vec<(PathBuf, String)>),
-    Done(u64, WalkSummary),
+    Batch(Stamp, Vec<(PathBuf, String)>),
+    Done(Stamp, WalkSummary),
 }
 
 #[derive(Default)]
@@ -102,11 +102,12 @@ struct State {
     /// Open and recent files, which the project's list leaves out.
     known: HashSet<PathBuf>,
     root: Option<PathBuf>,
-    walk_id: u64,
+    /// The walk for this opening; a message from an earlier one is dropped.
+    walk: Stamp,
     walk_cancel: Option<CancelToken>,
     walking: bool,
-    generation: u64,
-    shown_generation: u64,
+    /// The ranking on screen: a reply is shown when it is newer.
+    shown: Stamp,
     /// The newest ranking asked for has been shown.
     settled: bool,
     /// The field's text the newest ranking was asked for.
@@ -129,6 +130,10 @@ pub struct QuickOpen {
     state: RefCell<State>,
     /// The next ranking while files stream in.
     rerank: Debounce,
+    /// A stamp per ranking asked for.
+    ranks: SharedLatest,
+    /// A stamp per opening, for its walk.
+    walks: SharedLatest,
     requests: mpsc::Sender<RankRequest>,
     on_choose: RefCell<Option<OnChoose>>,
 }
@@ -182,6 +187,8 @@ impl QuickOpen {
             note,
             state: RefCell::new(State::default()),
             rerank: Debounce::default(),
+            ranks: SharedLatest::default(),
+            walks: SharedLatest::default(),
             requests,
             on_choose: RefCell::new(None),
         });
@@ -284,9 +291,8 @@ impl QuickOpen {
                 recent_paths,
                 known,
                 root: root.clone(),
-                walk_id: state.walk_id + 1,
-                generation: state.generation,
-                shown_generation: state.generation,
+                walk: self.walks.next(),
+                shown: self.ranks.newest(),
                 opened: Some(Instant::now()),
                 ..State::default()
             };
@@ -310,7 +316,7 @@ impl QuickOpen {
             let mut state = self.state.borrow_mut();
             state.walk_cancel = Some(cancel.clone());
             state.walking = true;
-            state.walk_id
+            state.walk
         };
         let home = std::env::home_dir();
         self.note.set_label(&format!(
@@ -350,9 +356,8 @@ impl QuickOpen {
     /// Adds a batch of the walk's files, or ends the walk. False once the walk is over or
     /// another one has started.
     fn take_walk_message(self: &Rc<Self>, message: WalkMessage) -> bool {
-        let current = self.state.borrow().walk_id;
         match message {
-            WalkMessage::Batch(id, files) if id == current => {
+            WalkMessage::Batch(id, files) if self.walks.is_current(id) => {
                 {
                     let mut state = self.state.borrow_mut();
                     let (paths, labels): (Vec<PathBuf>, Vec<String>) = files
@@ -367,7 +372,7 @@ impl QuickOpen {
                 self.rerank_soon();
                 true
             }
-            WalkMessage::Done(id, summary) if id == current => {
+            WalkMessage::Done(id, summary) if self.walks.is_current(id) => {
                 {
                     let mut state = self.state.borrow_mut();
                     state.walking = false;
@@ -438,7 +443,6 @@ impl QuickOpen {
         let text = self.entry.text().to_string();
         let request = {
             let mut state = self.state.borrow_mut();
-            state.generation += 1;
             state.settled = false;
             state.requested = text.clone();
             state.last_request = Some(Instant::now());
@@ -447,7 +451,7 @@ impl QuickOpen {
                 Request::Line(_) => String::new(),
             };
             RankRequest {
-                generation: state.generation,
+                stamp: self.ranks.next(),
                 pattern,
                 open: Arc::clone(&state.open),
                 recent: Arc::clone(&state.recent),
@@ -457,7 +461,7 @@ impl QuickOpen {
         if let Request::Line(target) = Request::parse(&text) {
             self.show_line_row(target);
             let mut state = self.state.borrow_mut();
-            state.shown_generation = state.generation;
+            state.shown = request.stamp;
             state.settled = true;
             return;
         }
@@ -479,11 +483,11 @@ impl QuickOpen {
         }
         {
             let mut state = self.state.borrow_mut();
-            if reply.generation <= state.shown_generation {
+            if reply.stamp <= state.shown {
                 return;
             }
-            state.shown_generation = reply.generation;
-            state.settled = reply.generation == state.generation;
+            state.shown = reply.stamp;
+            state.settled = self.ranks.is_current(reply.stamp);
             if state.settled {
                 state.stats.last_rows = state.last_request.map(|asked| asked.elapsed());
             }
@@ -733,7 +737,7 @@ fn rank_loop(requests: &mpsc::Receiver<RankRequest>, replies: &async_channel::Se
             SHOWN_LIMIT,
         );
         let reply = RankReply {
-            generation: request.generation,
+            stamp: request.stamp,
             pattern: request.pattern,
             rows,
             took: started.elapsed(),

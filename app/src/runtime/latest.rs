@@ -1,8 +1,11 @@
 //! Only the newest run applies its result: each run takes a [`Ticket`], and a result whose
-//! ticket is no longer current is dropped.
+//! ticket is no longer current is dropped. [`SharedLatest`] does the same for runs whose ticket
+//! travels to another thread.
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Hands out a ticket per run; only the newest ticket is current.
 #[derive(Debug, Default)]
@@ -41,9 +44,52 @@ impl Ticket {
     }
 }
 
+/// Like [`Latest`], for runs on other threads: its [`Stamp`]s are plain numbers that can be
+/// sent anywhere, and clones share one counter, so another thread can tell whether a stamp is
+/// still current. Stamps are ordered, so a caller can also show any result newer than the one
+/// it shows.
+#[derive(Debug, Clone, Default)]
+pub struct SharedLatest {
+    newest: Arc<AtomicU64>,
+}
+
+impl SharedLatest {
+    /// Starts a run: its stamp is current until the next run starts.
+    pub fn next(&self) -> Stamp {
+        Stamp(self.newest.fetch_add(1, Ordering::AcqRel) + 1)
+    }
+
+    /// The stamp of the newest run started so far.
+    pub fn newest(&self) -> Stamp {
+        Stamp(self.newest.load(Ordering::Acquire))
+    }
+
+    /// No newer run started since `stamp` was handed out.
+    pub fn is_current(&self, stamp: Stamp) -> bool {
+        self.newest() == stamp
+    }
+}
+
+/// One run of a [`SharedLatest`]; a later run's stamp compares greater.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Stamp(u64);
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_stamps_are_ordered_and_only_the_newest_is_current() {
+        let latest = SharedLatest::default();
+        let before = latest.newest();
+        let first = latest.next();
+        let other = latest.clone();
+        let second = std::thread::spawn(move || other.next()).join().unwrap();
+        assert!(before < first && first < second);
+        assert!(!latest.is_current(first));
+        assert!(latest.is_current(second));
+        assert_eq!(latest.newest(), second);
+    }
 
     #[test]
     fn only_the_newest_ticket_is_current() {

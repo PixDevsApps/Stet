@@ -23,10 +23,10 @@ use stet_domain::text::{
     DISPLAY_BREAK_CHARS, LONG_LINE_CHARS, LongestLine, Position, break_long_lines, line_count,
     longest_line,
 };
-use stet_infrastructure::encoding::status_label;
+use stet_infrastructure::encoding::{DocumentFormat, status_label};
 use stet_infrastructure::fs::{
-    DocumentFormat, LoadError, ReadFile, SaveError, SaveOptions, SaveOutcome, read_file,
-    remove_stale_temps, save_document,
+    LoadError, ReadFile, SaveError, SaveOptions, SaveOutcome, read_file, remove_stale_temps,
+    save_document,
 };
 
 /// Temporary files that interrupted saves left next to a file are removed after it is saved

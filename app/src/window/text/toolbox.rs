@@ -27,7 +27,7 @@ use stet_domain::ops::lines::{
 use stet_domain::ops::numbers::NumberSequence;
 use stet_domain::ops::{Change, Indent, SyntaxError, Target, json, xml};
 use stet_domain::search::SearchMode;
-use stet_domain::text::{LineIndex, TextEdit};
+use stet_domain::text::{LineIndex, Selection, TextEdit};
 
 /// A result larger than this is inserted in pieces of about this size, 16 ms apart, inside
 /// the one user action, so a 20 MB JSON file formats without blocking the window.
@@ -351,7 +351,7 @@ impl Window {
 
     /// The selection, or the caret, as a target: `reach` says what a caret stands for.
     fn target(page: &EditorPage, reach: Reach) -> Target {
-        let (selected, _) = edits::selection(&page.buffer());
+        let selected = edits::selection(&page.buffer()).range();
         match reach {
             _ if !selected.is_empty() => Target::Selection(selected),
             Reach::Caret => Target::caret(selected.start),
@@ -463,15 +463,9 @@ impl Window {
         let buffer = page.buffer();
         page.clear_current_match();
         // Bookmarks and marks follow the edits, and come back with Undo and Redo.
-        let mut applied = None;
-        page.track_edit(text, &change.edits, None, || {
-            let result = edits::apply_change(&buffer, &change, text);
-            applied = Some(result);
-            result.footprint
+        let applied = page.track_edit(text, &change.edits, None, || {
+            edits::apply_change(&buffer, &change, text)
         });
-        let Some(applied) = applied else {
-            return;
-        };
         page.view().scroll_mark_onscreen(&buffer.get_insert());
         self.inner.tools.stats.replace(Some(ToolStats {
             edits: applied.edits,
@@ -494,8 +488,8 @@ impl Window {
         started: Instant,
     ) {
         let buffer = page.buffer();
-        let (selected, backward) = edits::selection(&buffer);
-        let after = change.selection_after(selected);
+        let before = edits::selection(&buffer);
+        let after = change.selection_after(before.range());
         page.clear_current_match();
         page.set_busy(true);
         let begun = page.marks().begin(&buffer);
@@ -537,7 +531,7 @@ impl Window {
         );
         page.retag_marks();
         page.set_busy(false);
-        edits::select(&buffer, after, backward);
+        edits::select(&buffer, before.with_range(after));
         page.view().scroll_mark_onscreen(&buffer.get_insert());
         self.inner.tools.stats.replace(Some(ToolStats {
             edits: change.edits.len(),
@@ -565,7 +559,7 @@ impl Window {
 
     /// Validate JSON or XML: the selection, or the whole document.
     fn validate(&self, page: &EditorPage, is_json: bool) {
-        let (selected, _) = edits::selection(&page.buffer());
+        let selected = edits::selection(&page.buffer()).range();
         let what = if is_json { "JSON" } else { "XML" };
         let operation: Operation = Box::new(move |text, target| {
             let index = LineIndex::new(text);
@@ -650,7 +644,7 @@ impl Window {
     /// break after the last. Returns false when there is nothing.
     pub(in crate::window) fn copy_lines(page: &EditorPage) -> bool {
         let buffer = page.buffer();
-        let (selected, _) = edits::selection(&buffer);
+        let selected = edits::selection(&buffer).range();
         let first = buffer.iter_at_char_offset(selected.start);
         let mut last = buffer.iter_at_char_offset(selected.end);
         if last.line() > first.line() && last.starts_line() {
@@ -671,7 +665,7 @@ impl Window {
     /// query in Normal mode, and the next match is selected.
     fn select_and_find(&self, page: &EditorPage, forward: bool) {
         let buffer = page.buffer();
-        let (selected, _) = edits::selection(&buffer);
+        let selected = edits::selection(&buffer).range();
         let start = buffer.iter_at_char_offset(selected.start);
         let end = buffer.iter_at_char_offset(selected.end);
         let query = if selected.is_empty() {
@@ -686,7 +680,7 @@ impl Window {
                 Some(word) => {
                     let base = line_start.char_offset();
                     let (from, to) = (base + word.start, base + word.end);
-                    edits::select(&buffer, from..to, false);
+                    edits::select(&buffer, Selection::forward(from..to));
                     let from = buffer.iter_at_char_offset(from);
                     let to = buffer.iter_at_char_offset(to);
                     buffer.text(&from, &to, true).to_string()

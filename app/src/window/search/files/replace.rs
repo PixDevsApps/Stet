@@ -284,8 +284,8 @@ impl Window {
         };
         let template = match find.replace_template() {
             Ok(template) => template,
-            Err(message) => {
-                find.set_message(&message, Tone::Error);
+            Err(error) => {
+                find.set_message(&error.to_string(), Tone::Error);
                 return;
             }
         };
