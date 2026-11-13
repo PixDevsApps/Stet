@@ -1,6 +1,6 @@
 //! Stet's own XDG directories (ADR-010): `$XDG_STATE_HOME/stet`, `$XDG_CACHE_HOME/stet` and
 //! `$XDG_CONFIG_HOME/stet`. Directories Stet creates for private data are mode 0700
-//! ([`crate::fs::durable::ensure_private_dir`]).
+//! (`fs::durable::ensure_private_dir`).
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};

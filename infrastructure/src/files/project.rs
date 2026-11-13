@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use ignore::{WalkBuilder, WalkState};
+use ignore::WalkState;
+
+use super::CancelToken;
+use super::walk::WalkOptions;
 
 /// Files go to the sink in batches of at most this many, or whatever arrived in
 /// [`BATCH_INTERVAL`].
@@ -65,11 +68,11 @@ pub struct WalkSummary {
 /// Lists the files under `root`, at most `cap`, in no fixed order, handing them to `sink` in
 /// batches from the calling thread while a parallel walk runs on others. Hidden files and
 /// folders, what `.gitignore`, `.ignore` and git's excludes ignore, and binary-looking files
-/// are left out; symbolic links are not followed. Setting `cancel` stops the walk soon after.
+/// are left out; symbolic links are not followed. Cancelling `cancel` stops the walk soon after.
 pub fn walk_project(
     root: &Path,
     cap: usize,
-    cancel: &AtomicBool,
+    cancel: &CancelToken,
     mut sink: impl FnMut(Vec<ProjectFile>),
 ) -> WalkSummary {
     let started = Instant::now();
@@ -79,20 +82,14 @@ pub fn walk_project(
     let mut summary = WalkSummary::default();
     std::thread::scope(|scope| {
         let walk = scope.spawn(|| {
-            WalkBuilder::new(root)
-                .hidden(true)
-                .ignore(true)
-                .git_ignore(true)
-                .git_global(true)
-                .git_exclude(true)
-                .parents(true)
-                .follow_links(false)
+            WalkOptions::default()
+                .builder(root)
                 .build_parallel()
                 .run(|| {
                     let sender = sender.clone();
                     let (found, truncated) = (&found, &truncated);
                     Box::new(move |entry| {
-                        if cancel.load(Ordering::Relaxed) || truncated.load(Ordering::Relaxed) {
+                        if cancel.is_cancelled() || truncated.load(Ordering::Relaxed) {
                             return WalkState::Quit;
                         }
                         let Ok(entry) = entry else {
@@ -147,7 +144,7 @@ pub fn walk_project(
         let _ = walk.join();
     });
     summary.truncated = truncated.load(Ordering::Relaxed);
-    summary.cancelled = cancel.load(Ordering::Relaxed);
+    summary.cancelled = cancel.is_cancelled();
     summary.elapsed = started.elapsed();
     summary
 }
@@ -165,7 +162,7 @@ mod tests {
 
     fn listed(root: &Path, cap: usize) -> (Vec<String>, WalkSummary) {
         let mut files = Vec::new();
-        let summary = walk_project(root, cap, &AtomicBool::new(false), |batch| {
+        let summary = walk_project(root, cap, &CancelToken::new(), |batch| {
             files.extend(batch.into_iter().map(|file| file.relative));
         });
         files.sort();
@@ -240,7 +237,8 @@ mod tests {
         for index in 0..200 {
             write(dir.path(), &format!("d{}/f{index}.txt", index % 10));
         }
-        let cancel = AtomicBool::new(true);
+        let cancel = CancelToken::new();
+        cancel.cancel();
         let mut count = 0;
         let summary = walk_project(dir.path(), 1000, &cancel, |batch| count += batch.len());
         assert!(summary.cancelled);

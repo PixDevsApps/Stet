@@ -34,7 +34,7 @@ pub fn read_optional(path: &Path) -> io::Result<Option<String>> {
 
 /// Writes `text` to `path` unless the file exists, creating its directory. Returns whether it
 /// wrote the file; an existing file is never touched. The file appears complete or not at all
-/// ([`durable::write_atomic`]), with the umask's default mode, like a file the user creates.
+/// (`durable::write_atomic`), with the umask's default mode, like a file the user creates.
 pub fn create_if_missing(path: &Path, text: &str) -> io::Result<bool> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;

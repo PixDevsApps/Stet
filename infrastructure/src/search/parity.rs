@@ -385,7 +385,7 @@ mod tests {
     use stet_domain::text::apply;
 
     use super::*;
-    use crate::find_in_files::file_spans;
+    use crate::files::find::file_spans;
     use crate::search::{Matcher, PatternError};
 
     fn chars(text: &str, start: usize, end: usize) -> String {

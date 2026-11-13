@@ -1,6 +1,6 @@
 //! Replace in Files (ADR-005 amendment): the files row's other command. After a
 //! confirmation that names the folder, the filters and that files on disk can't be undone, a
-//! run on threads of its own (`stet_infrastructure::replace_in_files`) replaces in every file
+//! run on threads of its own (`stet_infrastructure::files::replace`) replaces in every file
 //! the walk reaches, keeping each file's encoding, byte-order mark and line endings, and
 //! reports each file to the results panel, with the reason for those it left alone. Open
 //! documents get the change in their buffer instead, as one undoable edit (one bulk edit above
@@ -29,11 +29,11 @@ use stet_domain::document::{expand_home, tilde};
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{DocumentOutcome, Skip, file_summary, heading};
 use stet_domain::search::report::{counted, replace_in_files_progress, replace_in_files_status};
-use stet_infrastructure::find_in_files;
-use stet_infrastructure::fs::fingerprint;
-use stet_infrastructure::replace_in_files::{
+use stet_infrastructure::files::find::DEFAULT_MAX_HITS;
+use stet_infrastructure::files::replace::{
     self as rif, FILE_HIT_LIMIT, RifEvent, RifHandle, RifRequest, RifSummary, replaced_hits,
 };
+use stet_infrastructure::fs::fingerprint;
 use stet_infrastructure::search::{Matcher, SearchError};
 
 /// How often the run's files reach the panel.
@@ -42,7 +42,7 @@ const DRAIN_INTERVAL: Duration = Duration::from_millis(33);
 const LINES_PER_DRAIN: usize = 1_000;
 /// The most changed lines a run lists, as Find in Files lists at most this many hits; files
 /// past it are listed with their counts only.
-const LISTED_LINES: usize = find_in_files::DEFAULT_MAX_HITS;
+const LISTED_LINES: usize = DEFAULT_MAX_HITS;
 /// How long an open document's replacement waits for it to load.
 const LOAD_WAIT: Duration = Duration::from_secs(30);
 /// Where an in-place save keeps the previous content (the same folder the editor's saves use).
@@ -355,14 +355,14 @@ impl Window {
                     lines += 1;
                     files.push(skipped_node(label(&path), path, &reason, matches));
                 }
-                RifEvent::Failed { path, message } => {
+                RifEvent::Failed { path, error } => {
                     run.totals.failed += 1;
                     lines += 1;
                     files.push(FileNode {
                         label: label(&path),
                         target: FileTarget::Path(path),
                         hits: Vec::new(),
-                        summary: Some(format!("failed: {message}")),
+                        summary: Some(format!("failed: {error}")),
                     });
                 }
                 RifEvent::OpenDocument { path } => run.open_queue.push_back(path),

@@ -1,4 +1,4 @@
-//! Find in Files filters, as `ignore` override globs.
+//! The filter list of Find in Files and Replace in Files, as `ignore` override globs.
 //!
 //! The list is separated by spaces (or `;`). Accepted forms:
 //! - `*.rs`, `Makefile`, `foo.*`: include matching file names, at any depth; with none, every

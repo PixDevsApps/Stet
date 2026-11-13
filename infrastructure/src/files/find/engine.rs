@@ -1,13 +1,12 @@
 use std::fmt::{self, Write as _};
 use std::io::{self, Read};
 use std::ops::Range;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use grep_matcher::{ByteSet, LineMatchKind, LineTerminator, Match, Matcher, NoCaptures};
+use grep_matcher::{ByteSet, LineMatchKind, LineTerminator, Match, Matcher, NoCaptures, NoError};
 use grep_searcher::{Searcher, Sink, SinkMatch};
 use stet_domain::search::{Query, SearchMode, Target, TranslateError, translate_for, unescape};
 
+use crate::files::CancelToken;
 use crate::search::{Hit, JIT_STACK, PatternError, make_hit, next_boundary, pcre2_message};
 
 /// How files are matched: Rust's regex engine for plain text (fast literal search), PCRE2
@@ -21,18 +20,19 @@ enum Engine {
 /// search inside a large file ends within one match.
 pub(crate) struct FileMatcher {
     engine: Engine,
-    stop: Arc<AtomicBool>,
+    stop: CancelToken,
     /// Matches can span lines or use whole-file anchors: search whole files, not lines.
     pub(crate) whole_file: bool,
 }
 
-#[derive(Debug)]
-pub(crate) struct MatchError(String);
-
-impl fmt::Display for MatchError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
+/// A match that failed inside an engine. Rust's regex engine cannot fail.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum MatchError {
+    #[error(transparent)]
+    Text(#[from] NoError),
+    /// PCRE2 gave up, for example on its JIT stack or match limit.
+    #[error("{}", pcre2_message(.0))]
+    Pcre(#[from] grep_pcre2::Error),
 }
 
 fn pattern_error(error: impl fmt::Display) -> PatternError {
@@ -43,7 +43,7 @@ fn pattern_error(error: impl fmt::Display) -> PatternError {
 }
 
 impl FileMatcher {
-    pub(crate) fn new(query: &Query, stop: Arc<AtomicBool>) -> Result<Self, PatternError> {
+    pub(crate) fn new(query: &Query, stop: CancelToken) -> Result<Self, PatternError> {
         let translated = translate_for(query, Target::Files)?;
         let options = query.options;
         let text = match options.mode {
@@ -88,18 +88,14 @@ impl FileMatcher {
     }
 
     fn stopped(&self) -> bool {
-        self.stop.load(Ordering::Relaxed)
+        self.stop.is_cancelled()
     }
 
     fn find(&self, haystack: &[u8], at: usize) -> Result<Option<Match>, MatchError> {
-        match &self.engine {
-            Engine::Text(matcher) => matcher
-                .find_at(haystack, at)
-                .map_err(|_| MatchError(String::new())),
-            Engine::Pcre(matcher) => matcher
-                .find_at(haystack, at)
-                .map_err(|error| MatchError(pcre2_message(error))),
-        }
+        Ok(match &self.engine {
+            Engine::Text(matcher) => matcher.find_at(haystack, at)?,
+            Engine::Pcre(matcher) => matcher.find_at(haystack, at)?,
+        })
     }
 
     /// The matches that start in `range` of `buffer`, which the searcher reported as lines.
@@ -146,14 +142,10 @@ impl Matcher for FileMatcher {
         if self.stopped() {
             return Ok(None);
         }
-        match &self.engine {
-            Engine::Text(matcher) => matcher
-                .shortest_match_at(haystack, at)
-                .map_err(|_| MatchError(String::new())),
-            Engine::Pcre(matcher) => matcher
-                .shortest_match_at(haystack, at)
-                .map_err(|error| MatchError(pcre2_message(error))),
-        }
+        Ok(match &self.engine {
+            Engine::Text(matcher) => matcher.shortest_match_at(haystack, at)?,
+            Engine::Pcre(matcher) => matcher.shortest_match_at(haystack, at)?,
+        })
     }
 
     fn non_matching_bytes(&self) -> Option<&ByteSet> {
@@ -178,14 +170,10 @@ impl Matcher for FileMatcher {
         if self.stopped() {
             return Ok(None);
         }
-        match &self.engine {
-            Engine::Text(matcher) => matcher
-                .find_candidate_line(haystack)
-                .map_err(|_| MatchError(String::new())),
-            Engine::Pcre(matcher) => matcher
-                .find_candidate_line(haystack)
-                .map_err(|error| MatchError(pcre2_message(error))),
-        }
+        Ok(match &self.engine {
+            Engine::Text(matcher) => matcher.find_candidate_line(haystack)?,
+            Engine::Pcre(matcher) => matcher.find_candidate_line(haystack)?,
+        })
     }
 }
 
@@ -293,12 +281,12 @@ impl Sink for FileSink<'_> {
 /// A reader that fails once the run is stopped, so reading a large file ends promptly.
 pub(crate) struct CancelRead<'a, R> {
     pub(crate) inner: R,
-    pub(crate) stop: &'a AtomicBool,
+    pub(crate) stop: &'a CancelToken,
 }
 
 impl<R: Read> Read for CancelRead<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.stop.load(Ordering::Relaxed) {
+        if self.stop.is_cancelled() {
             return Err(io::Error::other("cancelled"));
         }
         self.inner.read(buf)

@@ -18,20 +18,13 @@ pub(crate) const JIT_STACK: usize = 8 << 20;
 const BACKWARD_WINDOW: usize = 64 << 10;
 
 /// A pattern that does not compile, or a query with nothing to search for.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{message} (at character {offset})")]
 pub struct PatternError {
     pub message: String,
     /// Character offset in the typed pattern.
     pub offset: usize,
 }
-
-impl fmt::Display for PatternError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (at character {})", self.message, self.offset)
-    }
-}
-
-impl std::error::Error for PatternError {}
 
 impl From<TranslateError> for PatternError {
     fn from(error: TranslateError) -> Self {
@@ -68,45 +61,28 @@ pub(crate) fn pcre2_message(error: impl fmt::Display) -> String {
         .map_or_else(|| text.clone(), |(_, message)| message.to_owned())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SearchError {
-    Pattern(PatternError),
-    /// PCRE2 gave up while matching, for example on its JIT stack or match limit.
-    Match(String),
+    #[error(transparent)]
+    Pattern(#[from] PatternError),
+    /// PCRE2 gave up while matching, for example on its JIT stack or match limit. The
+    /// message is PCRE2's own.
+    #[error("matching failed: {message}")]
+    Match { message: String },
+    #[error("search cancelled")]
     Cancelled,
     /// A character range outside the text of `len` characters.
-    Range {
-        range: Range<usize>,
-        len: usize,
-    },
+    #[error("range {range:?} is outside the text of {len} characters")]
+    Range { range: Range<usize>, len: usize },
     /// The text at the given match no longer matches.
+    #[error("the text there no longer matches")]
     NotAMatch,
 }
 
-impl fmt::Display for SearchError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Pattern(error) => error.fmt(f),
-            Self::Match(message) => write!(f, "matching failed: {message}"),
-            Self::Cancelled => f.write_str("search cancelled"),
-            Self::Range { range, len } => {
-                write!(f, "range {range:?} is outside the text of {len} characters")
-            }
-            Self::NotAMatch => f.write_str("the text there no longer matches"),
-        }
-    }
-}
-
-impl std::error::Error for SearchError {}
-
-impl From<PatternError> for SearchError {
-    fn from(error: PatternError) -> Self {
-        Self::Pattern(error)
-    }
-}
-
 fn match_error(error: pcre2::Error) -> SearchError {
-    SearchError::Match(pcre2_message(error))
+    SearchError::Match {
+        message: pcre2_message(error),
+    }
 }
 
 /// A match in character offsets, the unit of `GtkTextIter` and [`stet_domain::text::TextEdit`].

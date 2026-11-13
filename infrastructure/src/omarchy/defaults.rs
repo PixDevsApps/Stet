@@ -24,7 +24,7 @@ pub fn read_default_editor(omarchy_dir: &Path) -> io::Result<Option<String>> {
 }
 
 /// Writes `command` as the default editor, as `omarchy-default-editor` does (`printf '%s\n'`),
-/// atomically and durably ([`durable::write_atomic`]), private to the user (mode 0600).
+/// atomically and durably (`durable::write_atomic`), private to the user (mode 0600).
 pub fn write_default_editor(omarchy_dir: &Path, command: &str) -> io::Result<PathBuf> {
     let path = editor_file(omarchy_dir);
     let dir = path.parent().expect("the editor file has a directory");

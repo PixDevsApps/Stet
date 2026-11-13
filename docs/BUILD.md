@@ -96,7 +96,8 @@ domain/          text/ (eol, TextEdit, position); ops/ (lines, sort, case, white
                  json_fmt, xml, column in M6); search/ (query, Extended unescape, Boost->PCRE2 translate, template);
                  document.rs, session.rs, language.rs, theme.rs, actions.rs, keymap.rs, config.rs
 infrastructure/  encoding/ (detect, decode, encode); fs/ (load, safe save, fingerprint); session_store/ (manifest,
-                 backup writer, restore, lock); find_in_files/ (walker, matcher, sink, cancel, replace in M8);
+                 backup writer, restore, lock); files/ (walk, filters, job handle and cancel token, open-documents
+                 index; find/ = Find in Files, replace/ = Replace in Files, project.rs = quick open's walk);
                  omarchy/ (paths, colors, font, default_editor); config/; logging
 ```
 

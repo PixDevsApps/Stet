@@ -22,6 +22,7 @@ cargo fmt --all --check
 python3 -I tools/flatpak-cargo-sources.py --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --quiet
 cargo build --workspace
 
 if $ui; then

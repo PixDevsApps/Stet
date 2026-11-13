@@ -1,5 +1,5 @@
 //! Find in Files (Ctrl+Shift+F): the bar's files row searches a folder in the background
-//! (`stet_infrastructure::find_in_files`), and results stream into the results panel about 30
+//! (`stet_infrastructure::files::find`), and results stream into the results panel about 30
 //! times a second. Open documents with unsaved changes, and those whose file the search would
 //! not read as the text they show (other encodings, NUL, CR line endings), are searched from
 //! their decoded text.
@@ -18,8 +18,8 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use stet_domain::document::{expand_home, tilde};
 use stet_domain::search::report::{find_in_files_progress, find_in_files_status, results_heading};
-use stet_infrastructure::find_in_files::{
-    self, FifHandle, FifRequest, FifSummary, FileHits, OpenDocument,
+use stet_infrastructure::files::find::{
+    self as find_in_files, FifHandle, FifRequest, FifSummary, FileHits, OpenDocument,
 };
 
 /// How often streamed results reach the panel: about 30 times a second.
@@ -321,7 +321,7 @@ impl Window {
                 .errors
                 .iter()
                 .take(20)
-                .map(|error| format!("{}: {}", error.path.display(), error.message))
+                .map(ToString::to_string)
                 .collect();
             results.status.set_tooltip_text(Some(&details.join("\n")));
         }

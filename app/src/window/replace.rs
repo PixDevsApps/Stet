@@ -29,7 +29,7 @@ use stet_domain::search::report::ScopeKind;
 use stet_domain::search::report::{
     count_message, counted, replace_in_documents_message, replace_message, results_heading,
 };
-use stet_infrastructure::find_in_files::DEFAULT_MAX_HITS;
+use stet_infrastructure::files::find::DEFAULT_MAX_HITS;
 use stet_infrastructure::search::{Match, SearchError, document_hits};
 
 const SCOPE_START_MARK: &str = "stet-scope-start";

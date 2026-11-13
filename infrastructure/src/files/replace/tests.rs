@@ -2,12 +2,15 @@ use super::plan::{Plan, PlanError, Stage, plan, replace_file_with_hook};
 use super::*;
 use crate::encoding::fixtures::{fixtures, legacy, utf16};
 use crate::encoding::{PLACEHOLDER, bom_bytes, decode, detect};
+use crate::files::CancelToken;
 use crate::fs::open_document;
 use encoding_rs::{ISO_2022_JP, SHIFT_JIS, UTF_8, UTF_16BE, UTF_16LE, WINDOWS_1252};
 use proptest::prelude::*;
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
+use std::path::Path;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 use stet_domain::search::{SearchMode, SearchOptions};
 use stet_domain::text::{Eol, normalize_to_lf};
 
@@ -36,7 +39,7 @@ fn plan_normal(bytes: &[u8], pattern: &str, replacement: &str) -> Result<Option<
         bytes,
         &matcher(SearchMode::Normal, pattern),
         &template(SearchMode::Normal, replacement),
-        &AtomicBool::new(false),
+        &CancelToken::new(),
         FILE_HIT_LIMIT,
     )
 }
@@ -166,7 +169,7 @@ fn extended_line_breaks_match_crlf_cr_and_lf_and_untouched_lines_keep_theirs() {
             bytes,
             &matcher(SearchMode::Extended, pattern),
             &template(SearchMode::Extended, replacement),
-            &AtomicBool::new(false),
+            &CancelToken::new(),
             FILE_HIT_LIMIT,
         )
         .unwrap()
@@ -201,7 +204,7 @@ fn regex_templates_replace_as_replace_all_does() {
         text,
         &matcher(SearchMode::Regex, r"(\w+)@(\w+)$"),
         &template(SearchMode::Regex, r"\U$2\E at $1"),
-        &AtomicBool::new(false),
+        &CancelToken::new(),
         FILE_HIT_LIMIT,
     )
     .unwrap()
@@ -307,7 +310,7 @@ fn line_breaks_that_would_join_skip_the_file() {
         b"a\rX\nb\r\n",
         &matcher(SearchMode::Normal, "X"),
         &template(SearchMode::Normal, ""),
-        &AtomicBool::new(false),
+        &CancelToken::new(),
         FILE_HIT_LIMIT,
     );
     assert_eq!(result, Err(PlanError::Skip(Skip::LineBreaksWouldJoin, 1)));
@@ -337,7 +340,7 @@ fn files_are_saved_safely_through_links_with_their_mode() {
         &matcher(SearchMode::Normal, "old"),
         &template(SearchMode::Normal, "new"),
         &options(dir.path()),
-        &AtomicBool::new(false),
+        &CancelToken::new(),
     );
     assert!(
         matches!(
@@ -378,7 +381,7 @@ fn read_only_files_are_skipped_with_their_matches() {
         &matcher(SearchMode::Normal, "a"),
         &template(SearchMode::Normal, "b"),
         &options(dir.path()),
-        &AtomicBool::new(false),
+        &CancelToken::new(),
     );
     assert_eq!(
         outcome,
@@ -400,7 +403,7 @@ fn a_file_changed_between_reading_and_writing_is_left_alone() {
         &matcher(SearchMode::Normal, "before"),
         &template(SearchMode::Normal, "after"),
         &options(dir.path()),
-        &AtomicBool::new(false),
+        &CancelToken::new(),
         &mut |stage| {
             assert_eq!(stage, Stage::Planned);
             fs::write(&path, "someone else's text\n").unwrap();
@@ -429,7 +432,7 @@ fn large_files_are_skipped_before_reading() {
             max_bytes: 1024,
             ..options(dir.path())
         },
-        &AtomicBool::new(false),
+        &CancelToken::new(),
     );
     assert_eq!(
         outcome,
@@ -560,19 +563,18 @@ fn a_cancelled_run_writes_each_file_whole_or_not_at_all() {
     );
     let reported = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&reported);
-    let cancel: Arc<Mutex<Option<Arc<Shared>>>> = Arc::new(Mutex::new(None));
+    let cancel: Arc<Mutex<Option<Control>>> = Arc::new(Mutex::new(None));
     let handle = start(request, {
         let cancel = Arc::clone(&cancel);
         move |event| {
             sink.lock().unwrap().push(event);
-            if let Some(shared) = cancel.lock().unwrap().as_ref() {
-                shared.cancelled.store(true, Ordering::SeqCst);
-                shared.stop.store(true, Ordering::SeqCst);
+            if let Some(control) = cancel.lock().unwrap().as_ref() {
+                control.cancel();
             }
         }
     })
     .unwrap();
-    cancel.lock().unwrap().replace(Arc::clone(&handle.shared));
+    cancel.lock().unwrap().replace(handle.control().clone());
     handle.cancel();
     let summary = handle.wait();
     assert!(summary.cancelled);
@@ -659,7 +661,7 @@ proptest! {
             .replace_all(&lf, &template, None, &AtomicBool::new(false))
             .unwrap()
             .apply(&lf);
-        match plan(&bytes, &matcher, &template, &AtomicBool::new(false), 10) {
+        match plan(&bytes, &matcher, &template, &CancelToken::new(), 10) {
             Ok(Some(plan)) if plan.changed => {
                 let check = decode(&plan.bytes, encoding, bom);
                 prop_assert!(!check.had_errors);

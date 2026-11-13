@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use stet_domain::search::{Query, SearchMode, SearchOptions};
@@ -353,14 +354,14 @@ fn bad_queries_and_filters_fail_to_start() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     match start(request(root, Query::regex("(abc")), |_| {}) {
-        Err(FifError::Pattern(error)) => assert_eq!(error.offset, 4),
+        Err(StartError::Pattern(error)) => assert_eq!(error.offset, 4),
         other => panic!("{:?}", other.map(|_| ())),
     }
     let mut bad_filter = request(root, Query::normal("x"));
     bad_filter.filters = "a[".to_owned();
     assert!(matches!(
         start(bad_filter, |_| {}),
-        Err(FifError::Filter(_))
+        Err(StartError::Filter(_))
     ));
 }
 

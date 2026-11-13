@@ -10,7 +10,7 @@ use crate::fs::durable::{self, FileMode, WriteOptions};
 /// The start of every generated scheme id, and so of every file name this module manages.
 pub const SCHEME_PREFIX: &str = "stet-omarchy-";
 
-/// Writes `<id>.xml` atomically and durably ([`durable::write_atomic`]) in the private
+/// Writes `<id>.xml` atomically and durably (`durable::write_atomic`) in the private
 /// directory `dir`, private to the user (mode 0600), and removes the other generated
 /// schemes, so exactly one is in the search path.
 pub fn write_scheme(dir: &Path, id: &str, xml: &str) -> io::Result<PathBuf> {

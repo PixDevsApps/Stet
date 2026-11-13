@@ -3,13 +3,13 @@
 
 use std::io;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 
 use encoding_rs::Encoding;
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{LfText, RawEdit, Skip, apply_raw, raw_edits};
 
 use crate::encoding::{bom_bytes, decode, detect, encode};
+use crate::files::{CancelToken, FileError};
 use crate::fs::{
     LoadError, SaveError, SaveMethod, SaveOptions, SizePolicy, fingerprint, load, safe_save,
 };
@@ -54,7 +54,7 @@ pub fn plan(
     bytes: &[u8],
     matcher: &Matcher,
     template: &Template,
-    cancel: &AtomicBool,
+    cancel: &CancelToken,
     hit_limit: usize,
 ) -> Result<Option<Plan>, PlanError> {
     let detection = detect(bytes);
@@ -63,7 +63,7 @@ pub fn plan(
     let decoded = decode(bytes, encoding, bom);
     let lf = LfText::new(&decoded.text);
     let result = matcher
-        .replace_all(&lf.text, template, None, cancel)
+        .replace_all(&lf.text, template, None, cancel.flag())
         .map_err(PlanError::Search)?;
     if result.count == 0 {
         return Ok(None);
@@ -240,7 +240,7 @@ pub enum FileOutcome {
         matches: Option<usize>,
     },
     /// Reading or writing failed.
-    Failed(String),
+    Failed(FileError),
     /// The run was stopped while this file was searched; nothing was written.
     Cancelled,
 }
@@ -270,7 +270,7 @@ pub fn replace_file(
     matcher: &Matcher,
     template: &Template,
     options: &FileOptions,
-    cancel: &AtomicBool,
+    cancel: &CancelToken,
 ) -> FileOutcome {
     replace_file_with_hook(path, matcher, template, options, cancel, &mut |_| {})
 }
@@ -280,13 +280,13 @@ pub(crate) fn replace_file_with_hook(
     matcher: &Matcher,
     template: &Template,
     options: &FileOptions,
-    cancel: &AtomicBool,
+    cancel: &CancelToken,
     hook: &mut dyn FnMut(Stage),
 ) -> FileOutcome {
     let size = match std::fs::metadata(path) {
         Ok(metadata) => metadata.len(),
         Err(error) if error.kind() == io::ErrorKind::NotFound => return FileOutcome::NoMatch,
-        Err(error) => return FileOutcome::Failed(error.to_string()),
+        Err(error) => return FileOutcome::Failed(error.into()),
     };
     if size >= options.max_bytes {
         return FileOutcome::Skipped {
@@ -300,7 +300,7 @@ pub(crate) fn replace_file_with_hook(
     let loaded = match load(path, &SizePolicy::default()) {
         Ok(loaded) => loaded,
         Err(LoadError::NotFound { .. }) => return FileOutcome::NoMatch,
-        Err(error) => return FileOutcome::Failed(error.to_string()),
+        Err(error) => return FileOutcome::Failed(error.into()),
     };
     let plan = match plan(&loaded.bytes, matcher, template, cancel, options.hit_limit) {
         Ok(Some(plan)) => plan,
@@ -312,7 +312,7 @@ pub(crate) fn replace_file_with_hook(
             };
         }
         Err(PlanError::Search(SearchError::Cancelled)) => return FileOutcome::Cancelled,
-        Err(PlanError::Search(error)) => return FileOutcome::Failed(error.to_string()),
+        Err(PlanError::Search(error)) => return FileOutcome::Failed(error.into()),
     };
     drop(loaded.bytes);
     if !plan.changed {
@@ -331,7 +331,7 @@ pub(crate) fn replace_file_with_hook(
         return skipped(Skip::ReadOnly);
     }
     hook(Stage::Planned);
-    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+    if cancel.is_cancelled() {
         return FileOutcome::Cancelled;
     }
     match fingerprint(path) {
@@ -348,6 +348,6 @@ pub(crate) fn replace_file_with_hook(
         Err(SaveError::PermissionDenied { .. } | SaveError::ReadOnlyFilesystem { .. }) => {
             skipped(Skip::ReadOnly)
         }
-        Err(error) => FileOutcome::Failed(error.to_string()),
+        Err(error) => FileOutcome::Failed(error.into()),
     }
 }

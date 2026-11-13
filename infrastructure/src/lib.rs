@@ -2,12 +2,10 @@
 
 pub mod desktop;
 pub mod encoding;
-pub mod find_in_files;
+pub mod files;
 pub mod fs;
 pub mod omarchy;
-pub mod project;
 pub mod recent;
-pub mod replace_in_files;
 pub mod sandbox;
 pub mod search;
 pub mod session_store;

@@ -5,7 +5,7 @@
 //! position and `:line` goes to a line of the current document.
 //!
 //! Nothing here blocks typing: the project's files come from a walk on a thread of their own
-//! (`stet_infrastructure::project`, capped at [`PROJECT_FILE_CAP`]) and stream in batches; a
+//! (`stet_infrastructure::files::project`, capped at [`PROJECT_FILE_CAP`]) and stream in batches; a
 //! ranking thread ranks a snapshot of the candidates for the newest query, and a ranking for
 //! another query than the one in the field is dropped.
 
@@ -19,7 +19,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use stet_domain::document::location::LineCol;
@@ -27,7 +26,8 @@ use stet_domain::document::tilde;
 use stet_domain::nav::quick_open::{
     PROJECT_FILE_CAP, Request, Row, SHOWN_LIMIT, Source, rank_groups, runs,
 };
-use stet_infrastructure::project::{WalkSummary, project_root, walk_project};
+use stet_infrastructure::files::CancelToken;
+use stet_infrastructure::files::project::{WalkSummary, project_root, walk_project};
 
 /// How often streamed files are ranked again while the walk goes on.
 const RERANK_INTERVAL: Duration = Duration::from_millis(60);
@@ -100,7 +100,7 @@ struct State {
     known: HashSet<PathBuf>,
     root: Option<PathBuf>,
     walk_id: u64,
-    walk_cancel: Option<Arc<AtomicBool>>,
+    walk_cancel: Option<CancelToken>,
     walking: bool,
     generation: u64,
     shown_generation: u64,
@@ -300,10 +300,10 @@ impl QuickOpen {
     }
 
     fn start_walk(self: &Rc<Self>, root: PathBuf) {
-        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel = CancelToken::new();
         let id = {
             let mut state = self.state.borrow_mut();
-            state.walk_cancel = Some(Arc::clone(&cancel));
+            state.walk_cancel = Some(cancel.clone());
             state.walking = true;
             state.walk_id
         };
@@ -397,7 +397,7 @@ impl QuickOpen {
     fn stop_walk(&self) {
         let mut state = self.state.borrow_mut();
         if let Some(cancel) = state.walk_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
+            cancel.cancel();
         }
         state.walking = false;
         if let Some(source) = state.rerank_pending.take() {
