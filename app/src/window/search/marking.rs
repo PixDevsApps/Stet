@@ -31,9 +31,9 @@ use stet_domain::marks::{self, Bookmarks, LineEdit, MarkStyle, bookmark_lines_of
 use stet_domain::ops::Change;
 use stet_domain::search::{Query, SearchMode, SearchOptions};
 use stet_domain::text::{BULK_EDIT_THRESHOLD, is_word_char};
-use stet_domain::text::{CharOffset, OffsetRange, counted};
+use stet_domain::text::{CharOffset, counted};
 use stet_domain::text::{LineIndex, Selection, TextEdit};
-use stet_infrastructure::search::{Matcher, SearchError};
+use stet_infrastructure::search::{Match, Matcher, SearchError};
 
 /// Mark and the style tokens stop after this many matches in a document.
 pub const MARK_LIMIT: usize = 1_000_000;
@@ -417,20 +417,14 @@ impl Window {
         let started = Instant::now();
         let (snapshot, text) = PageSnapshot::take(page);
         let bookmark = request.bookmark;
-        let range = request
-            .range
-            .clone()
-            .map(|range| CharOffset::new(range.start)..CharOffset::new(range.end));
+        let range = request.range.clone();
         let search = move |text: &str| {
             let cancel = AtomicBool::new(false);
             matcher
                 .find_all(text, range.clone(), MARK_LIMIT, &cancel)
                 .map(|found| {
-                    let ranges: Vec<Range<usize>> = found
-                        .matches
-                        .iter()
-                        .map(|found| found.range().get())
-                        .collect();
+                    let ranges: Vec<Range<CharOffset>> =
+                        found.matches.iter().map(Match::range).collect();
                     let lines = if bookmark {
                         bookmark_lines_of(&ranges, &LineIndex::new(text))
                     } else {
@@ -569,8 +563,8 @@ impl Window {
             .map(|range| {
                 buffer
                     .text(
-                        &buffer.iter_at_char_offset(range.start),
-                        &buffer.iter_at_char_offset(range.end),
+                        &buffer.iter_at_char(range.start),
+                        &buffer.iter_at_char(range.end),
                         true,
                     )
                     .to_string()
@@ -668,7 +662,7 @@ impl Window {
 
     /// The marks of a style in the current document, for the self-test.
     #[cfg(feature = "selftest")]
-    pub fn marked(&self, style: MarkStyle) -> Vec<Range<usize>> {
+    pub fn marked(&self, style: MarkStyle) -> Vec<Range<CharOffset>> {
         self.current_page()
             .map(|page| page.marks().marks().ranges(style).to_vec())
             .unwrap_or_default()
@@ -688,7 +682,7 @@ impl Window {
 /// What a Mark search found: the matches, the lines to bookmark, and whether there were more
 /// than [`MARK_LIMIT`].
 struct Found {
-    ranges: Vec<Range<usize>>,
+    ranges: Vec<Range<CharOffset>>,
     lines: Vec<usize>,
     truncated: bool,
 }
@@ -698,7 +692,7 @@ struct MarkRequest {
     style: MarkStyle,
     bookmark: bool,
     purge: bool,
-    range: Option<Range<usize>>,
+    range: Option<Range<CharOffset>>,
 }
 
 /// The selection, when it is on one line, else the word at the caret (as a whole word).

@@ -36,8 +36,8 @@ pub fn selection(buffer: &sourceview5::Buffer) -> Selection {
 
 /// Selects `selection` (character offsets).
 pub fn select(buffer: &sourceview5::Buffer, selection: Selection) {
-    let cursor = buffer.iter_at_char_offset(selection.cursor);
-    let anchor = buffer.iter_at_char_offset(selection.anchor);
+    let cursor = buffer.iter_at_char(selection.cursor);
+    let anchor = buffer.iter_at_char(selection.anchor);
     buffer.select_range(&cursor, &anchor);
 }
 
@@ -149,9 +149,9 @@ pub fn apply_change(buffer: &sourceview5::Buffer, change: &Change, text: &str) -
 /// Replaces one range; returns how long the deletion took.
 pub fn replace_range(buffer: &sourceview5::Buffer, edit: &TextEdit) -> Duration {
     let started = Instant::now();
-    let mut start = buffer.iter_at_char_offset(edit.start);
-    if edit.end > edit.start {
-        let mut end = buffer.iter_at_char_offset(edit.end);
+    let mut start = buffer.iter_at_char(edit.start());
+    if edit.removed() > 0 {
+        let mut end = buffer.iter_at_char(edit.end());
         buffer.delete(&mut start, &mut end);
     }
     let deleted = started.elapsed();

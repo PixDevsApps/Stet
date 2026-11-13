@@ -2,7 +2,7 @@ use std::fmt;
 
 use encoding_rs::{Encoder, EncoderResult, Encoding, UTF_8, UTF_16LE};
 use memchr::memmem;
-use stet_domain::text::Eol;
+use stet_domain::text::{CharOffset, Eol};
 
 use super::{PLACEHOLDER_UTF8, bom_bytes, is_utf16};
 
@@ -42,7 +42,7 @@ const CHECK_BUFFER_LEN: usize = 64 * 1024;
 pub struct Unmappable {
     pub encoding: &'static Encoding,
     /// The first `MAX_LISTED_UNMAPPABLE` of them, with their character offsets in the text.
-    pub chars: Vec<(usize, char)>,
+    pub chars: Vec<(CharOffset, char)>,
     /// How many characters cannot be represented, listed or not.
     pub count: usize,
 }
@@ -238,7 +238,7 @@ struct Collector<'t> {
     text: &'t str,
     error: Unmappable,
     counted_bytes: usize,
-    counted_chars: usize,
+    counted_chars: CharOffset,
 }
 
 impl<'t> Collector<'t> {
@@ -251,7 +251,7 @@ impl<'t> Collector<'t> {
                 count: 0,
             },
             counted_bytes: 0,
-            counted_chars: 0,
+            counted_chars: CharOffset::ZERO,
         }
     }
 
@@ -274,6 +274,15 @@ mod tests {
     use super::*;
     use crate::encoding::{ENCODINGS, decode};
     use stet_domain::text::NUL_PLACEHOLDER;
+
+    /// The listed characters with their offsets as numbers.
+    fn listed(error: &Unmappable) -> Vec<(usize, char)> {
+        error
+            .chars
+            .iter()
+            .map(|&(offset, character)| (offset.get(), character))
+            .collect()
+    }
 
     fn format(
         encoding: &'static Encoding,
@@ -324,7 +333,7 @@ mod tests {
             b"a\0b"
         );
         let error = encode(text, &format(WINDOWS_1252, false, false, Eol::Lf)).unwrap_err();
-        assert_eq!(error.chars, vec![(1, NUL_PLACEHOLDER)]);
+        assert_eq!(listed(&error), vec![(1, NUL_PLACEHOLDER)]);
     }
 
     #[test]
@@ -348,7 +357,7 @@ mod tests {
     fn unmappable_characters_are_all_reported_with_character_offsets() {
         let error = encode("ab€✓\nc✓", &format(WINDOWS_1252, false, true, Eol::Lf)).unwrap_err();
         assert_eq!(error.encoding, WINDOWS_1252);
-        assert_eq!(error.chars, vec![(3, '✓'), (6, '✓')]);
+        assert_eq!(listed(&error), vec![(3, '✓'), (6, '✓')]);
         assert_eq!(error.count, 2);
         assert_eq!(
             error.to_string(),
@@ -359,7 +368,7 @@ mod tests {
     #[test]
     fn offsets_count_characters_of_the_lf_text_when_converting_eol() {
         let error = encode("é\n\nж", &format(WINDOWS_1252, false, true, Eol::CrLf)).unwrap_err();
-        assert_eq!(error.chars, vec![(3, 'ж')]);
+        assert_eq!(listed(&error), vec![(3, 'ж')]);
     }
 
     #[test]
@@ -368,7 +377,7 @@ mod tests {
         let error = encode(&text, &format(WINDOWS_1252, false, true, Eol::Lf)).unwrap_err();
         assert_eq!(error.chars.len(), MAX_LISTED_UNMAPPABLE);
         assert_eq!(error.count, MAX_LISTED_UNMAPPABLE + 5);
-        assert_eq!(error.chars[99], (99, 'Ω'));
+        assert_eq!(listed(&error)[99], (99, 'Ω'));
     }
 
     #[test]
@@ -383,7 +392,7 @@ mod tests {
         assert!(check_encodable("anything 🎉", UTF_16LE, false).is_ok());
         let long = format!("{}✓", "x".repeat(3 * CHECK_BUFFER_LEN));
         let error = check_encodable(&long, WINDOWS_1252, true).unwrap_err();
-        assert_eq!(error.chars, vec![(3 * CHECK_BUFFER_LEN, '✓')]);
+        assert_eq!(listed(&error), vec![(3 * CHECK_BUFFER_LEN, '✓')]);
     }
 
     fn unicode_text() -> impl Strategy<Value = String> {

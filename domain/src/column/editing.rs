@@ -190,7 +190,8 @@ pub(super) fn single_line(text: &str) -> Result<(), ColumnError> {
     }
 }
 
-/// A replacement in one line: the line's characters it replaces and their new text.
+/// A replacement in one line: the characters it replaces, counted from the start of the line,
+/// and their new text.
 pub(super) type Splice = (Range<usize>, String);
 
 /// Collects the edits `splice` returns for the lines of `lines` that the text has, in document

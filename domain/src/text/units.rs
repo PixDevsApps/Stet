@@ -50,6 +50,12 @@ macro_rules! offset {
             pub const fn saturating_sub(self, count: usize) -> Self {
                 Self(self.0.saturating_sub(count))
             }
+
+            #[doc = concat!("`delta` ", $unit, "s later, or earlier when negative, stopping at the start of the text.")]
+            #[must_use]
+            pub const fn saturating_add_signed(self, delta: isize) -> Self {
+                Self(self.0.saturating_add_signed(delta))
+            }
         }
 
         #[doc = concat!("`count` ", $unit, "s later.")]
@@ -180,6 +186,8 @@ mod tests {
             prop_assert_eq!(CharOffset::new(high) - (high - low), at);
             prop_assert_eq!(at.checked_sub(high).map(CharOffset::get), low.checked_sub(high));
             prop_assert_eq!(at.saturating_sub(high).get(), low.saturating_sub(high));
+            let delta = b.cast_signed() - a.cast_signed();
+            prop_assert_eq!(at.saturating_add_signed(delta).get(), low.saturating_add_signed(delta));
             prop_assert_eq!(ByteOffset::new(a).cmp(&ByteOffset::new(b)), a.cmp(&b));
         }
     }

@@ -1,7 +1,7 @@
 //! Large column edits as one replacement of their line range (ADR-003 amendment).
 
 use super::editing::ColumnEdit;
-use crate::text::{ByteCursor, ByteOffset, CharOffset};
+use crate::text::{ByteCursor, ByteOffset, CharOffset, OffsetRange};
 use crate::text::{LineIndex, TextEdit};
 use std::ops::Range;
 
@@ -48,7 +48,7 @@ impl ColumnEdit {
     /// `None` when there are no edits.
     pub fn to_bulk(&self, text: &str, index: &LineIndex) -> Option<BulkEdit> {
         let (first, last) = (self.edits.first()?, self.edits.last()?);
-        let lines = index.line_of_char(first.start)..index.line_of_char(last.end) + 1;
+        let lines = index.line_of_char(first.start())..index.line_of_char(last.end()) + 1;
         let chars = index.line_chars(lines.start).start..index.line_chars(lines.end - 1).end;
         let bytes = index.line_bytes(lines.start).start..index.line_bytes(lines.end - 1).end;
         let old = &text[bytes];
@@ -57,10 +57,11 @@ impl ColumnEdit {
         let mut copied = ByteOffset::ZERO;
         let mut appended_lines = 0;
         for edit in &self.edits {
-            let start = cursor.byte_at(CharOffset::new(edit.start - chars.start));
-            new.push_str(&old[copied.get()..start.get()]);
+            // `old` starts at `chars.start`, so offsets into it count from there.
+            let start = cursor.byte_at(CharOffset::ZERO + (edit.start() - chars.start));
+            new.push_str(&old[(copied..start).get()]);
             new.push_str(&edit.insert);
-            copied = cursor.byte_at(CharOffset::new(edit.end - chars.start));
+            copied = cursor.byte_at(CharOffset::ZERO + (edit.end() - chars.start));
             appended_lines += memchr::memchr_iter(b'\n', edit.insert.as_bytes()).count();
         }
         new.push_str(&old[copied.get()..]);
@@ -78,6 +79,7 @@ mod tests {
     use crate::column::editing::insert;
     use crate::column::{Block, Rect, paste};
     use crate::text::apply;
+    use crate::text::testing::chars;
 
     #[test]
     fn a_bulk_edit_rewrites_the_touched_lines_once() {
@@ -87,7 +89,7 @@ mod tests {
         assert!(!edit.needs_bulk());
         let bulk = edit.to_bulk(text, &index).unwrap();
         assert_eq!(bulk.lines, 1..4);
-        assert_eq!(bulk.edit, TextEdit::new(5..11, "ab |\ncd |\n   |"));
+        assert_eq!(bulk.edit, TextEdit::new(chars(5..11), "ab |\ncd |\n   |"));
         assert_eq!(bulk.appended_lines, 0);
         assert_eq!(bulk.marks_to_restore([4, 2, 0, 3, 2]), [2, 3]);
         assert_eq!(

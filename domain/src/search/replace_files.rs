@@ -11,7 +11,7 @@
 //! The words the results panel uses for a run and for the files it leaves alone are here too.
 
 use crate::text::counted;
-use crate::text::{Eol, EolStats};
+use crate::text::{ByteOffset, Eol, EolStats};
 use std::fmt::{self, Write as _};
 use std::ops::Range;
 
@@ -56,8 +56,10 @@ impl LfText {
     }
 
     /// The byte offset in the raw text of byte `offset` of [`LfText::text`]: an LF that was a
-    /// CRLF maps to its CR, the byte after it to the byte after the LF.
-    pub fn raw_offset(&self, offset: usize) -> usize {
+    /// CRLF maps to its CR, the byte after it to the byte after the LF. It counts bytes of
+    /// another text than `offset` does, so it stays a plain number, as in [`RawEdit::range`].
+    fn raw_offset(&self, offset: ByteOffset) -> usize {
+        let offset = offset.get();
         offset + self.crlf.partition_point(|&at| at < offset)
     }
 
@@ -71,7 +73,8 @@ impl LfText {
 /// A replacement in the raw text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawEdit {
-    /// Byte range in the raw text.
+    /// Byte range in the raw text, the text before LF normalization: a plain number, since a
+    /// [`ByteOffset`] counts bytes of the text that was searched.
     pub range: Range<usize>,
     pub insert: String,
 }
@@ -81,7 +84,7 @@ pub struct RawEdit {
 /// [`LfText::eol`].
 pub fn raw_edits<'a>(
     lf: &LfText,
-    edits: impl IntoIterator<Item = (Range<usize>, &'a str)>,
+    edits: impl IntoIterator<Item = (Range<ByteOffset>, &'a str)>,
 ) -> Vec<RawEdit> {
     let eol = lf.eol();
     edits
@@ -273,6 +276,20 @@ mod tests {
     use crate::text::normalize_to_lf;
     use proptest::prelude::*;
 
+    /// [`raw_edits`] of plain byte ranges.
+    fn bytes_edits<'a>(
+        lf: &LfText,
+        edits: impl IntoIterator<Item = (Range<usize>, &'a str)>,
+    ) -> Vec<RawEdit> {
+        let typed = edits.into_iter().map(|(range, insert)| {
+            (
+                ByteOffset::new(range.start)..ByteOffset::new(range.end),
+                insert,
+            )
+        });
+        raw_edits(lf, typed)
+    }
+
     #[test]
     fn crlf_maps_to_both_bytes_and_cr_to_one() {
         let lf = LfText::new("a\r\nb\rc\nd\r\n");
@@ -280,13 +297,13 @@ mod tests {
         assert_eq!((lf.stats.lf, lf.stats.crlf, lf.stats.cr), (1, 2, 1));
         assert_eq!(lf.eol(), Eol::CrLf);
         // "a" stays, the first LF is the CR of "\r\n", "b" moves by one.
-        assert_eq!(lf.raw_offset(0), 0);
-        assert_eq!(lf.raw_offset(1), 1);
-        assert_eq!(lf.raw_offset(2), 3);
-        assert_eq!(lf.raw_offset(3), 4);
-        assert_eq!(lf.raw_offset(4), 5);
-        assert_eq!(lf.raw_offset(7), 8);
-        assert_eq!(lf.raw_offset(8), 10);
+        assert_eq!(lf.raw_offset(ByteOffset::new(0)), 0);
+        assert_eq!(lf.raw_offset(ByteOffset::new(1)), 1);
+        assert_eq!(lf.raw_offset(ByteOffset::new(2)), 3);
+        assert_eq!(lf.raw_offset(ByteOffset::new(3)), 4);
+        assert_eq!(lf.raw_offset(ByteOffset::new(4)), 5);
+        assert_eq!(lf.raw_offset(ByteOffset::new(7)), 8);
+        assert_eq!(lf.raw_offset(ByteOffset::new(8)), 10);
     }
 
     #[test]
@@ -294,16 +311,16 @@ mod tests {
         let raw = "one\r\ntwo\nthree\r\n";
         let lf = LfText::new(raw);
         // "\n" after "one" (a CRLF) becomes a space; "two" becomes two lines.
-        let edits = raw_edits(&lf, [(3..4, " "), (4..7, "2\n2")]);
+        let edits = bytes_edits(&lf, [(3..4, " "), (4..7, "2\n2")]);
         assert_eq!(
             apply_raw(raw, &edits).as_deref(),
             Some("one 2\r\n2\nthree\r\n")
         );
         let cr_only = LfText::new("a\rb\r");
-        let edits = raw_edits(&cr_only, [(0..1, "x\ny")]);
+        let edits = bytes_edits(&cr_only, [(0..1, "x\ny")]);
         assert_eq!(apply_raw("a\rb\r", &edits).as_deref(), Some("x\ry\rb\r"));
         let none = LfText::new("plain");
-        let edits = raw_edits(&none, [(0..5, "p\nq")]);
+        let edits = bytes_edits(&none, [(0..5, "p\nq")]);
         assert_eq!(apply_raw("plain", &edits).as_deref(), Some("p\nq"));
     }
 
@@ -311,12 +328,12 @@ mod tests {
     fn a_match_that_ends_before_a_crlf_leaves_it() {
         let raw = "key = 1\r\nnext\r\n";
         let lf = LfText::new(raw);
-        let edits = raw_edits(&lf, [(6..7, "2")]);
+        let edits = bytes_edits(&lf, [(6..7, "2")]);
         assert_eq!(
             apply_raw(raw, &edits).as_deref(),
             Some("key = 2\r\nnext\r\n")
         );
-        let empty = raw_edits(&lf, [(7..7, ";")]);
+        let empty = bytes_edits(&lf, [(7..7, ";")]);
         assert_eq!(
             apply_raw(raw, &empty).as_deref(),
             Some("key = 1;\r\nnext\r\n")
@@ -328,18 +345,18 @@ mod tests {
         // Deleting what stands between a lone CR and a lone LF.
         let raw = "a\rX\nb\r\n";
         let lf = LfText::new(raw);
-        assert_eq!(apply_raw(raw, &raw_edits(&lf, [(2..3, "")])), None);
-        assert!(apply_raw(raw, &raw_edits(&lf, [(2..3, "Y")])).is_some());
+        assert_eq!(apply_raw(raw, &bytes_edits(&lf, [(2..3, "")])), None);
+        assert!(apply_raw(raw, &bytes_edits(&lf, [(2..3, "Y")])).is_some());
         // A CR-dominant file: an inserted line break before a stray LF.
         let raw = "x\r\ry\n";
         let lf = LfText::new(raw);
         assert_eq!(lf.eol(), Eol::Cr);
-        assert_eq!(apply_raw(raw, &raw_edits(&lf, [(3..4, "z\n")])), None);
+        assert_eq!(apply_raw(raw, &bytes_edits(&lf, [(3..4, "z\n")])), None);
         // An LF-dominant file: an inserted line break after a stray CR.
         let raw = "a\nb\nc\r";
         let lf = LfText::new(raw);
-        assert_eq!(apply_raw(raw, &raw_edits(&lf, [(6..6, "\nX")])), None);
-        assert!(apply_raw(raw, &raw_edits(&lf, [(6..6, "X\n")])).is_some());
+        assert_eq!(apply_raw(raw, &bytes_edits(&lf, [(6..6, "\nX")])), None);
+        assert!(apply_raw(raw, &bytes_edits(&lf, [(6..6, "X\n")])).is_some());
     }
 
     #[test]
@@ -417,7 +434,7 @@ mod tests {
             let normalized = normalize_to_lf(&raw);
             prop_assert_eq!(lf.text.as_str(), normalized.as_ref());
             prop_assert_eq!(lf.stats, EolStats::detect(raw.as_bytes()));
-            prop_assert_eq!(lf.raw_offset(lf.text.len()), raw.len());
+            prop_assert_eq!(lf.raw_offset(ByteOffset::new(lf.text.len())), raw.len());
         }
 
         #[test]
@@ -433,7 +450,7 @@ mod tests {
                 .cloned()
                 .zip(inserts.iter().map(String::as_str).cycle())
                 .collect();
-            let mapped = raw_edits(&lf, edits.iter().cloned());
+            let mapped = bytes_edits(&lf, edits.iter().cloned());
             for edit in &mapped {
                 prop_assert!(raw.is_char_boundary(edit.range.start));
                 prop_assert!(raw.is_char_boundary(edit.range.end));

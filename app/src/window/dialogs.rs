@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 use stet_domain::ops::pretty::FormatKind;
-use stet_domain::text::plural;
+use stet_domain::text::{CharOffset, plural};
 use stet_domain::text::{LONG_LINE_CHARS, LongestLine, grouped};
 use stet_infrastructure::encoding::{Unmappable, status_label};
 
@@ -61,7 +61,7 @@ pub enum Purpose {
 pub enum UnmappableChoice {
     UseUtf8,
     /// Go to the character at this offset.
-    GoTo(usize),
+    GoTo(CharOffset),
     Cancel,
 }
 
@@ -219,7 +219,7 @@ impl Window {
             .build();
         let buffer = page.buffer();
         for &(offset, character) in error.chars.iter().take(LISTED_UNMAPPABLE) {
-            let iter = buffer.iter_at_char_offset(offset);
+            let iter = buffer.iter_at_char(offset);
             let text = format!(
                 "Line {}, column {}: {character} (U+{:04X})",
                 iter.display_line(),

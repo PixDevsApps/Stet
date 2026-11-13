@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command as Process, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 use stet_domain::session::Session;
+use stet_domain::text::CharOffset;
 
 /// A child self-test's scratch directory: given by its parent, and kept when it ends.
 pub const ROOT_ENV: &str = "STET_SELFTEST_ROOT";
@@ -431,8 +432,14 @@ impl Harness {
             let text = page.text();
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             text.hash(&mut hasher);
-            let anchor = buffer.iter_at_mark(&buffer.selection_bound()).char_offset();
-            let caret = buffer.iter_at_mark(&buffer.get_insert()).char_offset();
+            let anchor = buffer
+                .iter_at_mark(&buffer.selection_bound())
+                .char_offset()
+                .get();
+            let caret = buffer
+                .iter_at_mark(&buffer.get_insert())
+                .char_offset()
+                .get();
             let state = page.state();
             let language = page
                 .language()
@@ -490,11 +497,11 @@ impl Harness {
             buffer.end_user_action();
             if index % 3 == 0 {
                 buffer.select_range(
-                    &buffer.iter_at_char_offset(2),
-                    &buffer.iter_at_char_offset(8),
+                    &buffer.iter_at_char(CharOffset::new(2)),
+                    &buffer.iter_at_char(CharOffset::new(8)),
                 );
             } else {
-                buffer.place_cursor(&buffer.iter_at_char_offset(3));
+                buffer.place_cursor(&buffer.iter_at_char(CharOffset::new(3)));
             }
         }
         for index in 0..untitled {
@@ -506,8 +513,8 @@ impl Harness {
             );
             if index % 2 == 1 {
                 buffer.select_range(
-                    &buffer.iter_at_char_offset(0),
-                    &buffer.iter_at_char_offset(5),
+                    &buffer.iter_at_char(CharOffset::ZERO),
+                    &buffer.iter_at_char(CharOffset::new(5)),
                 );
             }
         }

@@ -10,7 +10,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::text::BULK_EDIT_THRESHOLD;
 
 use super::{Change, Doc, Target, char_len};
-use crate::text::TextEdit;
+use crate::text::{CharOffset, TextEdit};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Case {
@@ -54,7 +54,7 @@ pub fn convert(text: &str, target: &Target, case: Case) -> Change {
             }
             (doc.start(lines.start)..doc.end(lines.end - 1), None)
         }
-        Target::Document => (0..doc.len(), None),
+        Target::Document => (CharOffset::ZERO..doc.end_of_text(), None),
     };
     let old = doc.slice(range.clone());
     let new = transform(old, case);
@@ -102,12 +102,12 @@ pub fn transform(text: &str, case: Case) -> String {
 
 /// The word at `offset`: the Unicode word (UAX #29) that contains the character at `offset`
 /// or, failing that, ends at `offset`. Words hold at least one letter or digit.
-pub fn word_at(text: &str, offset: usize) -> Option<Range<usize>> {
+pub fn word_at(text: &str, offset: CharOffset) -> Option<Range<CharOffset>> {
     word_in(&Doc::new(text), offset)
 }
 
-fn word_in(doc: &Doc<'_>, offset: usize) -> Option<Range<usize>> {
-    let offset = offset.min(doc.len());
+fn word_in(doc: &Doc<'_>, offset: CharOffset) -> Option<Range<CharOffset>> {
+    let offset = offset.min(doc.end_of_text());
     let line = doc.index.line_of_char(offset);
     let content = doc.line(line);
     let caret = content
@@ -137,7 +137,7 @@ fn word_in(doc: &Doc<'_>, offset: usize) -> Option<Range<usize>> {
 /// Edits that turn `old`, at character `start`, into `new`: one per run of changed
 /// characters when both have the same length and there are no more than
 /// [`BULK_EDIT_THRESHOLD`] runs, otherwise one for the part that differs.
-fn diff(start: usize, old: &str, new: &str) -> Vec<TextEdit> {
+fn diff(start: CharOffset, old: &str, new: &str) -> Vec<TextEdit> {
     let mut edits = Vec::new();
     if char_len(old) == char_len(new) {
         let mut run: Option<(usize, String)> = None;
@@ -433,37 +433,37 @@ mod tests {
     fn a_caret_converts_the_word_at_it_and_stays() {
         let text = "say hello world";
         for caret in [4, 6, 9] {
-            let change = convert(text, &Target::caret(caret), Case::Upper);
-            assert_eq!(change.selection, Some(caret..caret));
+            let change = convert(text, &Target::caret(at(caret)), Case::Upper);
+            assert_eq!(change.selection, Some(chars(caret..caret)));
             assert_eq!(applied(text, &change), "say HELLO world");
         }
         assert_eq!(
-            applied(text, &convert(text, &Target::caret(3), Case::Upper)),
+            applied(text, &convert(text, &Target::caret(at(3)), Case::Upper)),
             "SAY hello world"
         );
-        assert!(convert("a  b", &Target::caret(2), Case::Upper).is_empty());
-        assert!(convert("", &Target::caret(0), Case::Upper).is_empty());
-        let change = convert("maß x", &Target::caret(3), Case::Upper);
-        assert_eq!(change.selection, Some(4..4));
+        assert!(convert("a  b", &Target::caret(at(2)), Case::Upper).is_empty());
+        assert!(convert("", &Target::caret(at(0)), Case::Upper).is_empty());
+        let change = convert("maß x", &Target::caret(at(3)), Case::Upper);
+        assert_eq!(change.selection, Some(chars(4..4)));
         assert_eq!(applied("maß x", &change), "MASS x");
     }
 
     #[test]
     fn word_at_finds_unicode_words() {
-        assert_eq!(word_at("foo bar", 1), Some(0..3));
-        assert_eq!(word_at("foo bar", 3), Some(0..3));
-        assert_eq!(word_at("foo bar", 4), Some(4..7));
-        assert_eq!(word_at("don't stop", 2), Some(0..5));
-        assert_eq!(word_at("a\nsnake_case x", 4), Some(2..12));
-        assert_eq!(word_at("x = y", 2), None);
+        assert_eq!(word_at("foo bar", at(1)), Some(chars(0..3)));
+        assert_eq!(word_at("foo bar", at(3)), Some(chars(0..3)));
+        assert_eq!(word_at("foo bar", at(4)), Some(chars(4..7)));
+        assert_eq!(word_at("don't stop", at(2)), Some(chars(0..5)));
+        assert_eq!(word_at("a\nsnake_case x", at(4)), Some(chars(2..12)));
+        assert_eq!(word_at("x = y", at(2)), None);
     }
 
     #[test]
     fn a_selection_stays_on_the_converted_text() {
-        let change = convert("a straße b", &Target::Selection(2..8), Case::Upper);
-        assert_eq!(change.selection, Some(2..9));
+        let change = convert("a straße b", &Target::Selection(chars(2..8)), Case::Upper);
+        assert_eq!(change.selection, Some(chars(2..9)));
         assert_eq!(applied("a straße b", &change), "a STRASSE b");
-        assert!(convert("ABC", &Target::Selection(0..3), Case::Upper).is_empty());
+        assert!(convert("ABC", &Target::Selection(chars(0..3)), Case::Upper).is_empty());
     }
 
     #[test]
@@ -471,7 +471,10 @@ mod tests {
         let change = convert("Hello World", &Target::Document, Case::Upper);
         assert_eq!(
             change.edits,
-            vec![TextEdit::new(1..5, "ELLO"), TextEdit::new(7..11, "ORLD")]
+            vec![
+                TextEdit::new(chars(1..5), "ELLO"),
+                TextEdit::new(chars(7..11), "ORLD")
+            ]
         );
         assert_eq!(change.selection, None);
     }
@@ -481,7 +484,7 @@ mod tests {
         let text = "a ".repeat(BULK_EDIT_THRESHOLD + 1);
         let change = convert(&text, &Target::Document, Case::Upper);
         assert_eq!(change.edits.len(), 1);
-        assert_eq!(change.edits[0].range(), 0..text.len() - 1);
+        assert_eq!(change.edits[0].range(), chars(0..text.len() - 1));
         assert_eq!(
             applied(&text, &change),
             "A ".repeat(BULK_EDIT_THRESHOLD + 1)
@@ -525,9 +528,10 @@ mod tests {
             let chars: Vec<char> = text.chars().collect();
             let range = match &target {
                 Target::Selection(range) => {
+                    let range = range.get();
                     let (a, b) = (range.start.min(chars.len()), range.end.min(chars.len()));
                     if a == b {
-                        word_at(&text, a)
+                        word_at(&text, at(a)).map(|word| word.get())
                     } else {
                         Some(a.min(b)..a.max(b))
                     }
@@ -536,7 +540,7 @@ mod tests {
                     let lines = naive_lines(&text, &target);
                     (!lines.is_empty()).then(|| {
                         let doc = Doc::new(&text);
-                        doc.start(lines.start)..doc.end(lines.end - 1)
+                        (doc.start(lines.start)..doc.end(lines.end - 1)).get()
                     })
                 }
                 Target::Document => Some(0..chars.len()),

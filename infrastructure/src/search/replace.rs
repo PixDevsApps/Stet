@@ -41,7 +41,7 @@ impl ReplaceAll {
             insert.push_str(&edit.insert);
             copied = span.end;
         }
-        Some(TextEdit::new(first.start..last.end, insert))
+        Some(TextEdit::new(first.start()..last.end(), insert))
     }
 
     /// The whole text after the replacements.
@@ -74,10 +74,7 @@ impl ReplaceAll {
         Cow::Owned(
             self.edits
                 .iter()
-                .map(|edit| {
-                    cursor.byte_at(CharOffset::new(edit.start))
-                        ..cursor.byte_at(CharOffset::new(edit.end))
-                })
+                .map(|edit| cursor.byte_at(edit.start())..cursor.byte_at(edit.end()))
                 .collect(),
         )
     }
@@ -132,11 +129,10 @@ impl Matcher {
                 continue;
             }
             let span = ByteOffset::new(start)..ByteOffset::new(end);
-            result.edits.push(TextEdit {
-                start: chars.char_at(span.start).get(),
-                end: chars.char_at(span.end).get(),
-                insert: insert.into_owned(),
-            });
+            let replaced = chars.char_at(span.start)..chars.char_at(span.end);
+            result
+                .edits
+                .push(TextEdit::new(replaced, insert.into_owned()));
             result.spans.push(span);
         }
         Ok(result)
@@ -172,6 +168,6 @@ impl Matcher {
                 suffix: &text[bytes.end..],
             }),
         };
-        Ok(TextEdit::new(found.start.get()..found.end.get(), insert))
+        Ok(TextEdit::new(found.range(), insert))
     }
 }

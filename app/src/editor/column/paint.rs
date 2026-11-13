@@ -40,13 +40,13 @@ pub(super) fn paint(view: &StetView, rect: Rect, snapshot: &gtk::Snapshot) -> us
         };
         let text = view.line_text(line);
         let span = LineSpan::new(line, &text, start.char_offset(), rect, tab);
-        let left = view.iter_location(&buffer.iter_at_char_offset(span.chars.start));
+        let left = view.iter_location(&buffer.iter_at_char(span.chars.start));
         let x = left.x() as f32 + span.pad_left as f32 * advance;
         let (y, height) = (left.y() as f32, left.height() as f32);
         if rect.is_empty() {
             snapshot.append_color(&caret, &graphene::Rect::new(x, y, CARET_WIDTH, height));
         } else {
-            let right = view.iter_location(&buffer.iter_at_char_offset(span.chars.end));
+            let right = view.iter_location(&buffer.iter_at_char(span.chars.end));
             let width = right.x() as f32 + span.pad_right as f32 * advance - x;
             snapshot.append_color(&fill, &graphene::Rect::new(x, y, width, height));
             if line == rect.cursor.line {

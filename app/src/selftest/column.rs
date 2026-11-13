@@ -641,10 +641,8 @@ impl Harness {
             (true, 1),
         )?;
         let (selected, count, ranges, _) = accessible_text::probe_selection(&view, true);
-        let wanted = vec![(
-            start.char_offset(),
-            end.char_offset().saturating_sub(start.char_offset()),
-        )];
+        let (start, end) = (start.char_offset(), end.char_offset());
+        let wanted = vec![(start.get(), end.max(start) - start)];
         equal(
             "selection (with ranges)",
             (selected, count, ranges),

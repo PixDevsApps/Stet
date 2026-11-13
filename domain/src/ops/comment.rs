@@ -94,11 +94,11 @@ pub fn toggle_block(text: &str, target: &Target, tokens: &CommentTokens) -> Chan
             if lead >= content {
                 return Change::default();
             }
-            let char_at = |byte: usize| doc.index.byte_to_char(text, ByteOffset::new(byte)).get();
+            let char_at = |byte: usize| doc.index.byte_to_char(text, ByteOffset::new(byte));
             (char_at(lead)..char_at(content), None)
         }
     };
-    let byte = |offset: usize| doc.index.char_to_byte(text, CharOffset::new(offset)).get();
+    let byte = |offset: CharOffset| doc.index.char_to_byte(text, offset).get();
     let bytes = byte(range.start)..byte(range.end);
     let is_space = |c: char| matches!(c, ' ' | '\t' | '\n');
     let slice = &text[bytes.clone()];
@@ -262,7 +262,7 @@ fn inner_spaces(inner: &str) -> (usize, usize) {
 }
 
 /// The characters of `line` without indentation and trailing blanks; `None` if it is blank.
-fn line_content(doc: &Doc<'_>, line: usize) -> Option<Range<usize>> {
+fn line_content(doc: &Doc<'_>, line: usize) -> Option<Range<CharOffset>> {
     let content = doc.line(line);
     if is_blank(content) {
         return None;
@@ -296,11 +296,7 @@ fn unwrap(doc: &Doc<'_>, comment: Range<usize>, open: &str, close: &str) -> Chan
     let (open_space, close_space) = inner_spaces(inner);
     let open_end = comment.start + open.len() + open_space;
     let close_start = (comment.end - close.len() - close_space).max(open_end);
-    let char_at = |byte: usize| {
-        doc.index
-            .byte_to_char(doc.text, ByteOffset::new(byte))
-            .get()
-    };
+    let char_at = |byte: usize| doc.index.byte_to_char(doc.text, ByteOffset::new(byte));
     Change::new(
         vec![
             TextEdit::delete(char_at(comment.start)..char_at(open_end)),
@@ -372,9 +368,9 @@ mod tests {
     #[test]
     fn a_selection_ending_at_column_zero_leaves_that_line_alone() {
         let text = "a\nb\nc";
-        let change = toggle_line(text, &Target::Selection(0..4), &rust());
+        let change = toggle_line(text, &Target::Selection(chars(0..4)), &rust());
         assert_eq!(applied(text, &change), "// a\n// b\nc");
-        assert_eq!(change.selection_after(0..4), 0..10);
+        assert_eq!(change.selection_after(chars(0..4)), chars(0..10));
     }
 
     #[test]
@@ -402,9 +398,9 @@ mod tests {
 
     #[test]
     fn a_blank_line_alone_gets_a_comment() {
-        let change = toggle_line("a\n\nb", &Target::caret(2), &rust());
+        let change = toggle_line("a\n\nb", &Target::caret(at(2)), &rust());
         assert_eq!(applied("a\n\nb", &change), "a\n// \nb");
-        let change = toggle_line("a\n// \nb", &Target::caret(3), &rust());
+        let change = toggle_line("a\n// \nb", &Target::caret(at(3)), &rust());
         assert_eq!(applied("a\n// \nb", &change), "a\n\nb");
     }
 
@@ -435,11 +431,11 @@ mod tests {
     #[test]
     fn toggle_block_wraps_a_selection_and_unwraps_it_again() {
         let text = "let x = 1 + 2;";
-        let change = toggle_block(text, &Target::Selection(8..13), &rust());
-        assert_eq!(change.selection, Some(8..19));
+        let change = toggle_block(text, &Target::Selection(chars(8..13)), &rust());
+        assert_eq!(change.selection, Some(chars(8..19)));
         let wrapped = applied(text, &change);
         assert_eq!(wrapped, "let x = /* 1 + 2 */;");
-        let change = toggle_block(&wrapped, &Target::Selection(8..19), &rust());
+        let change = toggle_block(&wrapped, &Target::Selection(chars(8..19)), &rust());
         assert_eq!(applied(&wrapped, &change), text);
     }
 
@@ -447,19 +443,19 @@ mod tests {
     fn toggle_block_unwraps_the_comment_around_the_caret_or_selection() {
         let text = "int x; /* note */ y";
         assert_eq!(
-            applied(text, &toggle_block(text, &Target::caret(11), &rust())),
+            applied(text, &toggle_block(text, &Target::caret(at(11)), &rust())),
             "int x; note y"
         );
         assert_eq!(
             applied(
                 text,
-                &toggle_block(text, &Target::Selection(10..12), &rust())
+                &toggle_block(text, &Target::Selection(chars(10..12)), &rust())
             ),
             "int x; note y"
         );
         let text = "/*\n  a\n  b\n*/";
         assert_eq!(
-            applied(text, &toggle_block(text, &Target::caret(5), &rust())),
+            applied(text, &toggle_block(text, &Target::caret(at(5)), &rust())),
             "\n  a\n  b\n"
         );
     }
@@ -467,11 +463,11 @@ mod tests {
     #[test]
     fn toggle_block_with_a_caret_wraps_the_line_content() {
         let text = "    foo();  \nbar";
-        let change = toggle_block(text, &Target::caret(6), &rust());
-        assert_eq!(change.selection, Some(9..9));
+        let change = toggle_block(text, &Target::caret(at(6)), &rust());
+        assert_eq!(change.selection, Some(chars(9..9)));
         assert_eq!(applied(text, &change), "    /* foo(); */  \nbar");
-        let change = toggle_block("a\n\nb", &Target::caret(2), &rust());
-        assert_eq!(change.selection, Some(5..5));
+        let change = toggle_block("a\n\nb", &Target::caret(at(2)), &rust());
+        assert_eq!(change.selection, Some(chars(5..5)));
         assert_eq!(applied("a\n\nb", &change), "a\n/*  */\nb");
     }
 
@@ -558,7 +554,7 @@ mod tests {
 
         #[test]
         fn toggle_block_twice_restores_a_selection((text, range) in selected_text()) {
-            let change = toggle_block(&text, &Target::Selection(range), &rust());
+            let change = toggle_block(&text, &Target::Selection(chars(range)), &rust());
             let wrapped = applied(&text, &change);
             let selection = change.selection.unwrap();
             let back = applied(&wrapped, &toggle_block(&wrapped, &Target::Selection(selection), &rust()));

@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::text::{Bias, LineIndex, TextEdit};
+use crate::text::{Bias, CharOffset, LineIndex, TextEdit};
 
 /// The Mark dialog's style and the five style tokens (Search > Style All Occurrences of Token).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -60,7 +60,7 @@ impl MarkStyle {
 /// never stored; they can still bookmark their line through [`bookmark_lines_of`].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Marks {
-    ranges: [Vec<Range<usize>>; 6],
+    ranges: [Vec<Range<CharOffset>>; 6],
 }
 
 impl Marks {
@@ -68,7 +68,7 @@ impl Marks {
         Self::default()
     }
 
-    pub fn ranges(&self, style: MarkStyle) -> &[Range<usize>] {
+    pub fn ranges(&self, style: MarkStyle) -> &[Range<CharOffset>] {
         &self.ranges[style.index()]
     }
 
@@ -81,14 +81,14 @@ impl Marks {
     }
 
     /// Adds marks, joining ranges that overlap existing ones (Mark All without Purge).
-    pub fn add(&mut self, style: MarkStyle, ranges: impl IntoIterator<Item = Range<usize>>) {
-        let mut added: Vec<Range<usize>> = ranges
+    pub fn add(&mut self, style: MarkStyle, ranges: impl IntoIterator<Item = Range<CharOffset>>) {
+        let mut added: Vec<Range<CharOffset>> = ranges
             .into_iter()
             .filter(|range| range.start < range.end)
             .collect();
         added.sort_unstable_by_key(|range| (range.start, range.end));
         let existing = std::mem::take(&mut self.ranges[style.index()]);
-        let mut merged: Vec<Range<usize>> = Vec::with_capacity(existing.len() + added.len());
+        let mut merged: Vec<Range<CharOffset>> = Vec::with_capacity(existing.len() + added.len());
         let (mut old, mut new) = (
             existing.into_iter().peekable(),
             added.into_iter().peekable(),
@@ -110,7 +110,7 @@ impl Marks {
     }
 
     /// Replaces the marks of `style` (Mark All with Purge for each search).
-    pub fn set(&mut self, style: MarkStyle, ranges: impl IntoIterator<Item = Range<usize>>) {
+    pub fn set(&mut self, style: MarkStyle, ranges: impl IntoIterator<Item = Range<CharOffset>>) {
         self.clear(style);
         self.add(style, ranges);
     }
@@ -124,14 +124,14 @@ impl Marks {
     }
 
     /// Jump Down: the first mark of `style` that starts after `offset`, wrapping to the first.
-    pub fn next(&self, style: MarkStyle, offset: usize) -> Option<Range<usize>> {
+    pub fn next(&self, style: MarkStyle, offset: CharOffset) -> Option<Range<CharOffset>> {
         let ranges = self.ranges(style);
         let index = ranges.partition_point(|range| range.start <= offset);
         ranges.get(index).or_else(|| ranges.first()).cloned()
     }
 
     /// Jump Up: the last mark of `style` that starts before `offset`, wrapping to the last.
-    pub fn prev(&self, style: MarkStyle, offset: usize) -> Option<Range<usize>> {
+    pub fn prev(&self, style: MarkStyle, offset: CharOffset) -> Option<Range<CharOffset>> {
         let ranges = self.ranges(style);
         let index = ranges.partition_point(|range| range.start < offset);
         index
@@ -168,7 +168,7 @@ impl Marks {
 
 /// The lines to bookmark for matches in `ranges` (character offsets): every line a match spans,
 /// and the line of an empty match. Sorted and unique.
-pub fn bookmark_lines_of(ranges: &[Range<usize>], index: &LineIndex) -> Vec<usize> {
+pub fn bookmark_lines_of(ranges: &[Range<CharOffset>], index: &LineIndex) -> Vec<usize> {
     let mut lines = Vec::new();
     for range in ranges {
         let first = index.line_of_char(range.start);
@@ -199,20 +199,21 @@ impl<'a> OffsetMap<'a> {
     }
 
     /// Where `offset` ends up, as [`map_offset`](crate::text::map_offset) computes it.
-    fn map(&mut self, offset: usize, bias: Bias) -> usize {
+    fn map(&mut self, offset: CharOffset, bias: Bias) -> CharOffset {
         while let Some(edit) = self.edits.get(self.next) {
-            if offset < edit.start || (offset == edit.start && bias == Bias::Before) {
+            let (start, end) = (edit.start(), edit.end());
+            if offset < start || (offset == start && bias == Bias::Before) {
                 break;
             }
             let inserted = self.inserted[self.next];
-            if offset < edit.end || (offset == edit.end && edit.start == edit.end) {
-                let start = edit.start.saturating_add_signed(self.shift);
+            if offset < end || (offset == end && start == end) {
+                let start = start.saturating_add_signed(self.shift);
                 return match bias {
                     Bias::Before => start,
                     Bias::After => start + inserted,
                 };
             }
-            self.shift += inserted.cast_signed() - (edit.end - edit.start).cast_signed();
+            self.shift += inserted.cast_signed() - edit.removed().cast_signed();
             self.next += 1;
         }
         offset.saturating_add_signed(self.shift)
@@ -226,8 +227,18 @@ impl<'a> OffsetMap<'a> {
 )]
 mod tests {
     use super::*;
+    use crate::text::OffsetRange;
+    use crate::text::testing::{at, chars};
     use crate::text::{apply, map_offset, normalize};
     use proptest::prelude::*;
+
+    fn spans(ranges: impl IntoIterator<Item = Range<usize>>) -> Vec<Range<CharOffset>> {
+        ranges.into_iter().map(chars).collect()
+    }
+
+    fn plain(marks: &Marks, style: MarkStyle) -> Vec<Range<usize>> {
+        marks.ranges(style).iter().map(OffsetRange::get).collect()
+    }
 
     #[test]
     fn style_ids_are_stable() {
@@ -252,13 +263,13 @@ mod tests {
     #[test]
     fn adding_joins_overlaps_and_keeps_neighbours_apart() {
         let mut marks = Marks::new();
-        marks.add(MarkStyle::Mark, [10..12, 0..3, 3..5, 4..4]);
-        assert_eq!(marks.ranges(MarkStyle::Mark), &[0..3, 3..5, 10..12]);
-        marks.add(MarkStyle::Mark, [2..4, 11..20]);
-        assert_eq!(marks.ranges(MarkStyle::Mark), &[0..5, 10..20]);
-        marks.set(MarkStyle::Token2, [7..9]);
-        marks.set(MarkStyle::Mark, [1..2]);
-        assert_eq!(marks.ranges(MarkStyle::Mark), &[1..2]);
+        marks.add(MarkStyle::Mark, spans([10..12, 0..3, 3..5, 4..4]));
+        assert_eq!(plain(&marks, MarkStyle::Mark), [0..3, 3..5, 10..12]);
+        marks.add(MarkStyle::Mark, spans([2..4, 11..20]));
+        assert_eq!(plain(&marks, MarkStyle::Mark), [0..5, 10..20]);
+        marks.set(MarkStyle::Token2, spans([7..9]));
+        marks.set(MarkStyle::Mark, spans([1..2]));
+        assert_eq!(plain(&marks, MarkStyle::Mark), [1..2]);
         assert_eq!(marks.count(MarkStyle::Token2), 1);
         marks.clear(MarkStyle::Mark);
         assert!(!marks.is_empty());
@@ -269,41 +280,44 @@ mod tests {
     #[test]
     fn jumps_between_marks_with_wrapping() {
         let mut marks = Marks::new();
-        marks.set(MarkStyle::Token1, [4..6, 10..12, 20..21]);
-        assert_eq!(marks.next(MarkStyle::Token1, 4), Some(10..12));
-        assert_eq!(marks.next(MarkStyle::Token1, 20), Some(4..6));
-        assert_eq!(marks.prev(MarkStyle::Token1, 10), Some(4..6));
-        assert_eq!(marks.prev(MarkStyle::Token1, 4), Some(20..21));
-        assert_eq!(marks.next(MarkStyle::Token5, 0), None);
+        marks.set(MarkStyle::Token1, spans([4..6, 10..12, 20..21]));
+        assert_eq!(marks.next(MarkStyle::Token1, at(4)), Some(chars(10..12)));
+        assert_eq!(marks.next(MarkStyle::Token1, at(20)), Some(chars(4..6)));
+        assert_eq!(marks.prev(MarkStyle::Token1, at(10)), Some(chars(4..6)));
+        assert_eq!(marks.prev(MarkStyle::Token1, at(4)), Some(chars(20..21)));
+        assert_eq!(marks.next(MarkStyle::Token5, at(0)), None);
     }
 
     #[test]
     fn marks_follow_edits() {
         let mut marks = Marks::new();
-        marks.set(MarkStyle::Mark, [2..5, 8..10, 12..14]);
+        marks.set(MarkStyle::Mark, spans([2..5, 8..10, 12..14]));
         let edits = normalize(
             vec![
-                TextEdit::insert(2, "ab"),
-                TextEdit::insert(9, "X"),
-                TextEdit::insert(10, "Y"),
-                TextEdit::delete(11..15),
+                TextEdit::insert(at(2), "ab"),
+                TextEdit::insert(at(9), "X"),
+                TextEdit::insert(at(10), "Y"),
+                TextEdit::delete(chars(11..15)),
             ],
             20,
         )
         .unwrap();
         marks.remap(&edits);
-        assert_eq!(marks.ranges(MarkStyle::Mark), &[4..7, 10..13]);
+        assert_eq!(plain(&marks, MarkStyle::Mark), [4..7, 10..13]);
     }
 
     #[test]
     fn bookmarks_every_line_a_match_spans() {
         let text = "one\ntwo\nthree\nfour";
         let index = LineIndex::new(text);
-        assert_eq!(bookmark_lines_of(&[1..6], &index), [0, 1]);
-        assert_eq!(bookmark_lines_of(&[4..8], &index), [1]);
-        assert_eq!(bookmark_lines_of(&[8..8, 18..18, 0..1], &index), [0, 2, 3]);
+        assert_eq!(bookmark_lines_of(&spans([1..6]), &index), [0, 1]);
+        assert_eq!(bookmark_lines_of(&spans([4..8]), &index), [1]);
+        assert_eq!(
+            bookmark_lines_of(&spans([8..8, 18..18, 0..1]), &index),
+            [0, 2, 3]
+        );
         let mut marks = Marks::new();
-        marks.set(MarkStyle::Mark, [9..10, 15..16]);
+        marks.set(MarkStyle::Mark, spans([9..10, 15..16]));
         assert_eq!(marks.bookmark_lines(MarkStyle::Mark, &index), [2, 3]);
     }
 
@@ -319,7 +333,7 @@ mod tests {
                 .filter_map(|(start, end, insert)| {
                     (start >= last_end).then(|| {
                         last_end = end;
-                        TextEdit::new(start..end, insert)
+                        TextEdit::new(chars(start..end), insert)
                     })
                 })
                 .collect()
@@ -338,22 +352,22 @@ mod tests {
             let edits = normalize(edits, len).unwrap();
             let after = apply(&text, edits.clone()).unwrap();
             let mut marks = Marks::new();
-            marks.add(MarkStyle::Mark, raw.iter().map(|&(start, width)| start..(start + width).min(len)));
+            marks.add(MarkStyle::Mark, raw.iter().map(|&(start, width)| chars(start..(start + width).min(len))));
             let before = marks.ranges(MarkStyle::Mark).to_vec();
             marks.remap(&edits);
-            let chars: Vec<char> = text.chars().collect();
+            let characters: Vec<char> = text.chars().collect();
             let after_chars: Vec<char> = after.chars().collect();
             for range in &before {
                 let expected = map_offset(range.start, &edits, Bias::After)
                     ..map_offset(range.end, &edits, Bias::Before);
-                let untouched = edits.iter().all(|e| e.end < range.start || e.start > range.end);
+                let untouched = edits.iter().all(|e| e.end() < range.start || e.start() > range.end);
                 if untouched {
                     prop_assert!(marks.ranges(MarkStyle::Mark).contains(&expected));
-                    prop_assert_eq!(&after_chars[expected.clone()], &chars[range.clone()]);
+                    prop_assert_eq!(&after_chars[expected.get()], &characters[range.get()]);
                 }
             }
             let remapped = marks.ranges(MarkStyle::Mark);
-            prop_assert!(remapped.iter().all(|r| r.start < r.end && r.end <= after_chars.len()));
+            prop_assert!(remapped.iter().all(|r| r.start < r.end && r.end.get() <= after_chars.len()));
             prop_assert!(remapped.windows(2).all(|pair| pair[0].end <= pair[1].start));
         }
     }

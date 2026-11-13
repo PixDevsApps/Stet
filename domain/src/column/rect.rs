@@ -1,7 +1,7 @@
 //! The rectangle and where its rows fall on each line.
 
 use super::visual::locate;
-use crate::text::LineIndex;
+use crate::text::{CharOffset, LineIndex};
 use std::ops::Range;
 
 /// A line and a visual column.
@@ -103,7 +103,7 @@ impl Rect {
 pub struct LineSpan {
     pub line: usize,
     /// Document character offsets of the characters at or containing the left and right edges.
-    pub chars: Range<usize>,
+    pub chars: Range<CharOffset>,
     pub pad_left: usize,
     pub pad_right: usize,
 }
@@ -114,7 +114,7 @@ impl LineSpan {
     pub fn new(
         line: usize,
         line_text: &str,
-        line_start: usize,
+        line_start: CharOffset,
         rect: Rect,
         tab_width: usize,
     ) -> Self {
@@ -143,6 +143,7 @@ pub(super) fn clamp_lines(index: &LineIndex, lines: Range<usize>) -> Range<usize
 mod tests {
     use super::*;
     use crate::column::visual::visual_column;
+    use crate::text::testing::chars;
     use proptest::prelude::*;
 
     /// The spans of `rect` on the lines of `text` it covers.
@@ -187,19 +188,19 @@ mod tests {
             vec![
                 LineSpan {
                     line: 0,
-                    chars: 2..8,
+                    chars: chars(2..8),
                     pad_left: 0,
                     pad_right: 2,
                 },
                 LineSpan {
                     line: 1,
-                    chars: 14..16,
+                    chars: chars(14..16),
                     pad_left: 2,
                     pad_right: 5,
                 },
                 LineSpan {
                     line: 2,
-                    chars: 19..19,
+                    chars: chars(19..19),
                     pad_left: 0,
                     pad_right: 8,
                 },
@@ -231,7 +232,7 @@ mod tests {
             for span in spans {
                 let line_text = &text[index.line_bytes(span.line)];
                 let start = index.line_chars(span.line).start;
-                let column = |offset: usize| visual_column(line_text, offset - start, tab);
+                let column = |offset: CharOffset| visual_column(line_text, offset - start, tab);
                 prop_assert_eq!(column(span.chars.start) + span.pad_left, rect.left());
                 prop_assert_eq!(column(span.chars.end) + span.pad_right, rect.right());
             }

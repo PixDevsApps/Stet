@@ -33,7 +33,7 @@ use std::time::Duration;
 use stet_domain::document::tilde;
 use stet_domain::document::{extension_from_globs, save_file_name};
 use stet_domain::nav::{History, Location, Mru};
-use stet_domain::text::TextEdit;
+use stet_domain::text::{CharOffset, TextEdit};
 
 /// How long Ctrl+Tab has to be held before the switcher shows, so a quick tap never flashes it.
 pub const SWITCHER_DELAY: Duration = Duration::from_millis(120);
@@ -178,13 +178,13 @@ impl Nav {
     }
 }
 
-fn caret(page: &EditorPage) -> usize {
+fn caret(page: &EditorPage) -> CharOffset {
     let buffer = page.buffer();
     buffer.iter_at_mark(&buffer.get_insert()).char_offset()
 }
 
-fn line_of(page: &EditorPage, offset: usize) -> usize {
-    page.buffer().iter_at_char_offset(offset).line_number()
+fn line_of(page: &EditorPage, offset: CharOffset) -> usize {
+    page.buffer().iter_at_char(offset).line_number()
 }
 
 /// The navigation commands: the Ctrl+Tab switcher's steps, and back and forward.
@@ -274,6 +274,7 @@ impl Window {
             page,
             move |_, start, end| {
                 let (start, end) = (start.char_offset(), end.char_offset());
+                let (start, end) = (start.min(end), start.max(end));
                 window.remap_history(&page, start, || TextEdit::delete(start..end));
             }
         ));
@@ -347,7 +348,7 @@ impl Window {
 
     /// Moves the places in `page` through an edit at character `at`; `edit` is only built when a
     /// place lies after it.
-    fn remap_history(&self, page: &EditorPage, at: usize, edit: impl FnOnce() -> TextEdit) {
+    fn remap_history(&self, page: &EditorPage, at: CharOffset, edit: impl FnOnce() -> TextEdit) {
         let mut history = self.inner.nav.history.borrow_mut();
         let affected = history
             .entries()
@@ -402,7 +403,7 @@ impl Window {
             let buffer = page.buffer();
             {
                 let _navigating = window.inner.nav.navigating.raise();
-                buffer.place_cursor(&buffer.iter_at_char_offset(place.offset));
+                buffer.place_cursor(&buffer.iter_at_char(place.offset));
                 page.view()
                     .scroll_to_mark(&buffer.get_insert(), 0.1, false, 0.0, 0.0);
             }

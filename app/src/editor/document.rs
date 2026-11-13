@@ -17,6 +17,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 use stet_domain::document::indent::Indentation;
+use stet_domain::text::CharOffset;
 use stet_domain::view::{DEFAULT_TAB_WIDTH, MAX_UNDO_LEVELS};
 
 /// The tag that shows the current search match.
@@ -69,8 +70,8 @@ pub(super) struct Document {
     pub(super) caret_owner: glib::WeakRef<EditorPage>,
     /// Edits on their way into the buffer: where an insertion starts, and the range a deletion
     /// takes, seen before the change and counted after it (a handler may stop it).
-    pending_insert: Cell<Option<usize>>,
-    pending_delete: Cell<Option<(usize, usize)>>,
+    pending_insert: Cell<Option<CharOffset>>,
+    pending_delete: Cell<Option<(CharOffset, CharOffset)>>,
 }
 
 impl Document {
@@ -135,7 +136,7 @@ impl Document {
             let document = weak.upgrade()?;
             let start = document.pending_insert.take()?;
             let end = values.get(1)?.get::<gtk::TextIter>().ok()?.char_offset();
-            document.marks.on_insert(start, end.saturating_sub(start));
+            document.marks.on_insert(start, end.max(start) - start);
             document.schedule_retag();
             None
         });

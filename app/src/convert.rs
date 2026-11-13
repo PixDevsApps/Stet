@@ -6,10 +6,11 @@
 //!
 //! The text buffer's and iterator's raw position methods are disallowed elsewhere
 //! (`clippy.toml`): every character offset, line number and column goes through
-//! [`BufferPositions`] and [`IterPosition`].
+//! [`BufferPositions`] and [`IterPosition`], and character offsets come out as [`CharOffset`].
 
 use gtk4 as gtk;
 use gtk4::prelude::*;
+use stet_domain::text::CharOffset;
 
 /// A count or position GTK never makes negative; a negative one counts as 0.
 pub(crate) fn to_usize(value: i32) -> usize {
@@ -80,7 +81,7 @@ pub(crate) fn unit_to_u16(value: f32) -> u16 {
 /// A buffer's text by character offsets, line numbers and columns, all zero-based.
 pub(crate) trait BufferPositions {
     /// The iterator at character `offset`, or at the end when `offset` is past it.
-    fn iter_at_char_offset(&self, offset: usize) -> gtk::TextIter;
+    fn iter_at_char(&self, offset: CharOffset) -> gtk::TextIter;
     /// The start of `line`, if the buffer has it.
     fn iter_at_line_number(&self, line: usize) -> Option<gtk::TextIter>;
     /// The start of `line`, or of the last line when the buffer has fewer lines.
@@ -89,6 +90,10 @@ pub(crate) trait BufferPositions {
     fn iter_at_line_column(&self, line: usize, column: usize) -> Option<gtk::TextIter>;
     /// How many characters the buffer holds.
     fn total_chars(&self) -> usize;
+    /// The end of the text, after its last character.
+    fn end_char(&self) -> CharOffset {
+        CharOffset::ZERO + self.total_chars()
+    }
     /// How many lines the buffer holds: at least 1.
     fn total_lines(&self) -> usize;
 }
@@ -98,8 +103,8 @@ pub(crate) trait BufferPositions {
     reason = "the one place that calls GTK's raw position methods"
 )]
 impl<T: IsA<gtk::TextBuffer>> BufferPositions for T {
-    fn iter_at_char_offset(&self, offset: usize) -> gtk::TextIter {
-        self.iter_at_offset(to_i32(offset))
+    fn iter_at_char(&self, offset: CharOffset) -> gtk::TextIter {
+        self.iter_at_offset(to_i32(offset.get()))
     }
 
     fn iter_at_line_number(&self, line: usize) -> Option<gtk::TextIter> {
@@ -126,7 +131,7 @@ impl<T: IsA<gtk::TextBuffer>> BufferPositions for T {
 
 /// An iterator's position as a character offset, line number and column, all zero-based.
 pub(crate) trait IterPosition {
-    fn char_offset(&self) -> usize;
+    fn char_offset(&self) -> CharOffset;
     fn line_number(&self) -> usize;
     /// Characters from the start of the line.
     fn column(&self) -> usize;
@@ -147,8 +152,8 @@ pub(crate) trait IterPosition {
     reason = "the one place that calls GTK's raw position methods"
 )]
 impl IterPosition for gtk::TextIter {
-    fn char_offset(&self) -> usize {
-        to_usize(self.offset())
+    fn char_offset(&self) -> CharOffset {
+        CharOffset::new(to_usize(self.offset()))
     }
 
     fn line_number(&self) -> usize {

@@ -21,6 +21,7 @@ use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 use stet_domain::search::{History, SearchHistory, SearchMode, translate};
+use stet_domain::text::CharOffset;
 use stet_infrastructure::search::{Matcher, parity};
 
 pub(super) const COMMANDS: &[Command] = commands![
@@ -908,16 +909,10 @@ impl Harness {
                 widget.push((start.char_offset(), end.char_offset()));
                 iter = end;
             }
-            let ours: Vec<(usize, usize)> = match Matcher::new(&query) {
+            let ours: Vec<(CharOffset, CharOffset)> = match Matcher::new(&query) {
                 Ok(matcher) => matcher
                     .find_all(row.input, None, usize::MAX, &AtomicBool::new(false))
-                    .map(|found| {
-                        found
-                            .matches
-                            .iter()
-                            .map(|m| (m.start.get(), m.end.get()))
-                            .collect()
-                    })
+                    .map(|found| found.matches.iter().map(|m| (m.start, m.end)).collect())
                     .unwrap_or_default(),
                 Err(error) => {
                     failures.push(format!("{}: our matcher rejected it: {error}", row.name));

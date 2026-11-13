@@ -24,14 +24,14 @@ pub enum Target {
     Lines(Range<usize>),
     /// A selection in character offsets; an empty range is the caret. Line operations cover
     /// every line the selection touches, except a last line that it reaches only at column 0.
-    Selection(Range<usize>),
+    Selection(Range<CharOffset>),
     /// The whole text. Line operations leave out the empty line after a final newline, so the
     /// file keeps its final newline.
     Document,
 }
 
 impl Target {
-    pub const fn caret(offset: usize) -> Self {
+    pub const fn caret(offset: CharOffset) -> Self {
         Self::Selection(offset..offset)
     }
 }
@@ -44,14 +44,16 @@ pub struct Change {
     pub edits: Vec<TextEdit>,
     /// The selection to set afterwards, in character offsets of the edited text. `None` keeps
     /// the current selection, mapped through the edits by [`Change::selection_after`].
-    pub selection: Option<Range<usize>>,
+    pub selection: Option<Range<CharOffset>>,
 }
 
 impl Change {
-    fn new(edits: Vec<TextEdit>, selection: Option<Range<usize>>) -> Self {
+    fn new(edits: Vec<TextEdit>, selection: Option<Range<CharOffset>>) -> Self {
         let edits: Vec<TextEdit> = edits.into_iter().filter(|edit| !edit.is_noop()).collect();
         debug_assert!(
-            edits.windows(2).all(|pair| pair[0].end <= pair[1].start),
+            edits
+                .windows(2)
+                .all(|pair| pair[0].end() <= pair[1].start()),
             "edits must be sorted and must not overlap"
         );
         if edits.is_empty() {
@@ -72,7 +74,7 @@ impl Change {
     /// The selection after the change: the explicit one if the operation set it, otherwise
     /// `current` mapped through the edits. A caret moves past text inserted at it; a range
     /// grows over text inserted at its ends.
-    pub fn selection_after(&self, current: Range<usize>) -> Range<usize> {
+    pub fn selection_after(&self, current: Range<CharOffset>) -> Range<CharOffset> {
         if let Some(selection) = &self.selection {
             return selection.clone();
         }
@@ -92,15 +94,15 @@ impl Change {
     pub fn coalesce(&self, text: &str) -> Option<TextEdit> {
         let (first, last) = (self.edits.first()?, self.edits.last()?);
         let mut cursor = ByteCursor::new(text);
-        let mut copied = cursor.byte_at(CharOffset::new(first.start));
+        let mut copied = cursor.byte_at(first.start());
         let mut insert = String::new();
         for edit in &self.edits {
-            let start = cursor.byte_at(CharOffset::new(edit.start));
-            insert.push_str(&text[copied.get()..start.get()]);
+            let start = cursor.byte_at(edit.start());
+            insert.push_str(&text[(copied..start).get()]);
             insert.push_str(&edit.insert);
-            copied = cursor.byte_at(CharOffset::new(edit.end));
+            copied = cursor.byte_at(edit.end());
         }
-        Some(TextEdit::new(first.start..last.end, insert))
+        Some(TextEdit::new(first.start()..last.end(), insert))
     }
 }
 
@@ -156,7 +158,7 @@ pub struct SyntaxError {
     pub message: String,
     pub line: usize,
     pub column: usize,
-    pub offset: usize,
+    pub offset: CharOffset,
 }
 
 impl SyntaxError {
@@ -171,13 +173,13 @@ impl SyntaxError {
             message: message.into(),
             line: memchr::memchr_iter(b'\n', &text.as_bytes()[..line_start]).count() + 1,
             column: text[line_start..byte].chars().count() + 1,
-            offset: text[..byte].chars().count(),
+            offset: CharOffset::ZERO + text[..byte].chars().count(),
         }
     }
 
     /// The same error in a text of which the parsed input starts at character `base`.
-    fn shifted(self, index: &LineIndex, base: usize) -> Self {
-        let offset = base + self.offset;
+    fn shifted(self, index: &LineIndex, base: CharOffset) -> Self {
+        let offset = base + (self.offset - CharOffset::ZERO);
         let Position { line, column } = index.position(offset);
         Self {
             offset,
@@ -214,10 +216,6 @@ impl<'a> Doc<'a> {
         }
     }
 
-    fn len(&self) -> usize {
-        self.index.len_chars()
-    }
-
     fn line_count(&self) -> usize {
         self.index.line_count()
     }
@@ -227,16 +225,21 @@ impl<'a> Doc<'a> {
         &self.text[self.index.line_bytes(line)]
     }
 
-    fn start(&self, line: usize) -> usize {
+    fn start(&self, line: usize) -> CharOffset {
         self.index.line_chars(line).start
     }
 
-    fn end(&self, line: usize) -> usize {
+    fn end(&self, line: usize) -> CharOffset {
         self.index.line_chars(line).end
     }
 
+    /// The end of the text.
+    fn end_of_text(&self) -> CharOffset {
+        self.index.end_char()
+    }
+
     /// The character offset of byte `byte` of `line`.
-    fn offset_in(&self, line: usize, byte: usize) -> usize {
+    fn offset_in(&self, line: usize, byte: usize) -> CharOffset {
         self.start(line) + self.line(line)[..byte].chars().count()
     }
 
@@ -247,14 +250,14 @@ impl<'a> Doc<'a> {
         &self.text[start..end]
     }
 
-    fn slice(&self, chars: Range<usize>) -> &'a str {
-        let byte = |offset| self.index.char_to_byte(self.text, CharOffset::new(offset));
+    fn slice(&self, chars: Range<CharOffset>) -> &'a str {
+        let byte = |offset| self.index.char_to_byte(self.text, offset);
         &self.text[(byte(chars.start)..byte(chars.end)).get()]
     }
 
     /// `range` ordered and clamped to the text.
-    fn clamp(&self, range: &Range<usize>) -> Range<usize> {
-        let len = self.len();
+    fn clamp(&self, range: &Range<CharOffset>) -> Range<CharOffset> {
+        let len = self.end_of_text();
         let (a, b) = (range.start.min(len), range.end.min(len));
         a.min(b)..a.max(b)
     }
@@ -314,9 +317,9 @@ fn delete_lines(doc: &Doc<'_>, lines: impl IntoIterator<Item = usize>) -> Vec<Te
         let range = if run.end < doc.line_count() {
             doc.start(run.start)..doc.start(run.end)
         } else if run.start > 0 {
-            doc.end(run.start - 1)..doc.len()
+            doc.end(run.start - 1)..doc.end_of_text()
         } else {
-            0..doc.len()
+            CharOffset::ZERO..doc.end_of_text()
         };
         edits.push(TextEdit::delete(range));
     };
@@ -370,7 +373,7 @@ fn reformat_target(
             }
             doc.start(lines.start)..doc.end(lines.end - 1)
         }
-        _ => 0..doc.len(),
+        _ => CharOffset::ZERO..doc.end_of_text(),
     };
     let slice = doc.slice(range.clone());
     let is_space = |c: char| matches!(c, ' ' | '\t' | '\n' | '\r');
@@ -396,6 +399,8 @@ fn reformat_target(
 #[cfg(test)]
 pub(crate) mod testing {
     use super::*;
+    pub(crate) use crate::text::OffsetRange;
+    pub(crate) use crate::text::testing::{at, chars};
     use crate::text::{apply, normalize};
     use proptest::prelude::*;
 
@@ -438,7 +443,7 @@ pub(crate) mod testing {
             let offset = prop_oneof![0..=len, prop::sample::select(starts)];
             let target = prop_oneof![
                 (0..=lines, 0..=lines).prop_map(|(a, b)| Target::Lines(a.min(b)..a.max(b))),
-                (offset.clone(), offset).prop_map(|(a, b)| Target::Selection(a..b)),
+                (offset.clone(), offset).prop_map(|(a, b)| Target::Selection(chars(a..b))),
                 Just(Target::Document),
             ];
             (Just(text), target)
@@ -455,6 +460,7 @@ pub(crate) mod testing {
             }
             Target::Selection(range) => {
                 let len = char_len(text);
+                let range = range.get();
                 let (a, b) = (range.start.min(len), range.end.min(len));
                 let (start, end) = (a.min(b), a.max(b));
                 let first = line_of(start);
@@ -484,7 +490,7 @@ pub(crate) mod testing {
         if let Some(selection) = &change.selection {
             let new_len = char_len(&result);
             assert!(
-                selection.start <= selection.end && selection.end <= new_len,
+                selection.start <= selection.end && selection.end.get() <= new_len,
                 "selection {selection:?} outside the result of {new_len} characters"
             );
         }
@@ -511,12 +517,12 @@ mod tests {
     #[test]
     fn a_selection_ending_at_column_zero_leaves_out_that_line() {
         let doc = Doc::new("one\ntwo\nthree\n");
-        assert_eq!(doc.lines(&Target::Selection(0..4)), 0..1);
-        assert_eq!(doc.lines(&Target::Selection(0..5)), 0..2);
-        assert_eq!(doc.lines(&Target::Selection(2..8)), 0..2);
-        assert_eq!(doc.lines(&Target::caret(4)), 1..2);
+        assert_eq!(doc.lines(&Target::Selection(chars(0..4))), 0..1);
+        assert_eq!(doc.lines(&Target::Selection(chars(0..5))), 0..2);
+        assert_eq!(doc.lines(&Target::Selection(chars(2..8))), 0..2);
+        assert_eq!(doc.lines(&Target::caret(at(4))), 1..2);
         let reversed = Range { start: 8, end: 4 };
-        assert_eq!(doc.lines(&Target::Selection(reversed)), 1..2);
+        assert_eq!(doc.lines(&Target::Selection(chars(reversed))), 1..2);
     }
 
     #[test]
@@ -525,8 +531,11 @@ mod tests {
         assert_eq!(Doc::new("a\nb").lines(&Target::Document), 0..2);
         assert_eq!(Doc::new("").lines(&Target::Document), 0..1);
         assert_eq!(Doc::new("\n").lines(&Target::Document), 0..1);
-        assert_eq!(Doc::new("a\nb\n").lines(&Target::Selection(0..4)), 0..2);
-        assert_eq!(Doc::new("a\nb\n").lines(&Target::caret(4)), 2..3);
+        assert_eq!(
+            Doc::new("a\nb\n").lines(&Target::Selection(chars(0..4))),
+            0..2
+        );
+        assert_eq!(Doc::new("a\nb\n").lines(&Target::caret(at(4))), 2..3);
     }
 
     #[test]
@@ -539,30 +548,39 @@ mod tests {
     #[test]
     fn selection_after_maps_through_the_edits() {
         let change = Change::new(
-            vec![TextEdit::insert(0, "// "), TextEdit::delete(5..7)],
+            vec![
+                TextEdit::insert(at(0), "// "),
+                TextEdit::delete(chars(5..7)),
+            ],
             None,
         );
-        assert_eq!(change.selection_after(0..9), 0..10);
-        assert_eq!(change.selection_after(0..0), 3..3);
-        assert_eq!(change.selection_after(6..6), 8..8);
-        let explicit = Change::new(vec![TextEdit::insert(0, "x")], Some(1..1));
-        assert_eq!(explicit.selection_after(0..0), 1..1);
+        assert_eq!(change.selection_after(chars(0..9)), chars(0..10));
+        assert_eq!(change.selection_after(chars(0..0)), chars(3..3));
+        assert_eq!(change.selection_after(chars(6..6)), chars(8..8));
+        let explicit = Change::new(vec![TextEdit::insert(at(0), "x")], Some(chars(1..1)));
+        assert_eq!(explicit.selection_after(chars(0..0)), chars(1..1));
     }
 
     #[test]
     fn coalesce_replaces_the_spanned_range_once() {
         let text = "a b c d";
         let change = Change::new(
-            vec![TextEdit::new(2..3, "B"), TextEdit::new(6..7, "D!")],
+            vec![
+                TextEdit::new(chars(2..3), "B"),
+                TextEdit::new(chars(6..7), "D!"),
+            ],
             None,
         );
-        assert_eq!(change.coalesce(text), Some(TextEdit::new(2..7, "B c D!")));
+        assert_eq!(
+            change.coalesce(text),
+            Some(TextEdit::new(chars(2..7), "B c D!"))
+        );
         assert_eq!(Change::default().coalesce(text), None);
     }
 
     #[test]
     fn no_op_edits_make_an_empty_change() {
-        let change = Change::new(vec![TextEdit::insert(3, "")], Some(0..0));
+        let change = Change::new(vec![TextEdit::insert(at(3), "")], Some(chars(0..0)));
         assert!(change.is_empty());
         assert_eq!(change.selection, None);
     }
@@ -570,9 +588,9 @@ mod tests {
     #[test]
     fn syntax_errors_count_characters() {
         let error = SyntaxError::at_byte("ab\nøx!", 6, "bad");
-        assert_eq!((error.line, error.column, error.offset), (2, 3, 5));
+        assert_eq!((error.line, error.column, error.offset.get()), (2, 3, 5));
         let error = SyntaxError::at_byte("ø", 1, "inside a character");
-        assert_eq!((error.line, error.column, error.offset), (1, 1, 0));
+        assert_eq!((error.line, error.column, error.offset.get()), (1, 1, 0));
         assert_eq!(error.to_string(), "inside a character at line 1, column 1");
     }
 

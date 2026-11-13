@@ -1,14 +1,14 @@
-use crate::text::{Bias, TextEdit, map_offset};
+use crate::text::{Bias, CharOffset, TextEdit, map_offset};
 
 /// A caret position: a document and a character offset in it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Location<D> {
     pub doc: D,
-    pub offset: usize,
+    pub offset: CharOffset,
 }
 
 impl<D> Location<D> {
-    pub fn new(doc: D, offset: usize) -> Self {
+    pub fn new(doc: D, offset: CharOffset) -> Self {
         Self { doc, offset }
     }
 }
@@ -75,7 +75,7 @@ impl<D: PartialEq + Clone> History<D> {
 
     /// Records a jump source or target. A location near the current entry replaces it; any
     /// other drops the forward entries and becomes the newest one.
-    pub fn record(&mut self, location: Location<D>, line_of: impl Fn(&D, usize) -> usize) {
+    pub fn record(&mut self, location: Location<D>, line_of: impl Fn(&D, CharOffset) -> usize) {
         if let Some(current) = self.entries.get_mut(self.current)
             && current.doc == location.doc
             && line_of(&location.doc, current.offset)
@@ -97,7 +97,7 @@ impl<D: PartialEq + Clone> History<D> {
     pub fn back(
         &mut self,
         here: Location<D>,
-        line_of: impl Fn(&D, usize) -> usize,
+        line_of: impl Fn(&D, CharOffset) -> usize,
     ) -> Option<Location<D>> {
         self.record(here, line_of);
         self.current = self.current.checked_sub(1)?;
@@ -109,7 +109,7 @@ impl<D: PartialEq + Clone> History<D> {
     pub fn forward(
         &mut self,
         here: Location<D>,
-        line_of: impl Fn(&D, usize) -> usize,
+        line_of: impl Fn(&D, CharOffset) -> usize,
     ) -> Option<Location<D>> {
         self.record(here, line_of);
         if !self.can_go_forward() {
@@ -158,21 +158,22 @@ impl<D: PartialEq + Clone> History<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::testing as chars;
 
     /// Every document has 100-character lines.
-    fn line_of(_doc: &&str, offset: usize) -> usize {
-        offset / 100
+    fn line_of(_doc: &&str, offset: CharOffset) -> usize {
+        offset.get() / 100
     }
 
     fn at(doc: &'static str, line: usize) -> Location<&'static str> {
-        Location::new(doc, line * 100)
+        Location::new(doc, CharOffset::ZERO + line * 100)
     }
 
     fn lines(history: &History<&'static str>) -> Vec<(&'static str, usize)> {
         history
             .entries()
             .iter()
-            .map(|entry| (entry.doc, entry.offset / 100))
+            .map(|entry| (entry.doc, entry.offset.get() / 100))
             .collect()
     }
 
@@ -234,17 +235,20 @@ mod tests {
     #[test]
     fn entries_follow_edits_to_their_document() {
         let mut history = History::with_limits(10, 0);
-        history.record(Location::new("a", 10), line_of);
-        history.record(Location::new("b", 10), line_of);
-        history.record(Location::new("a", 30), line_of);
+        history.record(Location::new("a", chars::at(10)), line_of);
+        history.record(Location::new("b", chars::at(10)), line_of);
+        history.record(Location::new("a", chars::at(30)), line_of);
         history.remap(
             &"a",
-            &[TextEdit::insert(0, "12345"), TextEdit::delete(20..40)],
+            &[
+                TextEdit::insert(chars::at(0), "12345"),
+                TextEdit::delete(chars::chars(20..40)),
+            ],
         );
         let offsets: Vec<(&str, usize)> = history
             .entries()
             .iter()
-            .map(|entry| (entry.doc, entry.offset))
+            .map(|entry| (entry.doc, entry.offset.get()))
             .collect();
         assert_eq!(offsets, [("a", 15), ("b", 10), ("a", 25)]);
     }

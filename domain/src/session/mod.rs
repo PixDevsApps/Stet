@@ -18,7 +18,7 @@ mod id;
 #[cfg(test)]
 mod tests;
 
-use crate::text::Eol;
+use crate::text::{CharOffset, Eol};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -198,10 +198,10 @@ pub struct TabRecord {
     pub language: Option<String>,
     /// The caret, in characters.
     #[serde(deserialize_with = "codec::lenient")]
-    pub caret: usize,
+    pub caret: CharOffset,
     /// Start and end of the selection, in characters; the caret is at one end.
     #[serde(deserialize_with = "codec::lenient")]
-    pub selection: Option<(usize, usize)>,
+    pub selection: Option<(CharOffset, CharOffset)>,
     /// The topmost visible line, zero-based, to restore the scroll position.
     #[serde(deserialize_with = "codec::lenient")]
     pub first_visible_line: usize,
@@ -237,11 +237,15 @@ impl TabRecord {
     /// The selection as (anchor, caret), clamped to `len` characters: the caret is at the
     /// end of `selection` it equals, so a selection made backwards stays backwards. Without a
     /// selection, both are the caret.
-    pub fn anchor_and_caret(&self, len: usize) -> (usize, usize) {
-        let caret = self.caret.min(len);
+    pub fn anchor_and_caret(&self, len: usize) -> (CharOffset, CharOffset) {
+        let end_of_text = CharOffset::ZERO + len;
+        let caret = self.caret.min(end_of_text);
         match self.selection {
             Some((start, end)) => {
-                let (start, end) = (start.min(end).min(len), start.max(end).min(len));
+                let (start, end) = (
+                    start.min(end).min(end_of_text),
+                    start.max(end).min(end_of_text),
+                );
                 if caret == start {
                     (end, start)
                 } else {

@@ -9,7 +9,7 @@ use super::{
     Change, Doc, Target, char_len, delete_lines, is_blank, is_blank_char, leading_blanks,
     replace_lines, trailing_blanks,
 };
-use crate::text::{Bias, TextEdit, map_offset};
+use crate::text::{Bias, CharOffset, TextEdit, map_offset};
 
 /// Which repeated lines [`remove_duplicates`] removes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,7 +102,7 @@ pub fn delete(text: &str, target: &Target) -> Change {
     } else if lines.start > 0 {
         doc.start(lines.start - 1)
     } else {
-        0
+        CharOffset::ZERO
     };
     Change::new(delete_lines(&doc, lines), Some(caret..caret))
 }
@@ -135,9 +135,9 @@ pub fn move_down(text: &str, target: &Target) -> Change {
     let moved = format!("{}\n{}", doc.line(below), doc.block(lines.clone()));
     let edit = TextEdit::new(doc.start(lines.start)..doc.end(below), moved);
     let shift = doc.end(below) - doc.start(below) + 1;
-    let len = doc.len();
+    let end = doc.end_of_text();
     let selection = selection_of(&doc, target)
-        .map(|range| (range.start + shift).min(len)..(range.end + shift).min(len));
+        .map(|range| (range.start + shift).min(end)..(range.end + shift).min(end));
     Change::new(vec![edit], selection)
 }
 
@@ -614,14 +614,14 @@ fn compare_chunk_lists(a: &[Chunk<'_>], b: &[Chunk<'_>]) -> Ordering {
         .unwrap_or_else(|| a.len().cmp(&b.len()))
 }
 
-fn selection_of(doc: &Doc<'_>, target: &Target) -> Option<Range<usize>> {
+fn selection_of(doc: &Doc<'_>, target: &Target) -> Option<Range<CharOffset>> {
     match target {
         Target::Selection(range) => Some(doc.clamp(range)),
         _ => None,
     }
 }
 
-fn caret_of(doc: &Doc<'_>, target: &Target) -> Option<Range<usize>> {
+fn caret_of(doc: &Doc<'_>, target: &Target) -> Option<Range<CharOffset>> {
     selection_of(doc, target).filter(Range::is_empty)
 }
 
@@ -636,25 +636,25 @@ mod tests {
     }
 
     fn sel(range: Range<usize>) -> Target {
-        Target::Selection(range)
+        Target::Selection(chars(range))
     }
 
     #[test]
     fn duplicate_copies_the_caret_line_below_and_keeps_the_caret() {
-        let change = duplicate("one\ntwo\nthree", &Target::caret(5));
-        assert_eq!(change.selection, Some(5..5));
+        let change = duplicate("one\ntwo\nthree", &Target::caret(at(5)));
+        assert_eq!(change.selection, Some(chars(5..5)));
         assert_eq!(run("one\ntwo\nthree", &change), "one\ntwo\ntwo\nthree");
         assert_eq!(
-            run("one\ntwo", &duplicate("one\ntwo", &Target::caret(7))),
+            run("one\ntwo", &duplicate("one\ntwo", &Target::caret(at(7)))),
             "one\ntwo\ntwo"
         );
-        assert_eq!(run("", &duplicate("", &Target::caret(0))), "\n");
+        assert_eq!(run("", &duplicate("", &Target::caret(at(0)))), "\n");
     }
 
     #[test]
     fn duplicate_copies_a_selection_right_after_itself() {
         let change = duplicate("say hello", &sel(4..9));
-        assert_eq!(change.selection, Some(4..9));
+        assert_eq!(change.selection, Some(chars(4..9)));
         assert_eq!(run("say hello", &change), "say hellohello");
         assert_eq!(
             run("ab\ncd", &duplicate("ab\ncd", &sel(1..4))),
@@ -676,18 +676,18 @@ mod tests {
 
     #[test]
     fn delete_removes_lines_with_their_line_break() {
-        let change = delete("one\ntwo\nthree", &Target::caret(5));
-        assert_eq!(change.selection, Some(4..4));
+        let change = delete("one\ntwo\nthree", &Target::caret(at(5)));
+        assert_eq!(change.selection, Some(chars(4..4)));
         assert_eq!(run("one\ntwo\nthree", &change), "one\nthree");
-        let change = delete("one\ntwo", &Target::caret(6));
-        assert_eq!(change.selection, Some(0..0));
+        let change = delete("one\ntwo", &Target::caret(at(6)));
+        assert_eq!(change.selection, Some(chars(0..0)));
         assert_eq!(run("one\ntwo", &change), "one");
         assert_eq!(
             run("one\ntwo\n", &delete("one\ntwo\n", &sel(4..7))),
             "one\n"
         );
-        assert_eq!(run("only", &delete("only", &Target::caret(2))), "");
-        assert!(delete("", &Target::caret(0)).is_empty());
+        assert_eq!(run("only", &delete("only", &Target::caret(at(2)))), "");
+        assert!(delete("", &Target::caret(at(0))).is_empty());
     }
 
     #[test]
@@ -697,33 +697,33 @@ mod tests {
 
     #[test]
     fn delete_on_the_line_after_a_final_newline_removes_that_newline() {
-        assert_eq!(run("a\n", &delete("a\n", &Target::caret(2))), "a");
+        assert_eq!(run("a\n", &delete("a\n", &Target::caret(at(2)))), "a");
     }
 
     #[test]
     fn move_up_swaps_with_the_line_above_and_moves_the_selection() {
         let change = move_up("a\nbb\ncc", &sel(3..4));
-        assert_eq!(change.selection, Some(1..2));
+        assert_eq!(change.selection, Some(chars(1..2)));
         assert_eq!(run("a\nbb\ncc", &change), "bb\na\ncc");
-        assert_eq!(run("a\nb", &move_up("a\nb", &Target::caret(3))), "b\na");
-        assert!(move_up("a\nb", &Target::caret(0)).is_empty());
+        assert_eq!(run("a\nb", &move_up("a\nb", &Target::caret(at(3)))), "b\na");
+        assert!(move_up("a\nb", &Target::caret(at(0))).is_empty());
     }
 
     #[test]
     fn move_down_swaps_with_the_line_below_and_moves_the_selection() {
         let change = move_down("a\nbb\ncc", &sel(0..5));
-        assert_eq!(change.selection, Some(3..7));
+        assert_eq!(change.selection, Some(chars(3..7)));
         assert_eq!(run("a\nbb\ncc", &change), "cc\na\nbb");
-        assert!(move_down("a\nb", &Target::caret(3)).is_empty());
+        assert!(move_down("a\nb", &Target::caret(at(3))).is_empty());
         let change = move_down("a\nb\nc", &sel(0..2));
-        assert_eq!(change.selection, Some(2..4));
+        assert_eq!(change.selection, Some(chars(2..4)));
         assert_eq!(run("a\nb\nc", &change), "b\na\nc");
     }
 
     #[test]
     fn move_down_into_the_line_after_a_final_newline_swaps_with_it() {
         assert_eq!(
-            run("a\nb\n", &move_down("a\nb\n", &Target::caret(2))),
+            run("a\nb\n", &move_down("a\nb\n", &Target::caret(at(2)))),
             "a\n\nb"
         );
     }
@@ -732,7 +732,7 @@ mod tests {
     fn join_trims_indentation_and_separates_with_one_space() {
         let text = "fn f(\n    a,\n    b\n)";
         let change = join(text, &sel(0..text.len()));
-        assert_eq!(change.selection, Some(0..12));
+        assert_eq!(change.selection, Some(chars(0..12)));
         assert_eq!(run(text, &change), "fn f( a, b )");
     }
 
@@ -748,10 +748,10 @@ mod tests {
 
     #[test]
     fn join_with_a_caret_joins_the_next_line() {
-        let change = join("one\n  two\nthree", &Target::caret(1));
-        assert_eq!(change.selection, Some(4..4));
+        let change = join("one\n  two\nthree", &Target::caret(at(1)));
+        assert_eq!(change.selection, Some(chars(4..4)));
         assert_eq!(run("one\n  two\nthree", &change), "one two\nthree");
-        assert!(join("one\ntwo", &Target::caret(5)).is_empty());
+        assert!(join("one\ntwo", &Target::caret(at(5))).is_empty());
         assert!(join("one\ntwo", &Target::Lines(1..2)).is_empty());
     }
 
@@ -762,14 +762,14 @@ mod tests {
 
     #[test]
     fn blank_lines_are_inserted_above_and_below_with_the_caret_on_them() {
-        let change = insert_blank_above("a\nb", &Target::caret(3));
-        assert_eq!(change.selection, Some(2..2));
+        let change = insert_blank_above("a\nb", &Target::caret(at(3)));
+        assert_eq!(change.selection, Some(chars(2..2)));
         assert_eq!(run("a\nb", &change), "a\n\nb");
-        let change = insert_blank_below("a\nb", &Target::caret(0));
-        assert_eq!(change.selection, Some(2..2));
+        let change = insert_blank_below("a\nb", &Target::caret(at(0)));
+        assert_eq!(change.selection, Some(chars(2..2)));
         assert_eq!(run("a\nb", &change), "a\n\nb");
-        let change = insert_blank_below("a\nb", &Target::caret(3));
-        assert_eq!(change.selection, Some(4..4));
+        let change = insert_blank_below("a\nb", &Target::caret(at(3)));
+        assert_eq!(change.selection, Some(chars(4..4)));
         assert_eq!(run("a\nb", &change), "a\nb\n");
     }
 
@@ -1036,7 +1036,7 @@ mod tests {
     fn sorting_touches_only_the_lines_that_move() {
         let text = "a\nc\nb\nd";
         let change = sort(text, &Target::Document, SortKey::Lexical, Order::Ascending);
-        assert_eq!(change.edits, vec![TextEdit::new(2..5, "b\nc")]);
+        assert_eq!(change.edits, vec![TextEdit::new(chars(2..5), "b\nc")]);
         assert!(
             sort(
                 "a\nb",
@@ -1202,6 +1202,7 @@ mod tests {
             let len = chars.len();
             let selected = match &target {
                 Target::Selection(range) => {
+                    let range = range.get();
                     let (a, b) = (range.start.min(len), range.end.min(len));
                     Some((a.min(b), a.max(b))).filter(|(start, end)| start != end)
                 }

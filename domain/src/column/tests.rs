@@ -3,6 +3,7 @@
 
 use super::editing::insert;
 use super::*;
+use crate::text::OffsetRange;
 use crate::text::{LineIndex, TextEdit, apply, normalize};
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
@@ -274,7 +275,7 @@ fn applied(text: &str, index: &LineIndex, edit: &ColumnEdit) -> Result<String, T
     let lines: Vec<usize> = edit
         .edits
         .iter()
-        .map(|edit| index.line_of_char(edit.start))
+        .map(|edit| index.line_of_char(edit.start()))
         .collect();
     prop_assert!(lines.windows(2).all(|pair| pair[0] < pair[1]));
     let result = apply(text, edit.edits.clone()).unwrap();
@@ -495,7 +496,10 @@ proptest! {
         let moved: Vec<_> = local
             .edits
             .into_iter()
-            .map(|edit| TextEdit::new(edit.start + first..edit.end + first, edit.insert))
+            .map(|edit| {
+                let range = edit.range().get();
+                TextEdit::new(first + range.start..first + range.end, edit.insert)
+            })
             .collect();
         prop_assert_eq!(moved, whole.edits);
         prop_assert_eq!(local.rect.shift_lines(shift), whole.rect);

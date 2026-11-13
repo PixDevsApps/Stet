@@ -9,6 +9,8 @@ mod index;
 mod lines;
 mod offset;
 mod selection;
+#[cfg(test)]
+pub(crate) mod testing;
 mod units;
 mod wording;
 mod words;

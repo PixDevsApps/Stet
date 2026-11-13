@@ -22,7 +22,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use stet_domain::column::{ColumnEdit, ColumnError, Rect};
 use stet_domain::marks::Footprint;
-use stet_domain::text::{LineIndex, TextEdit};
+use stet_domain::text::{CharOffset, LineIndex, TextEdit};
 
 /// What the last column operation did, for the self-test and the timings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +38,7 @@ pub struct OpStats {
 
 /// The text of `lines` (clamped to the buffer), without the last line's break, and the
 /// character offset where it starts.
-pub(super) fn snapshot(view: &StetView, lines: Range<usize>) -> (usize, String, usize) {
+pub(super) fn snapshot(view: &StetView, lines: Range<usize>) -> (usize, String, CharOffset) {
     let buffer = view.buffer();
     let last = view.last_line();
     let first = lines.start.min(last);
@@ -77,7 +77,7 @@ pub(super) fn apply(
         let logical: Vec<TextEdit> = edit
             .edits
             .iter()
-            .map(|change| TextEdit::new(base + change.start..base + change.end, &*change.insert))
+            .map(|change| TextEdit::new(in_buffer(base, change.range()), &*change.insert))
             .collect();
         let mut run = || {
             view.busy(|| {
@@ -130,14 +130,14 @@ fn apply_bulk(
     text: &str,
     index: &LineIndex,
     first: usize,
-    base: usize,
+    base: CharOffset,
 ) -> Vec<TextEdit> {
     let started = Instant::now();
     let visible = view.visible_rect();
     let line_at = |y: i32| view.line_at_y(y).0.line_number();
     let near = line_at(visible.y() - visible.height()).saturating_sub(first)
         ..line_at(visible.y() + 2 * visible.height()).saturating_sub(first) + 1;
-    let line_of = |change: &TextEdit| index.line_of_char(change.start);
+    let line_of = |change: &TextEdit| index.line_of_char(change.start());
     let part = |keep: &dyn Fn(usize) -> bool| ColumnEdit {
         edits: edit
             .edits
@@ -159,9 +159,9 @@ fn apply_bulk(
     applied.extend(single.edits);
     let mut applied: Vec<TextEdit> = applied
         .into_iter()
-        .map(|change| TextEdit::new(base + change.start..base + change.end, change.insert))
+        .map(|change| TextEdit::new(in_buffer(base, change.range()), change.insert))
         .collect();
-    applied.sort_by_key(|change| change.start);
+    applied.sort_by_key(TextEdit::start);
     tracing::info!(
         edits = edit.edits.len(),
         single = applied.len().saturating_sub(2),
@@ -179,7 +179,7 @@ fn replace_lines(
     text: &str,
     index: &LineIndex,
     first: usize,
-    base: usize,
+    base: CharOffset,
 ) -> Option<TextEdit> {
     let bulk = part.to_bulk(text, index)?;
     let lines = bulk.lines.start + first..bulk.lines.end + first;
@@ -227,10 +227,16 @@ fn source_marks(
     found
 }
 
-fn replace(buffer: &sourceview5::Buffer, base: usize, edit: &TextEdit) {
-    let mut start = buffer.iter_at_char_offset(base + edit.start);
-    if edit.end > edit.start {
-        let mut end = buffer.iter_at_char_offset(base + edit.end);
+/// The characters `range` of the snapshot that starts at `base`, in the buffer.
+fn in_buffer(base: CharOffset, range: Range<CharOffset>) -> Range<CharOffset> {
+    base + (range.start - CharOffset::ZERO)..base + (range.end - CharOffset::ZERO)
+}
+
+fn replace(buffer: &sourceview5::Buffer, base: CharOffset, edit: &TextEdit) {
+    let range = in_buffer(base, edit.range());
+    let mut start = buffer.iter_at_char(range.start);
+    if !range.is_empty() {
+        let mut end = buffer.iter_at_char(range.end);
         buffer.delete(&mut start, &mut end);
     }
     if !edit.insert.is_empty() {

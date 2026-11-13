@@ -455,7 +455,7 @@ impl Window {
     }
 
     /// Searches from character `from` in `page`, with GtkSourceView or our matcher.
-    pub(in crate::window) fn search_from(&self, page: EditorPage, from: usize, forward: bool) {
+    pub(in crate::window) fn search_from(&self, page: EditorPage, from: CharOffset, forward: bool) {
         let find = &self.inner.find;
         let Some(compiled) = find.compiled() else {
             return;
@@ -474,18 +474,16 @@ impl Window {
             };
             let wrap_mode = if wrap { Wrap::Around } else { Wrap::Stop };
             self.spawn(async move {
-                let found = worker::run(move || {
-                    matcher.find_next(&text, CharOffset::new(from), direction, wrap_mode)
-                })
-                .await;
+                let found =
+                    worker::run(move || matcher.find_next(&text, from, direction, wrap_mode)).await;
                 if snapshot.edited() {
                     return;
                 }
                 match found {
                     Some(Ok(Some(next))) => window.show_match(
                         &page,
-                        next.found.start.get(),
-                        next.found.end.get(),
+                        next.found.start,
+                        next.found.end,
                         forward,
                         next.wrapped,
                     ),
@@ -502,7 +500,7 @@ impl Window {
         }
         let context = self.context_for(&page);
         context.set_highlight(self.shows_matches(&page));
-        let from = page.buffer().iter_at_char_offset(from);
+        let from = page.buffer().iter_at_char(from);
         self.spawn(async move {
             match crate::sys::search::find(&context, &from, forward).await {
                 Some((start, end, wrapped)) => {
@@ -526,14 +524,14 @@ impl Window {
     pub(in crate::window) fn show_match(
         &self,
         page: &EditorPage,
-        start: usize,
-        end: usize,
+        start: CharOffset,
+        end: CharOffset,
         forward: bool,
         wrapped: bool,
     ) {
         let buffer = page.buffer();
-        let start = buffer.iter_at_char_offset(start);
-        let end = buffer.iter_at_char_offset(end);
+        let start = buffer.iter_at_char(start);
+        let end = buffer.iter_at_char(end);
         let caret = if forward { &end } else { &start };
         if self.inner.find.is_open() {
             page.set_current_match(&start, &end);

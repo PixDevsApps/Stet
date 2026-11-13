@@ -324,8 +324,8 @@ impl Window {
             page.set_loading(true);
             let begun = page.marks().begin(&buffer);
             buffer.begin_user_action();
-            let mut start = buffer.iter_at_char_offset(edit.start);
-            let mut end = buffer.iter_at_char_offset(edit.end);
+            let mut start = buffer.iter_at_char(edit.start());
+            let mut end = buffer.iter_at_char(edit.end());
             buffer.delete(&mut start, &mut end);
             let mark = buffer.create_mark(None, &start, false);
             let mut first = true;

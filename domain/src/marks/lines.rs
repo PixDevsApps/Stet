@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use crate::text::{LineIndex, TextEdit};
+use crate::text::{CharOffset, LineIndex, TextEdit};
 
 use super::Bookmarks;
 
@@ -98,7 +98,7 @@ pub fn paste_to_bookmarked_lines(
 /// Deletions for `lines` (sorted), merged where they touch. A non-empty last line takes the
 /// line break before the run of deleted lines that ends with it.
 fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = usize>) -> Vec<TextEdit> {
-    fn push(ranges: &mut Vec<Range<usize>>, range: Range<usize>) {
+    fn push(ranges: &mut Vec<Range<CharOffset>>, range: Range<CharOffset>) {
         match ranges.last_mut() {
             Some(previous) if previous.end >= range.start => {
                 previous.end = previous.end.max(range.end);
@@ -108,7 +108,7 @@ fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = usize>) -> Ve
     }
 
     let last = index.line_count() - 1;
-    let mut ranges: Vec<Range<usize>> = Vec::new();
+    let mut ranges: Vec<Range<CharOffset>> = Vec::new();
     for line in lines {
         if line > last {
             break;
@@ -130,6 +130,7 @@ fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = usize>) -> Ve
 mod tests {
     use super::*;
     use crate::marks::bookmark_lines_of;
+    use crate::text::testing::chars;
     use crate::text::{ByteOffset, apply};
     use proptest::prelude::*;
 
@@ -184,7 +185,7 @@ mod tests {
         let edit = delete_bookmarked_lines(&LineIndex::new(text), &bookmarks(&[1, 2, 4]));
         assert_eq!(
             edit.edits,
-            vec![TextEdit::delete(2..6), TextEdit::delete(7..9)]
+            vec![TextEdit::delete(chars(2..6)), TextEdit::delete(chars(7..9))]
         );
     }
 
@@ -192,10 +193,10 @@ mod tests {
     fn mark_bookmark_then_remove_unmarked_lines_is_one_edit_set() {
         let log = "info start\nERROR disk full\ninfo retry\nERROR disk full again\ninfo done\n";
         let index = LineIndex::new(log);
-        let matches: Vec<Range<usize>> = log
+        let matches: Vec<Range<CharOffset>> = log
             .match_indices("ERROR")
             .map(|(byte, found)| {
-                let start = index.byte_to_char(log, ByteOffset::new(byte)).get();
+                let start = index.byte_to_char(log, ByteOffset::new(byte));
                 start..start + found.chars().count()
             })
             .collect();

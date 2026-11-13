@@ -68,7 +68,7 @@ mod tests {
             "{\n  \"a\": [\n    1,\n    2\n  ]\n}"
         );
         let error = format("{\"a\":}", FormatKind::Json).unwrap_err();
-        assert_eq!((error.line, error.column, error.offset), (1, 6, 5));
+        assert_eq!((error.line, error.column, error.offset.get()), (1, 6, 5));
         assert!(
             error.to_string().ends_with(" at line 1, column 6"),
             "{error}"

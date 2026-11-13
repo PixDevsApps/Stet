@@ -185,6 +185,7 @@ pub fn replace_in_files_status(
 mod tests {
     use super::super::SearchMode;
     use super::*;
+    use crate::text::testing::{at, chars};
 
     #[test]
     fn scope_kinds_follow_the_scope_table() {
@@ -212,8 +213,12 @@ mod tests {
             (backward, false, 0..4),
             (in_selection, true, 2..6),
         ] {
-            let selection = has_selection.then_some(2..6);
-            assert_eq!(options.scope(4, selection, 10), range, "{options:?}");
+            let selection = has_selection.then_some(chars(2..6));
+            assert_eq!(
+                options.scope(at(4), selection, at(10)),
+                chars(range),
+                "{options:?}"
+            );
         }
         let regex = SearchOptions::new(SearchMode::Regex);
         assert_eq!(regex.scope_kind(false), ScopeKind::Document);

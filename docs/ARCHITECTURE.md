@@ -110,7 +110,7 @@ The self-test harness reaches the window only through `window/probe.rs`. Its com
 ## Rules the tools enforce
 
 - `[workspace.lints]` in `Cargo.toml`: `unsafe_code` denied (allowed on `mod sys;` only), the lossy-cast lints, `too_many_lines`, `unwrap_used` (outside tests), `undocumented_unsafe_blocks`, and a chosen part of Clippy's pedantic group. `#[expect(…, reason = "…")]` marks the few exceptions; `allow_attributes` and `allow_attributes_without_reason` keep it that way. The two libraries also warn on `unreachable_pub`.
-- `clippy.toml` disallows GTK's raw text positions (`TextBufferExt::iter_at_offset`, `iter_at_line`, `iter_at_line_offset`, and `TextIter::offset`, `line`, `line_offset` and their setters): offsets, lines and columns cross into `usize` only in `app/src/convert.rs`.
+- `clippy.toml` disallows GTK's raw text positions (`TextBufferExt::iter_at_offset`, `iter_at_line`, `iter_at_line_offset`, and `TextIter::offset`, `line`, `line_offset` and their setters): offsets, lines and columns cross from GTK's integers only in `app/src/convert.rs`, character offsets as `CharOffset` (`iter_at_char`, `char_offset`).
 - `tools/ci.sh`: rustfmt, Clippy with `-D warnings` (with and without `selftest`), the tests, rustdoc with `-D warnings`, the build, and the check that the Flatpak's crate list matches `Cargo.lock`.
 
 ## Where new code goes

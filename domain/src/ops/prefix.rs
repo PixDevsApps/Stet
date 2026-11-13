@@ -72,11 +72,11 @@ mod tests {
         let text = "a\n\nb\n";
         let change = add(text, &Target::Document, "- ", ";");
         assert_eq!(applied(text, &change), "- a;\n- ;\n- b;\n");
-        assert_eq!(change.selection_after(0..5), 0..14);
+        assert_eq!(change.selection_after(chars(0..5)), chars(0..14));
         assert_eq!(
             applied(
                 "x\ny\nz",
-                &add("x\ny\nz", &Target::Selection(0..4), "<", ">")
+                &add("x\ny\nz", &Target::Selection(chars(0..4)), "<", ">")
             ),
             "<x>\n<y>\nz"
         );

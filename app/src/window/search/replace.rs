@@ -115,7 +115,7 @@ impl Window {
     pub(in crate::window) fn command_scope(
         page: &EditorPage,
         options: SearchOptions,
-    ) -> (Range<usize>, ScopeKind) {
+    ) -> (Range<CharOffset>, ScopeKind) {
         let buffer = page.buffer();
         let caret = buffer.iter_at_mark(&buffer.get_insert()).char_offset();
         let live = buffer
@@ -134,9 +134,8 @@ impl Window {
             None if options.in_selection => remembered(),
             None => None,
         };
-        let len = buffer.total_chars();
         (
-            options.scope(caret, selection.clone(), len),
+            options.scope(caret, selection.clone(), buffer.end_char()),
             options.scope_kind(selection.is_some()),
         )
     }
@@ -163,12 +162,7 @@ impl Window {
             let cancel = AtomicBool::new(false);
             let counted = worker::run(move || {
                 matcher
-                    .find_all(
-                        &text,
-                        Some(CharOffset::new(range.start)..CharOffset::new(range.end)),
-                        usize::MAX,
-                        &cancel,
-                    )
+                    .find_all(&text, Some(range), usize::MAX, &cancel)
                     .map(|found| found.matches.len())
             })
             .await;
@@ -214,8 +208,8 @@ impl Window {
         }
         let (snapshot, text) = PageSnapshot::take(&page);
         let found = Match {
-            start: CharOffset::new(start.char_offset()),
-            end: CharOffset::new(end.char_offset()),
+            start: start.char_offset(),
+            end: end.char_offset(),
             line: start.line_number(),
         };
         let matcher = Arc::clone(&compiled.matcher);
@@ -233,12 +227,12 @@ impl Window {
                 Ok(edit) => {
                     page.clear_current_match();
                     edits::apply_edits(&page.buffer(), std::slice::from_ref(&edit));
-                    let after = edit.start + edit.insert.chars().count();
-                    let from = if forward { after } else { edit.start };
+                    let after = edit.start() + edit.insert.chars().count();
+                    let from = if forward { after } else { edit.start() };
                     window.search_from(page, from, forward);
                 }
                 Err(SearchError::NotAMatch) => {
-                    window.search_from(page, found.start.get(), forward);
+                    window.search_from(page, found.start, forward);
                 }
                 Err(error) => window
                     .inner
@@ -274,7 +268,6 @@ impl Window {
         let started = Instant::now();
         let options = find.options();
         let (range, scope) = Self::command_scope(&page, options);
-        let range = CharOffset::new(range.start)..CharOffset::new(range.end);
         let (taken, text) = PageSnapshot::take(&page);
         let snapshot = started.elapsed();
         let matcher = Arc::clone(&compiled.matcher);

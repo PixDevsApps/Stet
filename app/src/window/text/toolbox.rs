@@ -495,19 +495,19 @@ impl Window {
         let begun = page.marks().begin(&buffer);
         buffer.begin_user_action();
         let mut pieces = 0;
-        let mut left = edit.end - edit.start;
+        let mut left = edit.removed();
         while left > 0 {
             if pieces > 0 {
                 glib::timeout_future(PIECE_INTERVAL).await;
             }
             let count = left.min(DELETE_CHARS);
-            let mut start = buffer.iter_at_char_offset(edit.start);
-            let mut end = buffer.iter_at_char_offset(edit.start + count);
+            let mut start = buffer.iter_at_char(edit.start());
+            let mut end = buffer.iter_at_char(edit.start() + count);
             buffer.delete(&mut start, &mut end);
             left -= count;
             pieces += 1;
         }
-        let mut at = edit.start;
+        let mut at = edit.start();
         for piece in pieces_of(&edit.insert, PIECE_BYTES) {
             if pieces > 0 {
                 glib::timeout_future(PIECE_INTERVAL).await;
@@ -515,7 +515,7 @@ impl Window {
                     break;
                 }
             }
-            let mut iter = buffer.iter_at_char_offset(at);
+            let mut iter = buffer.iter_at_char(at);
             buffer.insert(&mut iter, piece);
             at += piece.chars().count();
             pieces += 1;
@@ -545,7 +545,7 @@ impl Window {
     /// Moves the caret to a JSON or XML error and says what it is.
     fn show_syntax_error(&self, page: &EditorPage, what: &str, error: &SyntaxError) {
         let buffer = page.buffer();
-        let iter = buffer.iter_at_char_offset(error.offset);
+        let iter = buffer.iter_at_char(error.offset);
         buffer.place_cursor(&iter);
         page.view().scroll_mark_onscreen(&buffer.get_insert());
         self.toast(&format!(
@@ -565,9 +565,9 @@ impl Window {
             let index = LineIndex::new(text);
             let range = match target {
                 Target::Selection(range) if !range.is_empty() => range,
-                _ => 0..index.len_chars(),
+                _ => CharOffset::ZERO..index.end_char(),
             };
-            let byte = |offset: usize| index.char_to_byte(text, CharOffset::new(offset));
+            let byte = |offset| index.char_to_byte(text, offset);
             let slice = &text[(byte(range.start)..byte(range.end)).get()];
             let checked = if is_json {
                 json::validate(slice)
@@ -577,7 +577,7 @@ impl Window {
             checked
                 .map(|()| Change::default())
                 .map_err(|error| SyntaxError {
-                    offset: range.start + error.offset,
+                    offset: range.start + (error.offset - CharOffset::ZERO),
                     ..error
                 })
         });
@@ -645,8 +645,8 @@ impl Window {
     pub(in crate::window) fn copy_lines(page: &EditorPage) -> bool {
         let buffer = page.buffer();
         let selected = edits::selection(&buffer).range();
-        let first = buffer.iter_at_char_offset(selected.start);
-        let mut last = buffer.iter_at_char_offset(selected.end);
+        let first = buffer.iter_at_char(selected.start);
+        let mut last = buffer.iter_at_char(selected.end);
         if last.line_number() > first.line_number() && last.starts_line() {
             last.backward_line();
         }
@@ -668,8 +668,8 @@ impl Window {
     fn select_and_find(&self, page: &EditorPage, forward: bool) {
         let buffer = page.buffer();
         let selected = edits::selection(&buffer).range();
-        let start = buffer.iter_at_char_offset(selected.start);
-        let end = buffer.iter_at_char_offset(selected.end);
+        let start = buffer.iter_at_char(selected.start);
+        let end = buffer.iter_at_char(selected.end);
         let query = if selected.is_empty() {
             let line_start = buffer
                 .iter_at_line_number(start.line_number())
@@ -679,14 +679,18 @@ impl Window {
                 line_end.forward_to_line_end();
             }
             let line = buffer.text(&line_start, &line_end, true).to_string();
-            let column = selected.start - line_start.char_offset();
-            match case::word_at(&line, column) {
+            let base = line_start.char_offset();
+            // `line` starts at `base`: offsets in it count from there.
+            let caret = CharOffset::ZERO + (selected.start - base);
+            match case::word_at(&line, caret) {
                 Some(word) => {
-                    let base = line_start.char_offset();
-                    let (from, to) = (base + word.start, base + word.end);
+                    let (from, to) = (
+                        base + (word.start - CharOffset::ZERO),
+                        base + (word.end - CharOffset::ZERO),
+                    );
                     edits::select(&buffer, Selection::forward(from..to));
-                    let from = buffer.iter_at_char_offset(from);
-                    let to = buffer.iter_at_char_offset(to);
+                    let from = buffer.iter_at_char(from);
+                    let to = buffer.iter_at_char(to);
                     buffer.text(&from, &to, true).to_string()
                 }
                 None => String::new(),
@@ -782,7 +786,8 @@ fn transpose(text: &str, target: &Target) -> Change {
         return Change::default();
     }
     let mut change = lines::move_down(text, &Target::Lines(line - 1..line));
-    let length = index.line_chars(line).len();
+    let chars = index.line_chars(line);
+    let length = chars.end - chars.start;
     let caret = index.line_chars(line - 1).start + length + 1;
     change.selection = (!change.is_empty()).then_some(caret..caret);
     change
@@ -855,10 +860,11 @@ mod tests {
     #[test]
     fn transpose_swaps_with_the_line_above() {
         let text = "one\ntwo\nthree";
-        let change = transpose(text, &Target::caret(5));
+        let at = CharOffset::new;
+        let change = transpose(text, &Target::caret(at(5)));
         let result = stet_domain::text::apply(text, change.edits.clone()).unwrap();
         assert_eq!(result, "two\none\nthree");
-        assert_eq!(change.selection, Some(4..4));
-        assert!(transpose(text, &Target::caret(1)).is_empty());
+        assert_eq!(change.selection, Some(at(4)..at(4)));
+        assert!(transpose(text, &Target::caret(at(1))).is_empty());
     }
 }

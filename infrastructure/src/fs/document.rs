@@ -194,7 +194,7 @@ mod tests {
     use proptest::prelude::*;
     use std::fs;
     use std::time::{Duration, Instant};
-    use stet_domain::text::NUL_PLACEHOLDER;
+    use stet_domain::text::{CharOffset, NUL_PLACEHOLDER};
 
     fn save_options(dir: &Path) -> SaveOptions {
         SaveOptions::new(dir.join("backups"))
@@ -320,7 +320,7 @@ mod tests {
         let SaveError::Unmappable(unmappable) = error else {
             panic!("expected Unmappable, got {error}");
         };
-        assert_eq!(unmappable.chars, vec![(5, '€')]);
+        assert_eq!(unmappable.chars, vec![(CharOffset::new(5), '€')]);
         assert_eq!(fs::read_to_string(&path).unwrap(), "untouched");
     }
 

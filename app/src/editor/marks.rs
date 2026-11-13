@@ -26,7 +26,7 @@ use sourceview5::prelude::*;
 use std::cell::{Cell, Ref, RefCell};
 use std::ops::Range;
 use stet_domain::marks::{BookmarkHistory, Bookmarks, Footprint, MarkStyle, Marks, Step};
-use stet_domain::text::{LineIndex, TextEdit};
+use stet_domain::text::{CharOffset, LineIndex, TextEdit};
 
 /// The source-mark category of bookmarks.
 pub const BOOKMARK_CATEGORY: &str = "stet-bookmark";
@@ -166,7 +166,7 @@ pub struct DocMarks {
     own: Cell<u32>,
     marks: RefCell<Marks>,
     /// The character ranges the marks' tags cover now.
-    tagged: RefCell<Vec<Range<usize>>>,
+    tagged: RefCell<Vec<Range<CharOffset>>>,
 }
 
 impl DocMarks {
@@ -325,7 +325,7 @@ impl DocMarks {
     }
 
     /// `chars` characters went in at `offset`.
-    pub fn on_insert(&self, offset: usize, chars: usize) {
+    pub fn on_insert(&self, offset: CharOffset, chars: usize) {
         match self.replay.get() {
             Some((undo, mut seen)) => {
                 seen.observe(offset, 0, chars);
@@ -343,7 +343,7 @@ impl DocMarks {
     }
 
     /// The characters `start..end` went.
-    pub fn on_delete(&self, start: usize, end: usize) {
+    pub fn on_delete(&self, start: CharOffset, end: CharOffset) {
         match self.replay.get() {
             Some((undo, mut seen)) => {
                 seen.observe(start, end - start, 0);
@@ -401,15 +401,15 @@ impl DocMarks {
     /// Tags the marks around the lines `views` show, and removes the tags elsewhere.
     pub fn retag(&self, buffer: &sourceview5::Buffer, views: &[sourceview5::View]) {
         let table = buffer.tag_table();
-        let len = buffer.total_chars();
+        let len = buffer.end_char();
         for range in self.tagged.take() {
             let end = range.end.min(len);
             let start = range.start.min(end);
             for style in MarkStyle::ALL {
                 buffer.remove_tag_by_name(
                     tag_name(style),
-                    &buffer.iter_at_char_offset(start),
-                    &buffer.iter_at_char_offset(end),
+                    &buffer.iter_at_char(start),
+                    &buffer.iter_at_char(end),
                 );
             }
         }
@@ -429,8 +429,8 @@ impl DocMarks {
                 for range in ranges[from..].iter().take_while(|range| range.start < end) {
                     buffer.apply_tag(
                         &tag,
-                        &buffer.iter_at_char_offset(range.start),
-                        &buffer.iter_at_char_offset(range.end),
+                        &buffer.iter_at_char(range.start),
+                        &buffer.iter_at_char(range.end),
                     );
                 }
             }
@@ -439,14 +439,14 @@ impl DocMarks {
     }
 
     /// The character ranges the tags cover, for the self-test.
-    pub fn tagged(&self) -> Vec<Range<usize>> {
+    pub fn tagged(&self) -> Vec<Range<CharOffset>> {
         self.tagged.borrow().clone()
     }
 }
 
 /// The character ranges around the lines each view shows, merged where they overlap.
-fn windows(buffer: &sourceview5::Buffer, views: &[sourceview5::View]) -> Vec<Range<usize>> {
-    let mut windows: Vec<Range<usize>> = views
+fn windows(buffer: &sourceview5::Buffer, views: &[sourceview5::View]) -> Vec<Range<CharOffset>> {
+    let mut windows: Vec<Range<CharOffset>> = views
         .iter()
         .map(|view| {
             let rect = view.visible_rect();
@@ -458,15 +458,15 @@ fn windows(buffer: &sourceview5::Buffer, views: &[sourceview5::View]) -> Vec<Ran
                 .map_or_else(|| buffer.total_lines(), |iter| iter.line_number());
             let start = buffer
                 .iter_at_line_number(top.saturating_sub(TAG_MARGIN_LINES))
-                .map_or(0, |iter| iter.char_offset());
+                .map_or(CharOffset::ZERO, |iter| iter.char_offset());
             let end = buffer
                 .iter_at_line_number(bottom.saturating_add(TAG_MARGIN_LINES))
-                .map_or_else(|| buffer.total_chars(), |iter| iter.char_offset());
+                .map_or_else(|| buffer.end_char(), |iter| iter.char_offset());
             start..end
         })
         .collect();
     windows.sort_by_key(|window| window.start);
-    let mut merged: Vec<Range<usize>> = Vec::new();
+    let mut merged: Vec<Range<CharOffset>> = Vec::new();
     for window in windows {
         match merged.last_mut() {
             Some(last) if window.start <= last.end => last.end = last.end.max(window.end),

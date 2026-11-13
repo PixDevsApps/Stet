@@ -44,7 +44,7 @@ use stet_domain::search::{HISTORY_LIMIT, History, SearchHistory};
 use stet_domain::session::{
     BackupAction, BackupState, RecordId, SCHEMA_VERSION, Session, TabRecord, ViewSlot, WindowState,
 };
-use stet_domain::text::line_count;
+use stet_domain::text::{CharOffset, line_count};
 use stet_domain::view::Zoom;
 use stet_infrastructure::encoding::{DocumentFormat, encoding_for_name, entry_for, entry_for_id};
 use stet_infrastructure::fs::{
@@ -1061,7 +1061,7 @@ impl Window {
         let session = page.session().clone();
         let loading = page.is_loading();
         let (caret, selection) = if loading {
-            (0, None)
+            (CharOffset::ZERO, None)
         } else {
             page.own_selection()
         };
@@ -1110,7 +1110,7 @@ impl Window {
     /// A clone in `view` of the document recorded as `of`: its own place only.
     fn clone_record(&self, page: &EditorPage, of: RecordId, view: ViewSlot) -> TabRecord {
         let (caret, selection) = if page.is_loading() {
-            (0, None)
+            (CharOffset::ZERO, None)
         } else {
             page.own_selection()
         };

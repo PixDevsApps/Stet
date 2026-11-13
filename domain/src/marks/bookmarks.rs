@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::text::{LineIndex, TextEdit};
+use crate::text::{CharOffset, LineIndex, TextEdit};
 
 /// Bookmarked lines, sorted and unique.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
@@ -194,8 +194,8 @@ impl Extend<usize> for Bookmarks {
 
 /// Adjacent edits act as one: their deleted ranges join into one span.
 struct Group {
-    start: usize,
-    end: usize,
+    start: CharOffset,
+    end: CharOffset,
     first_line: usize,
     last_line: usize,
     newlines: usize,
@@ -204,24 +204,28 @@ struct Group {
 
 impl Group {
     fn from_edits(edits: &[TextEdit], before: &LineIndex) -> Vec<Self> {
-        debug_assert!(edits.windows(2).all(|pair| pair[0].end <= pair[1].start));
+        debug_assert!(
+            edits
+                .windows(2)
+                .all(|pair| pair[0].end() <= pair[1].start())
+        );
         let mut groups: Vec<Self> = Vec::new();
         for edit in edits {
             let newlines = memchr::memchr_iter(b'\n', edit.insert.as_bytes()).count();
             match groups.last_mut() {
-                Some(group) if group.end == edit.start => {
-                    group.end = edit.end;
-                    group.last_line = before.line_of_char(edit.end);
+                Some(group) if group.end == edit.start() => {
+                    group.end = edit.end();
+                    group.last_line = before.line_of_char(edit.end());
                     group.newlines += newlines;
-                    group.pure_insert &= edit.start == edit.end;
+                    group.pure_insert &= edit.range().is_empty();
                 }
                 _ => groups.push(Self {
-                    start: edit.start,
-                    end: edit.end,
-                    first_line: before.line_of_char(edit.start),
-                    last_line: before.line_of_char(edit.end),
+                    start: edit.start(),
+                    end: edit.end(),
+                    first_line: before.line_of_char(edit.start()),
+                    last_line: before.line_of_char(edit.end()),
                     newlines,
-                    pure_insert: edit.start == edit.end,
+                    pure_insert: edit.range().is_empty(),
                 }),
             }
         }
@@ -237,6 +241,7 @@ impl Group {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::testing::{at, chars};
     use crate::text::{Bias, apply, map_offset, normalize};
     use proptest::prelude::*;
 
@@ -280,11 +285,11 @@ mod tests {
     #[test]
     fn lines_inserted_above_shift_a_bookmark() {
         assert_eq!(
-            remapped("a\nb\nc", &[2], vec![TextEdit::insert(0, "x\ny\n")]),
+            remapped("a\nb\nc", &[2], vec![TextEdit::insert(at(0), "x\ny\n")]),
             [4]
         );
         assert_eq!(
-            remapped("a\nb\nc", &[2], vec![TextEdit::insert(1, "\nx")]),
+            remapped("a\nb\nc", &[2], vec![TextEdit::insert(at(1), "\nx")]),
             [3]
         );
     }
@@ -292,65 +297,82 @@ mod tests {
     #[test]
     fn deleting_a_whole_line_drops_its_bookmark() {
         assert_eq!(
-            remapped("a\nb\nc", &[1, 2], vec![TextEdit::delete(2..4)]),
+            remapped("a\nb\nc", &[1, 2], vec![TextEdit::delete(chars(2..4))]),
             [1]
         );
         assert_eq!(
-            remapped("a\nb", &[1], vec![TextEdit::delete(1..3)]),
+            remapped("a\nb", &[1], vec![TextEdit::delete(chars(1..3))]),
             [] as [usize; 0]
         );
         assert_eq!(
-            remapped("a\n", &[1], vec![TextEdit::delete(1..2)]),
+            remapped("a\n", &[1], vec![TextEdit::delete(chars(1..2))]),
             [] as [usize; 0]
         );
         assert_eq!(
-            remapped("a\nb\n", &[1, 2], vec![TextEdit::delete(2..4)]),
+            remapped("a\nb\n", &[1, 2], vec![TextEdit::delete(chars(2..4))]),
             [1]
         );
         assert_eq!(
-            remapped("x\ny\nz", &[1, 2], vec![TextEdit::delete(2..5)]),
+            remapped("x\ny\nz", &[1, 2], vec![TextEdit::delete(chars(2..5))]),
             [] as [usize; 0]
         );
-        assert_eq!(remapped("a\nb\nc", &[1], vec![TextEdit::delete(2..3)]), [1]);
+        assert_eq!(
+            remapped("a\nb\nc", &[1], vec![TextEdit::delete(chars(2..3))]),
+            [1]
+        );
     }
 
     #[test]
     fn enter_at_the_start_of_a_line_moves_the_bookmark_with_the_text() {
         assert_eq!(
-            remapped("ab\ncd", &[1], vec![TextEdit::insert(3, "\n")]),
+            remapped("ab\ncd", &[1], vec![TextEdit::insert(at(3), "\n")]),
             [2]
         );
         assert_eq!(
-            remapped("ab\ncd", &[1], vec![TextEdit::insert(4, "\n")]),
+            remapped("ab\ncd", &[1], vec![TextEdit::insert(at(4), "\n")]),
             [1]
         );
         assert_eq!(
-            remapped("ab\ncd", &[1], vec![TextEdit::new(3..4, "x\ny")]),
+            remapped("ab\ncd", &[1], vec![TextEdit::new(chars(3..4), "x\ny")]),
             [1]
         );
     }
 
     #[test]
     fn merged_lines_keep_a_bookmark_on_the_surviving_text() {
-        assert_eq!(remapped("a\nb", &[0, 1], vec![TextEdit::delete(1..2)]), [0]);
-        assert_eq!(remapped("a\nb", &[1], vec![TextEdit::delete(1..2)]), [0]);
         assert_eq!(
-            remapped("abc\ndef\nghi", &[0, 1, 2], vec![TextEdit::delete(1..9)]),
+            remapped("a\nb", &[0, 1], vec![TextEdit::delete(chars(1..2))]),
             [0]
         );
         assert_eq!(
-            remapped("abc\ndef\nghi", &[2], vec![TextEdit::new(0..9, "x\n\ny")]),
+            remapped("a\nb", &[1], vec![TextEdit::delete(chars(1..2))]),
+            [0]
+        );
+        assert_eq!(
+            remapped(
+                "abc\ndef\nghi",
+                &[0, 1, 2],
+                vec![TextEdit::delete(chars(1..9))]
+            ),
+            [0]
+        );
+        assert_eq!(
+            remapped(
+                "abc\ndef\nghi",
+                &[2],
+                vec![TextEdit::new(chars(0..9), "x\n\ny")]
+            ),
             [2]
         );
         assert_eq!(
-            remapped("\nb", &[0], vec![TextEdit::delete(0..1)]),
+            remapped("\nb", &[0], vec![TextEdit::delete(chars(0..1))]),
             [] as [usize; 0]
         );
     }
 
     #[test]
     fn adjacent_edits_count_as_one_deletion() {
-        let edits = vec![TextEdit::delete(2..3), TextEdit::delete(3..4)];
+        let edits = vec![TextEdit::delete(chars(2..3)), TextEdit::delete(chars(3..4))];
         assert_eq!(remapped("a\nb\nc", &[1, 2], edits), [1]);
     }
 
@@ -377,7 +399,7 @@ mod tests {
                 .filter_map(|(start, end, insert)| {
                     (start >= last_end).then(|| {
                         last_end = end;
-                        TextEdit::new(start..end, insert)
+                        TextEdit::new(chars(start..end), insert)
                     })
                 })
                 .collect()
@@ -403,7 +425,7 @@ mod tests {
             prop_assert!(bookmarks.lines().iter().all(|&line| line < after.line_count()));
             for &line in &marked {
                 let span = before.line_chars(line);
-                if edits.iter().all(|edit| edit.end < span.start || edit.start > span.end) {
+                if edits.iter().all(|edit| edit.end() < span.start || edit.start() > span.end) {
                     let moved = after.line_of_char(map_offset(span.start, &edits, Bias::Before));
                     prop_assert!(bookmarks.contains(moved), "line {line} lost its bookmark");
                     prop_assert_eq!(

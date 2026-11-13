@@ -47,7 +47,7 @@ fn validation_error(text: &str, error: &roxmltree::Error) -> XmlError {
     let offset = match error {
         roxmltree::Error::NoRootNode
         | roxmltree::Error::UnclosedRootNode
-        | roxmltree::Error::UnexpectedEndOfStream => index.len_chars(),
+        | roxmltree::Error::UnexpectedEndOfStream => index.end_char(),
         _ => index.offset(Position::new(
             (position.row as usize).saturating_sub(1),
             (position.col as usize).saturating_sub(1),
@@ -252,6 +252,7 @@ mod tests {
 
     use super::*;
     use crate::text::apply;
+    use crate::text::testing::chars;
     use proptest::prelude::*;
 
     fn pretty(text: &str) -> String {
@@ -349,7 +350,7 @@ mod tests {
         );
         let error = format("<a>\n  <b></b>", Indent::default()).unwrap_err();
         assert_eq!(error.message, "`<a>` is not closed");
-        assert_eq!((error.line, error.column, error.offset), (1, 1, 0));
+        assert_eq!((error.line, error.column, error.offset.get()), (1, 1, 0));
         let error = format("<a><!-- x</a>", Indent::default()).unwrap_err();
         assert_eq!((error.line, error.column), (1, 4));
         assert!(format("</a>", Indent::default()).is_err());
@@ -368,7 +369,7 @@ mod tests {
         );
         let error = validate("<a>\n  <b></a>").unwrap_err();
         assert_eq!(error.message, "expected 'b' tag, not 'a'");
-        assert_eq!((error.line, error.column, error.offset), (2, 6, 9));
+        assert_eq!((error.line, error.column, error.offset.get()), (2, 6, 9));
         let error = validate("<a x='1' x='2'/>").unwrap_err();
         assert_eq!(error.message, "attribute 'x' is already defined");
         let error = validate("<a>&nope;</a>").unwrap_err();
@@ -377,7 +378,7 @@ mod tests {
         assert_eq!(error.message, "an unknown namespace prefix 'p'");
         let error = validate("<a>\n<b>").unwrap_err();
         assert_eq!(error.message, "the root node was opened but never closed");
-        assert_eq!((error.line, error.column, error.offset), (2, 4, 7));
+        assert_eq!((error.line, error.column, error.offset.get()), (2, 4, 7));
         assert!(validate("<a/><b/>").is_err());
         assert!(validate("").is_err());
         assert!(validate("<a>--<!-- x -- y --></a>").is_err());
@@ -392,8 +393,9 @@ mod tests {
             "\n<a>\n    <b/>\n</a>\n"
         );
         let text = "x\n<a><b></a>";
-        let error = format_target(text, &Target::Selection(2..12), Indent::default()).unwrap_err();
-        assert_eq!((error.line, error.column, error.offset), (2, 7, 8));
+        let error =
+            format_target(text, &Target::Selection(chars(2..12)), Indent::default()).unwrap_err();
+        assert_eq!((error.line, error.column, error.offset.get()), (2, 7, 8));
     }
 
     fn attributes() -> impl Strategy<Value = String> {

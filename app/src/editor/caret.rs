@@ -7,7 +7,7 @@ use crate::convert::{BufferPositions, IterPosition};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
-use stet_domain::text::Position;
+use stet_domain::text::{CharOffset, Position};
 
 impl EditorPage {
     /// Keeps the caret and selection the buffer has now as this view's, while another view of
@@ -55,7 +55,7 @@ impl EditorPage {
     }
 
     /// This view's caret and selection, in characters: (caret, selection).
-    pub fn own_selection(&self) -> (usize, Option<(usize, usize)>) {
+    pub fn own_selection(&self) -> (CharOffset, Option<(CharOffset, CharOffset)>) {
         let buffer = self.buffer();
         let saved = self.imp().selection.borrow().clone();
         let (insert, bound) = match saved {
@@ -76,9 +76,9 @@ impl EditorPage {
 
     /// Puts this view's caret at `caret` with the selection reaching to `anchor` (characters):
     /// in the buffer when it has this view's caret, else in the marks this view keeps.
-    pub fn place_selection(&self, anchor: usize, caret: usize) {
+    pub fn place_selection(&self, anchor: CharOffset, caret: CharOffset) {
         let buffer = self.buffer();
-        let at = |chars: usize| buffer.iter_at_char_offset(chars);
+        let at = |offset| buffer.iter_at_char(offset);
         let document = self.document();
         if document.caret_owner.upgrade().is_none() {
             document.caret_owner.set(Some(self));
@@ -142,9 +142,9 @@ impl EditorPage {
     }
 
     /// Selects the character at `offset` and shows it (the unmappable dialog's Go To).
-    pub fn select_char(&self, offset: usize) {
+    pub fn select_char(&self, offset: CharOffset) {
         let buffer = self.buffer();
-        let start = buffer.iter_at_char_offset(offset);
+        let start = buffer.iter_at_char(offset);
         let mut end = start;
         end.forward_char();
         buffer.select_range(&start, &end);

@@ -73,7 +73,7 @@ pub struct PageSearch {
     pub own_pending: Cell<Option<(u64, u64)>>,
     pub own_cancel: RefCell<Option<Arc<AtomicBool>>>,
     /// The character range our match tag currently covers.
-    tagged: Cell<Option<(usize, usize)>>,
+    tagged: Cell<Option<(CharOffset, CharOffset)>>,
     /// The pending search after an edit.
     pub own_refresh: Debounce,
     /// Smart highlighting's pending update.
@@ -227,11 +227,11 @@ impl PageSearch {
 
     fn untag(&self, buffer: &sourceview5::Buffer) {
         if let Some((start, end)) = self.tagged.take() {
-            let end = end.min(buffer.total_chars());
+            let end = end.min(buffer.end_char());
             buffer.remove_tag_by_name(
                 OWN_MATCH_TAG,
-                &buffer.iter_at_char_offset(start.min(end)),
-                &buffer.iter_at_char_offset(end),
+                &buffer.iter_at_char(start.min(end)),
+                &buffer.iter_at_char(end),
             );
         }
     }
@@ -259,25 +259,24 @@ impl PageSearch {
         let last_line = bottom.saturating_add(TAG_MARGIN_LINES);
         let start = buffer
             .iter_at_line_number(first_line)
-            .map_or(0, |iter| iter.char_offset());
+            .map_or(CharOffset::ZERO, |iter| iter.char_offset());
         let end = buffer
             .iter_at_line_number(last_line)
-            .map_or_else(|| buffer.total_chars(), |iter| iter.char_offset());
+            .map_or_else(|| buffer.end_char(), |iter| iter.char_offset());
         let matches = &own.matches;
-        let (first, last) = (CharOffset::new(start), CharOffset::new(end));
-        let from = matches.partition_point(|found| found.end < first);
+        let from = matches.partition_point(|found| found.end < start);
         let Some(tag) = buffer.tag_table().lookup(OWN_MATCH_TAG) else {
             return;
         };
         for found in matches[from..]
             .iter()
-            .take_while(|found| found.start <= last)
+            .take_while(|found| found.start <= end)
         {
             if found.end > found.start {
                 buffer.apply_tag(
                     &tag,
-                    &buffer.iter_at_char_offset(found.start.get()),
-                    &buffer.iter_at_char_offset(found.end.get()),
+                    &buffer.iter_at_char(found.start),
+                    &buffer.iter_at_char(found.end),
                 );
             }
         }
@@ -285,10 +284,9 @@ impl PageSearch {
     }
 
     /// 1-based position of the match `start..end` among our matcher's matches, if it is one.
-    pub fn own_position(&self, start: usize, end: usize) -> Option<usize> {
+    pub fn own_position(&self, start: CharOffset, end: CharOffset) -> Option<usize> {
         let own = self.own.borrow();
         let matches = &own.as_ref()?.matches;
-        let (start, end) = (CharOffset::new(start), CharOffset::new(end));
         let index = matches.partition_point(|found| found.start < start);
         matches
             .get(index)

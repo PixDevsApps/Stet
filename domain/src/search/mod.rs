@@ -19,6 +19,8 @@ mod translate;
 use std::borrow::Cow;
 use std::ops::Range;
 
+use crate::text::CharOffset;
+
 pub use extended::unescape;
 pub use history::{HISTORY_LIMIT, History, Recall, SearchHistory};
 pub use smart::SmartHighlight;
@@ -112,16 +114,22 @@ impl SearchOptions {
     /// The character range that Count and Replace All work on: the selection with In selection;
     /// the whole text with Wrap around; otherwise from the caret (or the selection's start) to
     /// the end, or backward from the start to the caret (or the selection's end). An empty
-    /// selection counts as no selection.
-    pub fn scope(&self, caret: usize, selection: Option<Range<usize>>, len: usize) -> Range<usize> {
+    /// selection counts as no selection. `end` is the end of the text.
+    pub fn scope(
+        &self,
+        caret: CharOffset,
+        selection: Option<Range<CharOffset>>,
+        end: CharOffset,
+    ) -> Range<CharOffset> {
+        let start = CharOffset::ZERO;
         let selection = selection.filter(|range| range.start < range.end);
         match selection {
-            Some(range) if self.in_selection => range.start.min(len)..range.end.min(len),
-            _ if self.wrap => 0..len,
-            Some(range) if self.backward => 0..range.end.min(len),
-            Some(range) => range.start.min(len)..len,
-            None if self.backward => 0..caret.min(len),
-            None => caret.min(len)..len,
+            Some(range) if self.in_selection => range.start.min(end)..range.end.min(end),
+            _ if self.wrap => start..end,
+            Some(range) if self.backward => start..range.end.min(end),
+            Some(range) => range.start.min(end)..end,
+            None if self.backward => start..caret.min(end),
+            None => caret.min(end)..end,
         }
     }
 }
@@ -183,6 +191,7 @@ pub fn to_buffer_text(text: &str) -> Cow<'_, str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::testing::{at, chars};
 
     #[test]
     fn buffer_text_normalizes_line_breaks_and_nul() {
@@ -205,13 +214,25 @@ mod tests {
             in_selection: true,
             ..options
         };
-        assert_eq!(plain.scope(4, None, 10), 4..10);
-        assert_eq!(plain.scope(4, Some(2..6), 10), 2..10);
-        assert_eq!(backward.scope(4, None, 10), 0..4);
-        assert_eq!(backward.scope(4, Some(2..6), 10), 0..6);
-        assert_eq!(in_selection.scope(4, Some(2..6), 10), 2..6);
-        assert_eq!(options.scope(4, Some(2..6), 10), 0..10);
-        assert_eq!(in_selection.scope(4, Some(3..3), 10), 0..10);
-        assert_eq!(plain.scope(40, None, 10), 10..10);
+        assert_eq!(plain.scope(at(4), None, at(10)), chars(4..10));
+        assert_eq!(plain.scope(at(4), Some(chars(2..6)), at(10)), chars(2..10));
+        assert_eq!(backward.scope(at(4), None, at(10)), chars(0..4));
+        assert_eq!(
+            backward.scope(at(4), Some(chars(2..6)), at(10)),
+            chars(0..6)
+        );
+        assert_eq!(
+            in_selection.scope(at(4), Some(chars(2..6)), at(10)),
+            chars(2..6)
+        );
+        assert_eq!(
+            options.scope(at(4), Some(chars(2..6)), at(10)),
+            chars(0..10)
+        );
+        assert_eq!(
+            in_selection.scope(at(4), Some(chars(3..3)), at(10)),
+            chars(0..10)
+        );
+        assert_eq!(plain.scope(at(40), None, at(10)), chars(10..10));
     }
 }

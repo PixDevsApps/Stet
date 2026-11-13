@@ -7,7 +7,7 @@ use std::path::Path;
 use encoding_rs::Encoding;
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{LfText, RawEdit, Skip, apply_raw, raw_edits};
-use stet_domain::text::{ByteOffset, CharOffset, Eol, OffsetRange};
+use stet_domain::text::{ByteOffset, CharOffset, Eol};
 
 use crate::encoding::{DocumentFormat, bom_bytes, decode, detect, encode};
 use crate::files::{CancelToken, FileError};
@@ -90,7 +90,7 @@ pub(super) fn plan(
         &lf,
         ranges
             .iter()
-            .map(OffsetRange::get)
+            .cloned()
             .zip(result.edits.iter().map(|edit| edit.insert.as_str())),
     );
     let new_raw =
@@ -207,7 +207,7 @@ pub fn replaced_hits(
     let mut matches = Vec::with_capacity(edits.len().min(limit));
     let mut shift: isize = 0;
     let (mut line, mut line_from) = (0, 0);
-    let (mut chars, mut chars_from) = (0, 0);
+    let (mut chars, mut chars_from) = (CharOffset::ZERO, 0);
     for (range, edit) in ranges.iter().zip(edits).take(limit) {
         let start = range.start.get().saturating_add_signed(shift);
         let end = start + edit.insert.len();
@@ -216,8 +216,8 @@ pub fn replaced_hits(
         chars += new_text[chars_from..start].chars().count();
         let length = edit.insert.chars().count();
         matches.push(Match {
-            start: CharOffset::new(chars),
-            end: CharOffset::new(chars + length),
+            start: chars,
+            end: chars + length,
             line,
         });
         // The next search for line breaks starts after this replacement.

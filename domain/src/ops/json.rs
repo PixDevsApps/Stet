@@ -156,6 +156,7 @@ mod tests {
     use std::fmt::Write as _;
 
     use super::*;
+    use crate::text::testing::chars;
     use crate::text::{LineIndex, apply};
     use proptest::prelude::*;
 
@@ -216,12 +217,12 @@ mod tests {
     fn errors_point_at_the_character() {
         let error = validate("[1, 2 3]").unwrap_err();
         assert_eq!(error.message, "expected `,` or `]`");
-        assert_eq!((error.line, error.column, error.offset), (1, 7, 6));
+        assert_eq!((error.line, error.column, error.offset.get()), (1, 7, 6));
         let error = validate("{\"é\": x}").unwrap_err();
         assert_eq!(error.message, "expected value");
-        assert_eq!((error.line, error.column, error.offset), (1, 7, 6));
+        assert_eq!((error.line, error.column, error.offset.get()), (1, 7, 6));
         let error = validate("{\n  \"a\": 1,\n  }").unwrap_err();
-        assert_eq!((error.line, error.column, error.offset), (3, 3, 14));
+        assert_eq!((error.line, error.column, error.offset.get()), (3, 3, 14));
         assert_eq!(
             error.to_string(),
             format!("{} at line 3, column 3", error.message)
@@ -254,14 +255,14 @@ mod tests {
     fn targets_keep_the_surrounding_whitespace() {
         let text = "\n  {\"a\":[1]}\n";
         let change = format_target(text, &Target::Document, Indent::Spaces(2)).unwrap();
-        assert_eq!(change.selection, Some(3..3));
+        assert_eq!(change.selection, Some(chars(3..3)));
         assert_eq!(
             apply(text, change.edits).unwrap(),
             "\n  {\n  \"a\": [\n    1\n  ]\n}\n"
         );
         let text = "x = {\"a\": 1};";
-        let change = minify_target(text, &Target::Selection(4..12)).unwrap();
-        assert_eq!(change.selection, Some(4..11));
+        let change = minify_target(text, &Target::Selection(chars(4..12))).unwrap();
+        assert_eq!(change.selection, Some(chars(4..11)));
         assert_eq!(apply(text, change.edits).unwrap(), "x = {\"a\":1};");
         assert!(minify_target("[1]", &Target::Document).unwrap().is_empty());
     }
@@ -269,8 +270,9 @@ mod tests {
     #[test]
     fn target_errors_are_positions_in_the_document() {
         let text = "x\n  [1,]\n";
-        let error = format_target(text, &Target::Selection(2..8), Indent::default()).unwrap_err();
-        assert_eq!((error.line, error.column, error.offset), (2, 6, 7));
+        let error =
+            format_target(text, &Target::Selection(chars(2..8)), Indent::default()).unwrap_err();
+        assert_eq!((error.line, error.column, error.offset.get()), (2, 6, 7));
     }
 
     fn space() -> impl Strategy<Value = String> {
@@ -372,7 +374,7 @@ mod tests {
         fn error_positions_are_consistent(text in "[\\[\\]{}:,\" a1\\\\n.e\n-]{0,16}") {
             if let Err(error) = validate(&text) {
                 let index = LineIndex::new(&text);
-                prop_assert!(error.offset <= index.len_chars());
+                prop_assert!(error.offset <= index.end_char());
                 let position = index.position(error.offset);
                 prop_assert_eq!((error.line, error.column), (position.line + 1, position.column + 1));
                 prop_assert!(format(&text, Indent::default()).is_err());

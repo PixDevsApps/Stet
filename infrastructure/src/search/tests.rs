@@ -221,7 +221,7 @@ fn replace_one_rechecks_the_match() {
     let template = Template::parse(r"<\U\1>");
     assert_eq!(
         matcher.replace_one(text, &found, &template),
-        Ok(TextEdit::new(0..10, "<ALICE>"))
+        Ok(TextEdit::new(chars(0..10), "<ALICE>"))
     );
     let stale = matched(1, 10, 0);
     assert_eq!(
@@ -232,13 +232,13 @@ fn replace_one_rechecks_the_match() {
     let second = matched(0, 1, 0);
     assert_eq!(
         after_empty.replace_one("b", &second, &Template::literal("x")),
-        Ok(TextEdit::new(0..1, "x"))
+        Ok(TextEdit::new(chars(0..1), "x"))
     );
     assert_eq!(
         Matcher::new(&Query::regex(r"user=(\w+)"))
             .unwrap()
             .replace_one(text, &found, &Template::parse("$1")),
-        Ok(TextEdit::new(0..10, "alice"))
+        Ok(TextEdit::new(chars(0..10), "alice"))
     );
 }
 
@@ -253,7 +253,7 @@ fn replace_all_counts_unchanged_matches_without_editing_them() {
         )
         .unwrap();
     assert_eq!(result.count, 2);
-    assert_eq!(result.edits, [TextEdit::new(4..7, "DEF")]);
+    assert_eq!(result.edits, [TextEdit::new(chars(4..7), "DEF")]);
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn a_single_bulk_edit_covers_the_first_to_the_last_change() {
     assert_eq!(result.edits.len(), 4);
     assert!(!result.is_bulk());
     let edit = result.as_single_edit(text).unwrap();
-    assert_eq!(edit, TextEdit::new(1..7, "#b##c#"));
+    assert_eq!(edit, TextEdit::new(chars(1..7), "#b##c#"));
     assert_eq!(result.apply(text), "a#b##c#d");
     let mut changed = result;
     changed.edits.pop();

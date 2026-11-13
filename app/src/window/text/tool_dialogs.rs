@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::str::FromStr;
 use stet_domain::ops::numbers::{Base, NumberOverflow, NumberSequence, Padding};
 use stet_domain::ops::{Change, SyntaxError, Target, prefix};
-use stet_domain::text::LineIndex;
+use stet_domain::text::{CharOffset, LineIndex};
 
 /// The response that applies a tool dialog.
 pub const APPLY: &str = "apply";
@@ -91,12 +91,12 @@ where
 
 /// How many lines Insert Numbers numbers: from the caret's line to the end, or every line the
 /// selection touches except a last one it reaches only at column 0 (as `Target::Selection`).
-fn numbered_lines(buffer: &sourceview5::Buffer, selected: &Range<usize>) -> usize {
-    let first = buffer.iter_at_char_offset(selected.start);
+fn numbered_lines(buffer: &sourceview5::Buffer, selected: &Range<CharOffset>) -> usize {
+    let first = buffer.iter_at_char(selected.start);
     let last = if selected.is_empty() {
         buffer.total_lines() - 1
     } else {
-        let end = buffer.iter_at_char_offset(selected.end);
+        let end = buffer.iter_at_char(selected.end);
         if end.line_number() > first.line_number() && end.starts_line() {
             end.line_number() - 1
         } else {

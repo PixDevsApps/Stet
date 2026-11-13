@@ -5,7 +5,7 @@ use std::fs::Permissions;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use stet_domain::session::{Fingerprint, SCHEMA_VERSION, WindowState};
-use stet_domain::text::Eol;
+use stet_domain::text::{CharOffset, Eol};
 
 #[test]
 fn creates_a_private_layout() {
@@ -138,8 +138,8 @@ fn forty_tabs(texts: &mut BTreeMap<RecordId, String>) -> Vec<TabRecord> {
                         bom: Some(false),
                         eol: Some(Eol::CrLf),
                         language: Some("rust".into()),
-                        caret: 7,
-                        selection: Some((2, 7)),
+                        caret: CharOffset::new(7),
+                        selection: Some((CharOffset::new(2), CharOffset::new(7))),
                         first_visible_line: 1,
                         disk_fingerprint: Some(Fingerprint {
                             dev: 57,
@@ -153,7 +153,7 @@ fn forty_tabs(texts: &mut BTreeMap<RecordId, String>) -> Vec<TabRecord> {
                 2 => TabRecord {
                     pinned: true,
                     read_only: true,
-                    caret: 3,
+                    caret: CharOffset::new(3),
                     ..file_tab(&id, &format!("/etc/file{index}.conf"), false)
                 },
                 _ => TabRecord {

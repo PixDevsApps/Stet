@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::CharOffset;
 use proptest::collection::vec;
 use proptest::prelude::*;
 use serde_json::{Value, json};
@@ -22,8 +23,8 @@ fn sample() -> Session {
                 bom: Some(false),
                 eol: Some(Eol::CrLf),
                 language: Some("markdown".into()),
-                caret: 120,
-                selection: Some((100, 120)),
+                caret: CharOffset::new(120),
+                selection: Some((CharOffset::new(100), CharOffset::new(120))),
                 first_visible_line: 3,
                 disk_fingerprint: Some(Fingerprint {
                     dev: 57,
@@ -50,7 +51,7 @@ fn sample() -> Session {
             TabRecord {
                 id: record_id("0199a3b2-7c20-7f00-9b11-0a1b2c3d4e5f"),
                 display_name: "todo.md".into(),
-                caret: 4,
+                caret: CharOffset::new(4),
                 view: ViewSlot::Second,
                 clone_of: Some(record_id("0199a3b2-7c1e-7d4a-9f00-3c5e8b2a1d10")),
                 ..TabRecord::default()
@@ -468,19 +469,23 @@ fn forgetting_drafts_keeps_file_tabs_clean() {
 
 #[test]
 fn selections_keep_their_direction() {
-    let tab = |caret, selection| TabRecord {
-        caret,
-        selection,
+    let tab = |caret, selection: Option<(usize, usize)>| TabRecord {
+        caret: CharOffset::new(caret),
+        selection: selection.map(|(start, end)| (CharOffset::new(start), CharOffset::new(end))),
         ..TabRecord::default()
     };
-    assert_eq!(tab(5, None).anchor_and_caret(10), (5, 5));
-    assert_eq!(tab(50, None).anchor_and_caret(10), (10, 10));
-    assert_eq!(tab(8, Some((2, 8))).anchor_and_caret(10), (2, 8));
-    assert_eq!(tab(2, Some((2, 8))).anchor_and_caret(10), (8, 2));
-    assert_eq!(tab(2, Some((8, 2))).anchor_and_caret(10), (8, 2));
+    let ends = |tab: TabRecord, len| {
+        let (anchor, caret) = tab.anchor_and_caret(len);
+        (anchor.get(), caret.get())
+    };
+    assert_eq!(ends(tab(5, None), 10), (5, 5));
+    assert_eq!(ends(tab(50, None), 10), (10, 10));
+    assert_eq!(ends(tab(8, Some((2, 8))), 10), (2, 8));
+    assert_eq!(ends(tab(2, Some((2, 8))), 10), (8, 2));
+    assert_eq!(ends(tab(2, Some((8, 2))), 10), (8, 2));
     // Past the end of a text that a crash left shorter.
-    assert_eq!(tab(30, Some((20, 30))).anchor_and_caret(25), (20, 25));
-    assert_eq!(tab(20, Some((20, 30))).anchor_and_caret(15), (15, 15));
+    assert_eq!(ends(tab(30, Some((20, 30))), 25), (20, 25));
+    assert_eq!(ends(tab(20, Some((20, 30))), 15), (15, 15));
 }
 
 fn backup(chars: usize) -> BackupState {
@@ -588,8 +593,9 @@ fn tab() -> impl Strategy<Value = TabRecord> {
         any::<Option<bool>>(),
         proptest::option::of(proptest::sample::select(Eol::ALL.to_vec())),
         proptest::option::of(text()),
-        any::<usize>(),
-        any::<Option<(usize, usize)>>(),
+        any::<usize>().prop_map(CharOffset::new),
+        any::<Option<(usize, usize)>>()
+            .prop_map(|ends| ends.map(|(a, b)| (CharOffset::new(a), CharOffset::new(b)))),
         any::<usize>(),
         any::<bool>(),
         proptest::option::of(fingerprint()),

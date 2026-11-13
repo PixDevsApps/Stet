@@ -348,8 +348,8 @@ impl Harness {
             .ok_or_else(|| format!("there are {} marks", marks.len()))?;
         let buffer = page.buffer();
         let text = buffer.text(
-            &buffer.iter_at_char_offset(range.start),
-            &buffer.iter_at_char_offset(range.end),
+            &buffer.iter_at_char(range.start),
+            &buffer.iter_at_char(range.end),
             true,
         );
         equal("marked text", text.to_string(), args[2].clone())
@@ -464,7 +464,7 @@ impl Harness {
             .view_page(index)
             .ok_or_else(|| format!("view {} shows no tab", args[0]))?;
         let (caret, _) = page.own_selection();
-        let iter = page.buffer().iter_at_char_offset(caret);
+        let iter = page.buffer().iter_at_char(caret);
         equal(
             "cursor (line, column)",
             (iter.line_number() + 1, iter.column() + 1),

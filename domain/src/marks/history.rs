@@ -13,7 +13,7 @@
 
 use std::ops::Range;
 
-use crate::text::{LineIndex, TextEdit};
+use crate::text::{CharOffset, LineIndex, TextEdit};
 
 use super::{Bookmarks, Marks};
 
@@ -25,7 +25,7 @@ const MAX_STEPS: usize = crate::view::MAX_UNDO_LEVELS as usize;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Footprint {
     /// Where the first replacement started.
-    pub start: usize,
+    pub start: CharOffset,
     pub deleted: usize,
     pub inserted: usize,
 }
@@ -35,8 +35,10 @@ impl Footprint {
     /// offsets), as they reached the buffer.
     pub fn of(replacements: &[TextEdit]) -> Self {
         Self {
-            start: replacements.first().map_or(0, |edit| edit.start),
-            deleted: replacements.iter().map(|edit| edit.end - edit.start).sum(),
+            start: replacements
+                .first()
+                .map_or(CharOffset::ZERO, TextEdit::start),
+            deleted: replacements.iter().map(TextEdit::removed).sum(),
             inserted: replacements
                 .iter()
                 .map(|edit| edit.insert.chars().count())
@@ -55,7 +57,7 @@ impl Footprint {
     }
 
     /// Adds one replacement seen while GTK undid or redid a step.
-    pub fn observe(&mut self, start: usize, deleted: usize, inserted: usize) {
+    pub fn observe(&mut self, start: CharOffset, deleted: usize, inserted: usize) {
         if self.deleted == 0 && self.inserted == 0 {
             self.start = start;
         } else {
@@ -95,11 +97,11 @@ impl Step {
         after: &Bookmarks,
     ) -> Option<Self> {
         let (first, last) = (edits.first()?, edits.last()?);
-        let first_line = index.line_of_char(first.start);
-        let last_line = index.line_of_char(last.end);
+        let first_line = index.line_of_char(first.start());
+        let last_line = index.line_of_char(last.end());
         let removed: usize = edits
             .iter()
-            .map(|edit| index.line_of_char(edit.end) - index.line_of_char(edit.start))
+            .map(|edit| index.line_of_char(edit.end()) - index.line_of_char(edit.start()))
             .sum();
         let added: usize = edits
             .iter()
@@ -108,7 +110,7 @@ impl Step {
         let lines_before = first_line..last_line + 1;
         let lines_after = first_line..last_line + 1 + added - removed;
         let inserted: usize = edits.iter().map(|edit| edit.insert.chars().count()).sum();
-        let deleted: usize = edits.iter().map(|edit| edit.end - edit.start).sum();
+        let deleted: usize = edits.iter().map(TextEdit::removed).sum();
         let len_before = index.len_chars();
         Some(Self {
             footprint: Footprint::of(applied),
@@ -234,7 +236,9 @@ impl BookmarkHistory {
 mod tests {
     use super::*;
     use crate::marks::delete_unbookmarked_lines;
+    use crate::text::OffsetRange;
     use crate::text::apply;
+    use crate::text::testing::{at, chars as char_range};
     use proptest::prelude::*;
 
     fn bookmarks(lines: &[usize]) -> Bookmarks {
@@ -251,19 +255,22 @@ mod tests {
 
     #[test]
     fn footprints_add_up_replacements() {
-        let edits = [TextEdit::new(4..6, "abc"), TextEdit::delete(10..12)];
+        let edits = [
+            TextEdit::new(char_range(4..6), "abc"),
+            TextEdit::delete(char_range(10..12)),
+        ];
         let footprint = Footprint::of(&edits);
         assert_eq!(
             footprint,
             Footprint {
-                start: 4,
+                start: at(4),
                 deleted: 4,
                 inserted: 3
             }
         );
         let mut seen = Footprint::default();
-        seen.observe(10, 0, 2);
-        seen.observe(4, 3, 2);
+        seen.observe(at(10), 0, 2);
+        seen.observe(at(4), 3, 2);
         assert_eq!(seen, footprint.inverse());
     }
 
@@ -304,14 +311,14 @@ mod tests {
     fn other_steps_are_not_mistaken_for_ours() {
         let text = numbered(4);
         let index = LineIndex::new(&text);
-        let edits = [TextEdit::new(0..6, "LINE 0")];
+        let edits = [TextEdit::new(char_range(0..6), "LINE 0")];
         let step = Step::new(&edits, &edits, &index, &bookmarks(&[1]), &bookmarks(&[1])).unwrap();
         let mut history = BookmarkHistory::default();
         history.record(step.clone());
         let len = text.chars().count();
         // Same length, another place: a typed word undone, say.
         let elsewhere = Footprint {
-            start: 9,
+            start: at(9),
             ..step.footprint.inverse()
         };
         assert_eq!(history.undone(elsewhere, len, &Bookmarks::new()), None);
@@ -366,7 +373,7 @@ mod tests {
     fn a_new_edit_ends_redo_and_a_new_step_replaces_it() {
         let text = numbered(3);
         let index = LineIndex::new(&text);
-        let edits = [TextEdit::insert(0, "x\n")];
+        let edits = [TextEdit::insert(at(0), "x\n")];
         let step = Step::new(&edits, &edits, &index, &bookmarks(&[1]), &bookmarks(&[2])).unwrap();
         let mut history = BookmarkHistory::default();
         history.record(step.clone());
@@ -400,11 +407,12 @@ mod tests {
     fn changes(text: &[char], edits: &[TextEdit]) -> Vec<Change> {
         let mut changes = Vec::new();
         for edit in edits.iter().rev() {
-            if edit.end > edit.start {
-                changes.push((edit.start, text[edit.start..edit.end].to_vec(), false));
+            let range = edit.range().get();
+            if !range.is_empty() {
+                changes.push((range.start, text[range.clone()].to_vec(), false));
             }
             if !edit.insert.is_empty() {
-                changes.push((edit.start, edit.insert.chars().collect(), true));
+                changes.push((range.start, edit.insert.chars().collect(), true));
             }
         }
         changes
@@ -417,10 +425,10 @@ mod tests {
         let mut play = |(at, chars, inserted): &Change| {
             if *inserted == undo {
                 text.drain(*at..*at + chars.len());
-                seen.observe(*at, chars.len(), 0);
+                seen.observe(CharOffset::ZERO + *at, chars.len(), 0);
             } else {
                 text.splice(*at..*at, chars.iter().copied());
-                seen.observe(*at, 0, chars.len());
+                seen.observe(CharOffset::ZERO + *at, 0, chars.len());
             }
         };
         if undo {
@@ -445,7 +453,7 @@ mod tests {
                 if end > chars.len() {
                     break;
                 }
-                let edit = TextEdit::new(start..end, insert);
+                let edit = TextEdit::new(char_range(start..end), insert);
                 if !edit.is_noop() {
                     edits.push(edit);
                 }
@@ -490,9 +498,9 @@ mod tests {
         use crate::marks::MarkStyle;
         let text = numbered(4);
         let index = LineIndex::new(&text);
-        let edits = [TextEdit::delete(0..7)];
+        let edits = [TextEdit::delete(char_range(0..7))];
         let mut before = Marks::new();
-        before.add(MarkStyle::Mark, std::iter::once(7..13));
+        before.add(MarkStyle::Mark, std::iter::once(char_range(7..13)));
         let mut after = before.clone();
         after.remap(&edits);
         let step = Step {
@@ -513,6 +521,9 @@ mod tests {
                 .is_some()
         );
         assert_eq!(history.redone_marks(), Some(&after));
-        assert_eq!(after.ranges(MarkStyle::Mark), std::slice::from_ref(&(0..6)));
+        assert_eq!(
+            after.ranges(MarkStyle::Mark),
+            std::slice::from_ref(&char_range(0..6))
+        );
     }
 }
