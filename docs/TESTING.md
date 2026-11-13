@@ -28,6 +28,15 @@ Run by the agent on the development machine (gtk4 1:4.24.1-1), headless on Broad
 | `python3 -I tools/check-links.py` | **Pass** after the history split; before it, it found one broken link (RELEASE_STATUS.md to the M9 milestone, an en dash typed as a hyphen), fixed. |
 | The new `session-settings.stet-test` steps against the code before the fix (`Settings::default()` in place of `self.settings()` in `put_restored_text`, a scratch change) | **Fail** as they should: `not ok 3 - assert-highlight false` and `not ok 4 - assert-banner "…over 2 MiB or 10 lines"` in the child; 25 of 26. With the fix: 26 of 26. |
 
+The continuation on `cleanup/offsets`, the same machine and display:
+
+| Command | Result |
+| --- | --- |
+| `STET_CI_DISPLAY=93 bash tools/ci.sh --ui` on `main` at `a5e45cb`, then on `79e6974`, `eb8d15a`, `86cb486`, `399eeb1` and `eba1f47` | **Pass** each time: 52 of 52 scripts, 4,789 steps. On `eba1f47`: tests `stet` 64 (54 without `selftest`), `stet-domain` 506 with 9 ignored, `stet-infrastructure` 232 with 5 ignored, 1 doc test; `cargo deny --locked check`: advisories, bans, licenses and sources ok. |
+| `cargo deny check` (cargo-deny 0.20.2) on `ee915b3`, before `deny.toml`'s path exception and the update | **Fail**: the RustSec advisory "xattr functions mark unwritten bytes as initialized when given a zero-length buffer" for rustix 1.1.5 (fixed in 1.1.6), and the workspace's path dependencies counted as wildcards. |
+| `keeps_user_extended_attributes` with rustix 1.1.6 and `read_xattr` still asking the size with an empty buffer (a scratch change) | **Fail**, panicked at the value check: 1.1.6 returns an empty result for an empty buffer. With `listxattr_query`/`getxattr_query`: **pass**. |
+| `cargo +1.92 check --workspace --all-targets --locked` on `eba1f47` | **Pass**. |
+
 Not verified: a Flatpak built from the release manifest with `--no-default-features` (`tools/flatpak.py build` needs the tagged commit, and `--untagged` would overwrite the published 1.6.0's build folder); its build command is the same one-flag change the Arch package checks. The GitHub Actions workflow on GitHub's runners (an `archlinux:base-devel` container, Arch's rust 1:1.99.1): run 43462425733 on `d2af54e` **failed** at `tools/check-links.py`, because git refused the checkout as owned by another user (fixed with `safe.directory`, `319ae57`); run 43462796391 **failed** to compile: Rust 1.99 deprecates `AtomicUsize::fetch_update`, and `-D warnings` made that an error (rewritten with `compare_exchange_weak`, which 1.92 also has, `396aad0`; the Find in Files unit tests and `cargo +1.92 check -p stet-infrastructure` passed locally); run 43463292924 on `396aad0` **passed** both jobs, `tools/ci.sh` and the minimum Rust version. The UI scripts were not run again after `396aad0`.
 
 ### 2026-11-12 — 1.6.0: the Flatpak
