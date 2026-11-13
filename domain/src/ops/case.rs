@@ -516,7 +516,8 @@ mod tests {
         fn conversions_are_idempotent(text in "[a-zA-Z \u{df}\u{3a3}\u{3c3}\u{1c6}\u{1c5}.'\n]{0,24}") {
             for case in [Case::Upper, Case::Lower, Case::Proper, Case::Sentence] {
                 let once = transform(&text, case);
-                prop_assert_eq!(transform(&once, case), once.clone(), "{:?}", case);
+                let twice = transform(&once, case);
+                prop_assert_eq!(twice, once, "{:?}", case);
             }
         }
 

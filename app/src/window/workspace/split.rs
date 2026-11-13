@@ -388,17 +388,16 @@ impl Window {
     /// The pages in front changed, or the sync toggles did: the positions now are the ones
     /// later scrolls are measured from.
     pub(in crate::window) fn reset_scroll_sync(&self) {
-        let split = &self.inner.split;
-        for index in 0..2 {
+        for (index, [vertical, horizontal]) in self.inner.split.last.iter().enumerate() {
             let Some(page) = self.view_page(index) else {
                 continue;
             };
             let view = page.view();
             if let Some(adjustment) = view.vadjustment() {
-                split.last[index][0].set(adjustment.value());
+                vertical.set(adjustment.value());
             }
             if let Some(adjustment) = view.hadjustment() {
-                split.last[index][1].set(adjustment.value());
+                horizontal.set(adjustment.value());
             }
         }
     }
