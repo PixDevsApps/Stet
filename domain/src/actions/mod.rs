@@ -8,13 +8,8 @@ mod menu;
 mod registry;
 
 pub use accelerator::{Accelerator, OVERRIDDEN_BUILTINS, is_key_name};
-pub use menu::{
-    BLANK_SUBMENU, BOOKMARK_SUBMENU, CASE_SUBMENU, CHARACTER_SETS_SUBMENU, CLEAR_STYLE_SUBMENU,
-    COMMENT_SUBMENU, COMPARE_SUBMENU, COPY_SUBMENU, EDITOR_MENU, EOL_SUBMENU, EditorMenuItem,
-    JSON_SUBMENU, JUMP_DOWN_SUBMENU, JUMP_UP_SUBMENU, LINES_SUBMENU, MOVE_CLONE_SUBMENU, Menu,
-    MenuPlace, RECENT_SUBMENU, STYLE_TOKEN_SUBMENU, SUBMENU_ORDER, TAB_MENU, XML_SUBMENU,
-    submenu_rank,
-};
+use menu::{COMPARE_SUBMENU, LINES_SUBMENU};
+pub use menu::{Menu, MenuItem, MenuList, MenuPlace, MenuSection, MenuTree, Menus};
 pub use registry::ActionId;
 
 /// Where an action lives: on the application, or on the window that has focus.

@@ -1,0 +1,352 @@
+---
+source: domain/src/actions/menu.rs
+expression: "text(&Menus::new(|_| true))"
+---
+# main
+File ›
+  --
+  New [new-tab]
+  Open… [open]
+  Quick Open… [quick-open]
+  Reload from Disk [reload-from-disk]
+  Open Recent ›
+    --
+    <RecentFiles> [open-recent]
+    --
+    Clear Recent Files [clear-recent]
+  --
+  Save [save]
+  Save As… [save-as]
+  Save All [save-all]
+  Rename… [rename-file]
+  --
+  Open Containing Folder [open-containing-folder]
+  Open Terminal Here [open-terminal-here]
+  --
+  Close [close-tab]
+  Close All [close-all]
+  Restore Closed Tab [restore-closed-tab]
+  Forget Unsaved Drafts… [forget-drafts]
+  Move to Trash… [move-to-trash]
+  Close Others [close-others]
+  Close to the Right [close-to-the-right]
+  --
+  Quit [quit]
+Edit ›
+  --
+  Undo [undo]
+  Redo [redo]
+  --
+  Cut [cut]
+  Copy [copy]
+  Paste [paste]
+  Delete [delete]
+  --
+  Select All [select-all]
+  Begin/End Select in Column Mode [column-begin-end-select]
+  Column Editor… [column-editor]
+  --
+  Copy to Clipboard ›
+    --
+    Copy Full Path [copy-full-path]
+    Copy File Name [copy-file-name]
+    Copy Directory Path [copy-directory-path]
+  Convert Case to ›
+    --
+    UPPERCASE [uppercase]
+    lowercase [lowercase]
+    Proper Case [proper-case]
+    Proper Case (blend) [proper-case-blend]
+    Sentence case [sentence-case]
+    Sentence case (blend) [sentence-case-blend]
+    iNVERT cASE [invert-case]
+  Line Operations ›
+    --
+    Duplicate Current Line [duplicate-line]
+    Cut Current Line [cut-line]
+    Copy Current Line [copy-line]
+    Delete Current Line [delete-line]
+    Transpose Current Line [transpose-line]
+    --
+    Move Up Current Line [move-line-up]
+    Move Down Current Line [move-line-down]
+    Join Lines [join-lines]
+    Insert Blank Line Above Current [blank-line-above]
+    Insert Blank Line Below Current [blank-line-below]
+    --
+    Remove Duplicate Lines [remove-duplicate-lines]
+    Remove Consecutive Duplicate Lines [remove-consecutive-duplicate-lines]
+    Remove Empty Lines [remove-empty-lines]
+    Remove Empty Lines (Containing Blank Characters) [remove-blank-lines]
+    Reverse Line Order [reverse-lines]
+    --
+    Sort Lines Lexicographically Ascending [sort-lexical-ascending]
+    Sort Lines Lexicographically Descending [sort-lexical-descending]
+    Sort Lines Lex. Ascending Ignoring Case [sort-ignore-case-ascending]
+    Sort Lines Lex. Descending Ignoring Case [sort-ignore-case-descending]
+    Sort Lines As Integers Ascending [sort-integer-ascending]
+    Sort Lines As Integers Descending [sort-integer-descending]
+    Sort Lines As Decimals (Comma) Ascending [sort-decimal-comma-ascending]
+    Sort Lines As Decimals (Comma) Descending [sort-decimal-comma-descending]
+    Sort Lines As Decimals (Dot) Ascending [sort-decimal-dot-ascending]
+    Sort Lines As Decimals (Dot) Descending [sort-decimal-dot-descending]
+    Sort Lines By Length Ascending [sort-length-ascending]
+    Sort Lines By Length Descending [sort-length-descending]
+  Comment/Uncomment ›
+    --
+    Toggle Single Line Comment [toggle-comment]
+    Single Line Comment [comment-lines]
+    Single Line Uncomment [uncomment-lines]
+    --
+    Block Comment [toggle-block-comment]
+  EOL Conversion ›
+    --
+    Windows (CR LF) [eol-crlf]
+    Unix (LF) [eol-lf]
+    Macintosh (CR) [eol-cr]
+  Blank Operations ›
+    --
+    Trim Trailing Space [trim-trailing]
+    Trim Leading Space [trim-leading]
+    Trim Leading and Trailing Space [trim-both]
+    --
+    TAB to Space [tabs-to-spaces]
+    Space to TAB (All) [spaces-to-tabs]
+    Space to TAB (Leading) [spaces-to-tabs-leading]
+  --
+  Add Prefix/Suffix… [add-prefix-suffix]
+  Insert Numbers… [insert-numbers]
+Search ›
+  --
+  Find… [find]
+  Find in Files… [find-in-files]
+  Find Next [find-next]
+  Find Previous [find-previous]
+  Replace… [replace]
+  Select and Find Next [select-and-find-next]
+  Select and Find Previous [select-and-find-previous]
+  --
+  Search Results Window [search-results]
+  Next Search Result [next-search-result]
+  Previous Search Result [previous-search-result]
+  --
+  Go to Line… [go-to-line]
+  Go Back [go-back]
+  Go Forward [go-forward]
+  Go to Matching Brace [go-to-matching-brace]
+  Select to Matching Brace [select-to-matching-brace]
+  --
+  Mark… [mark]
+  Clear All Marks [clear-marks]
+  Copy Marked Text [copy-marked-text]
+  Style All Occurrences of Token ›
+    --
+    Using 1st Style [style-token-1]
+    Using 2nd Style [style-token-2]
+    Using 3rd Style [style-token-3]
+    Using 4th Style [style-token-4]
+    Using 5th Style [style-token-5]
+  Clear Style ›
+    --
+    Clear 1st Style [clear-style-1]
+    Clear 2nd Style [clear-style-2]
+    Clear 3rd Style [clear-style-3]
+    Clear 4th Style [clear-style-4]
+    Clear 5th Style [clear-style-5]
+    --
+    Clear All Styles [clear-all-styles]
+  Jump Up ›
+    --
+    1st Style [jump-up-1]
+    2nd Style [jump-up-2]
+    3rd Style [jump-up-3]
+    4th Style [jump-up-4]
+    5th Style [jump-up-5]
+    --
+    Find Mark Style [jump-up-mark]
+  Jump Down ›
+    --
+    1st Style [jump-down-1]
+    2nd Style [jump-down-2]
+    3rd Style [jump-down-3]
+    4th Style [jump-down-4]
+    5th Style [jump-down-5]
+    --
+    Find Mark Style [jump-down-mark]
+  Bookmark ›
+    --
+    Toggle Bookmark [toggle-bookmark]
+    Next Bookmark [next-bookmark]
+    Previous Bookmark [previous-bookmark]
+    Clear All Bookmarks [clear-bookmarks]
+    --
+    Cut Bookmarked Lines [cut-bookmarked-lines]
+    Copy Bookmarked Lines [copy-bookmarked-lines]
+    Paste to (Replace) Bookmarked Lines [paste-to-bookmarked-lines]
+    Remove Bookmarked Lines [remove-bookmarked-lines]
+    Remove Non-Bookmarked Lines [remove-unbookmarked-lines]
+    Inverse Bookmarks [inverse-bookmarks]
+View ›
+  --
+  Word Wrap [word-wrap]
+  Show Whitespace [show-whitespace]
+  Document Map [document-map]
+  --
+  Zoom In [zoom-in]
+  Zoom Out [zoom-out]
+  Reset Zoom [zoom-reset]
+  --
+  Full Screen [full-screen]
+  --
+  Next Tab [next-tab]
+  Previous Tab [previous-tab]
+  Next Recent Tab [next-recent-tab]
+  Previous Recent Tab [previous-recent-tab]
+  Move Tab Forward [move-tab-forward]
+  Move Tab Backward [move-tab-backward]
+  Pin Tab [pin-tab]
+  Unpin Tab [unpin-tab]
+  --
+  Focus on Another View [switch-view]
+  Synchronise Vertical Scrolling [sync-vertical-scrolling]
+  Synchronise Horizontal Scrolling [sync-horizontal-scrolling]
+  Move/Clone Current Document ›
+    --
+    Move to Other View [move-to-other-view]
+    Clone to Other View [clone-to-other-view]
+  --
+  Command Palette… [command-palette]
+Encoding ›
+  --
+  Encode in UTF-8 [encode-utf8]
+  Encode in UTF-8-BOM [encode-utf8-bom]
+  Encode in UTF-16 BE BOM [encode-utf16be-bom]
+  Encode in UTF-16 LE BOM [encode-utf16le-bom]
+  Character Sets ›
+    --
+    <Encodings> [reinterpret]
+  --
+  Convert to ANSI (Windows-1252) [convert-to-ansi]
+  Convert to UTF-8 [convert-to-utf8]
+  Convert to UTF-8-BOM [convert-to-utf8-bom]
+  Convert to UTF-16 BE BOM [convert-to-utf16be-bom]
+  Convert to UTF-16 LE BOM [convert-to-utf16le-bom]
+Language ›
+  --
+  Set Language… [choose-language]
+Settings ›
+  --
+  Open Settings (config.toml) [open-settings]
+  Open Keyboard Shortcuts (keys.toml) [open-keyboard-shortcuts]
+  --
+  Set as Default Editor… [set-as-default-editor]
+Tools ›
+  --
+  Compare ›
+    --
+    Compare [compare]
+    Compare with File… [compare-with-file]
+    Compare with Clipboard [compare-with-clipboard]
+    Compare with Saved Version [compare-with-saved]
+    --
+    Previous Difference [previous-difference]
+    Next Difference [next-difference]
+    --
+    Ignore Whitespace [compare-ignore-whitespace]
+    Ignore Case [compare-ignore-case]
+    --
+    Clear Compare [clear-compare]
+  JSON ›
+    --
+    Format JSON [format-json]
+    Minify JSON [minify-json]
+    Validate JSON [validate-json]
+  XML ›
+    --
+    Format XML [format-xml]
+    Validate XML [validate-xml]
+Help ›
+  --
+  Keyboard Shortcuts [keyboard-shortcuts]
+  About Stet [about]
+--
+Check for Updates… [check-for-updates]
+# tab
+--
+Pin Tab [pin-tab, when enabled]
+Unpin Tab [unpin-tab, when enabled]
+--
+Close [close-tab]
+Close Others [close-others]
+Close to the Right [close-to-the-right]
+--
+Save [save]
+Save As… [save-as]
+--
+Copy Full Path [copy-full-path]
+Copy File Name [copy-file-name]
+Copy Directory Path [copy-directory-path]
+--
+Open Containing Folder [open-containing-folder]
+Open Terminal Here [open-terminal-here]
+--
+Rename… [rename-file]
+Move to Trash… [move-to-trash]
+# editor
+--
+Convert Case to ›
+  --
+  UPPERCASE [uppercase]
+  lowercase [lowercase]
+  Proper Case [proper-case]
+  Proper Case (blend) [proper-case-blend]
+  Sentence case [sentence-case]
+  Sentence case (blend) [sentence-case-blend]
+  iNVERT cASE [invert-case]
+Comment/Uncomment ›
+  --
+  Toggle Single Line Comment [toggle-comment]
+  Single Line Comment [comment-lines]
+  Single Line Uncomment [uncomment-lines]
+  --
+  Block Comment [toggle-block-comment]
+Line Operations ›
+  --
+  Duplicate Current Line [duplicate-line]
+  Cut Current Line [cut-line]
+  Copy Current Line [copy-line]
+  Delete Current Line [delete-line]
+  Transpose Current Line [transpose-line]
+  --
+  Move Up Current Line [move-line-up]
+  Move Down Current Line [move-line-down]
+  Join Lines [join-lines]
+  Insert Blank Line Above Current [blank-line-above]
+  Insert Blank Line Below Current [blank-line-below]
+  --
+  Remove Duplicate Lines [remove-duplicate-lines]
+  Remove Consecutive Duplicate Lines [remove-consecutive-duplicate-lines]
+  Remove Empty Lines [remove-empty-lines]
+  Remove Empty Lines (Containing Blank Characters) [remove-blank-lines]
+  Reverse Line Order [reverse-lines]
+  --
+  Sort Lines Lexicographically Ascending [sort-lexical-ascending]
+  Sort Lines Lexicographically Descending [sort-lexical-descending]
+  Sort Lines Lex. Ascending Ignoring Case [sort-ignore-case-ascending]
+  Sort Lines Lex. Descending Ignoring Case [sort-ignore-case-descending]
+  Sort Lines As Integers Ascending [sort-integer-ascending]
+  Sort Lines As Integers Descending [sort-integer-descending]
+  Sort Lines As Decimals (Comma) Ascending [sort-decimal-comma-ascending]
+  Sort Lines As Decimals (Comma) Descending [sort-decimal-comma-descending]
+  Sort Lines As Decimals (Dot) Ascending [sort-decimal-dot-ascending]
+  Sort Lines As Decimals (Dot) Descending [sort-decimal-dot-descending]
+  Sort Lines By Length Ascending [sort-length-ascending]
+  Sort Lines By Length Descending [sort-length-descending]
+--
+Select and Find Next [select-and-find-next]
+Go to Matching Brace [go-to-matching-brace]
+# line endings
+-- Save line endings as
+Windows (CR LF) [eol-crlf]
+Unix (LF) [eol-lf]
+Macintosh (CR) [eol-cr]

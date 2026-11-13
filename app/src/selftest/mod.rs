@@ -1485,14 +1485,17 @@ echo "$name" > theme.name
     fn check_menu(&self) -> StepResult {
         let items = self.menu_items()?;
         let no_recent = self.window.shared().recent().is_empty();
+        let recent_submenu = ActionId::OpenRecent
+            .spec()
+            .menu
+            .and_then(|place| place.submenu);
         let mut problems = Vec::new();
         for id in ActionId::ALL {
             let spec = id.spec();
             let Some(place) = spec.menu else {
                 continue;
             };
-            let hidden_recent =
-                no_recent && place.submenu == Some(stet_domain::actions::RECENT_SUBMENU);
+            let hidden_recent = no_recent && place.submenu == recent_submenu;
             if hidden_recent || spec.kind == stet_domain::actions::ActionKind::WithString {
                 continue;
             }

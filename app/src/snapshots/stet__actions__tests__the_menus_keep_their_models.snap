@@ -1,0 +1,948 @@
+---
+source: app/src/actions.rs
+expression: out
+---
+# main with recent files
+- label='File'
+  <submenu>
+    - 
+      <section>
+        - action='win.new-tab' label='New'
+        - action='win.open' label='Open…'
+        - action='win.quick-open' label='Quick Open…'
+        - action='win.reload-from-disk' label='Reload from Disk'
+        - label='Open Recent'
+          <submenu>
+            - 
+              <section>
+                - action='win.open-recent' label='todo__list.txt' target='/home/user/notes/todo_list.txt'
+                - action='win.open-recent' label='a.md' target='/tmp/a.md'
+                - action='win.open-recent' label='/' target='/'
+            - 
+              <section>
+                - action='win.clear-recent' label='Clear Recent Files'
+    - 
+      <section>
+        - action='win.save' label='Save'
+        - action='win.save-as' label='Save As…'
+        - action='win.save-all' label='Save All'
+        - action='win.rename-file' label='Rename…'
+    - 
+      <section>
+        - action='win.open-containing-folder' label='Open Containing Folder'
+        - action='win.open-terminal-here' label='Open Terminal Here'
+    - 
+      <section>
+        - action='win.close-tab' label='Close'
+        - action='win.close-all' label='Close All'
+        - action='win.restore-closed-tab' label='Restore Closed Tab'
+        - action='win.forget-drafts' label='Forget Unsaved Drafts…'
+        - action='win.move-to-trash' label='Move to Trash…'
+        - action='win.close-others' label='Close Others'
+        - action='win.close-to-the-right' label='Close to the Right'
+    - 
+      <section>
+        - action='app.quit' label='Quit'
+- label='Edit'
+  <submenu>
+    - 
+      <section>
+        - accel='<Control>z' action='win.undo' label='Undo'
+        - accel='<Control>y' action='win.redo' label='Redo'
+    - 
+      <section>
+        - accel='<Control>x' action='win.cut' label='Cut'
+        - accel='<Control>c' action='win.copy' label='Copy'
+        - accel='<Control>v' action='win.paste' label='Paste'
+        - accel='Delete' action='win.delete' label='Delete'
+    - 
+      <section>
+        - accel='<Control>a' action='win.select-all' label='Select All'
+        - action='win.column-begin-end-select' label='Begin/End Select in Column Mode'
+        - action='win.column-editor' label='Column Editor…'
+    - 
+      <section>
+        - label='Copy to Clipboard'
+          <submenu>
+            - 
+              <section>
+                - action='win.copy-full-path' label='Copy Full Path'
+                - action='win.copy-file-name' label='Copy File Name'
+                - action='win.copy-directory-path' label='Copy Directory Path'
+        - label='Convert Case to'
+          <submenu>
+            - 
+              <section>
+                - accel='<Alt><Shift>u' action='win.uppercase' label='UPPERCASE'
+                - accel='<Control>u' action='win.lowercase' label='lowercase'
+                - accel='<Alt>u' action='win.proper-case' label='Proper Case'
+                - action='win.proper-case-blend' label='Proper Case (blend)'
+                - accel='<Control><Alt>u' action='win.sentence-case' label='Sentence case'
+                - action='win.sentence-case-blend' label='Sentence case (blend)'
+                - action='win.invert-case' label='iNVERT cASE'
+        - label='Line Operations'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control>d' action='win.duplicate-line' label='Duplicate Current Line'
+                - accel='<Control>l' action='win.cut-line' label='Cut Current Line'
+                - accel='<Control><Shift>x' action='win.copy-line' label='Copy Current Line'
+                - accel='<Control><Shift>l' action='win.delete-line' label='Delete Current Line'
+                - accel='<Control>t' action='win.transpose-line' label='Transpose Current Line'
+            - 
+              <section>
+                - accel='<Control><Shift>Up' action='win.move-line-up' label='Move Up Current Line'
+                - accel='<Control><Shift>Down' action='win.move-line-down' label='Move Down Current Line'
+                - accel='<Control>j' action='win.join-lines' label='Join Lines'
+                - accel='<Control><Alt>Return' action='win.blank-line-above' label='Insert Blank Line Above Current'
+                - accel='<Control><Alt><Shift>Return' action='win.blank-line-below' label='Insert Blank Line Below Current'
+            - 
+              <section>
+                - action='win.remove-duplicate-lines' label='Remove Duplicate Lines'
+                - action='win.remove-consecutive-duplicate-lines' label='Remove Consecutive Duplicate Lines'
+                - action='win.remove-empty-lines' label='Remove Empty Lines'
+                - action='win.remove-blank-lines' label='Remove Empty Lines (Containing Blank Characters)'
+                - action='win.reverse-lines' label='Reverse Line Order'
+            - 
+              <section>
+                - action='win.sort-lexical-ascending' label='Sort Lines Lexicographically Ascending'
+                - action='win.sort-lexical-descending' label='Sort Lines Lexicographically Descending'
+                - action='win.sort-ignore-case-ascending' label='Sort Lines Lex. Ascending Ignoring Case'
+                - action='win.sort-ignore-case-descending' label='Sort Lines Lex. Descending Ignoring Case'
+                - action='win.sort-integer-ascending' label='Sort Lines As Integers Ascending'
+                - action='win.sort-integer-descending' label='Sort Lines As Integers Descending'
+                - action='win.sort-decimal-comma-ascending' label='Sort Lines As Decimals (Comma) Ascending'
+                - action='win.sort-decimal-comma-descending' label='Sort Lines As Decimals (Comma) Descending'
+                - action='win.sort-decimal-dot-ascending' label='Sort Lines As Decimals (Dot) Ascending'
+                - action='win.sort-decimal-dot-descending' label='Sort Lines As Decimals (Dot) Descending'
+                - action='win.sort-length-ascending' label='Sort Lines By Length Ascending'
+                - action='win.sort-length-descending' label='Sort Lines By Length Descending'
+        - label='Comment/Uncomment'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control>q' action='win.toggle-comment' label='Toggle Single Line Comment'
+                - accel='<Control>k' action='win.comment-lines' label='Single Line Comment'
+                - accel='<Control><Shift>k' action='win.uncomment-lines' label='Single Line Uncomment'
+            - 
+              <section>
+                - accel='<Control><Shift>q' action='win.toggle-block-comment' label='Block Comment'
+        - label='EOL Conversion'
+          <submenu>
+            - 
+              <section>
+                - action='win.eol-crlf' label='Windows (CR LF)'
+                - action='win.eol-lf' label='Unix (LF)'
+                - action='win.eol-cr' label='Macintosh (CR)'
+        - label='Blank Operations'
+          <submenu>
+            - 
+              <section>
+                - action='win.trim-trailing' label='Trim Trailing Space'
+                - action='win.trim-leading' label='Trim Leading Space'
+                - action='win.trim-both' label='Trim Leading and Trailing Space'
+            - 
+              <section>
+                - action='win.tabs-to-spaces' label='TAB to Space'
+                - action='win.spaces-to-tabs' label='Space to TAB (All)'
+                - action='win.spaces-to-tabs-leading' label='Space to TAB (Leading)'
+    - 
+      <section>
+        - action='win.add-prefix-suffix' label='Add Prefix/Suffix…'
+        - action='win.insert-numbers' label='Insert Numbers…'
+- label='Search'
+  <submenu>
+    - 
+      <section>
+        - action='win.find' label='Find…'
+        - action='win.find-in-files' label='Find in Files…'
+        - action='win.find-next' label='Find Next'
+        - action='win.find-previous' label='Find Previous'
+        - action='win.replace' label='Replace…'
+        - accel='<Control><Alt>f' action='win.select-and-find-next' label='Select and Find Next'
+        - accel='<Control><Alt><Shift>f' action='win.select-and-find-previous' label='Select and Find Previous'
+    - 
+      <section>
+        - action='win.search-results' label='Search Results Window'
+        - action='win.next-search-result' label='Next Search Result'
+        - action='win.previous-search-result' label='Previous Search Result'
+    - 
+      <section>
+        - action='win.go-to-line' label='Go to Line…'
+        - action='win.go-back' label='Go Back'
+        - action='win.go-forward' label='Go Forward'
+        - accel='<Control>b' action='win.go-to-matching-brace' label='Go to Matching Brace'
+        - accel='<Control><Alt>b' action='win.select-to-matching-brace' label='Select to Matching Brace'
+    - 
+      <section>
+        - action='win.mark' label='Mark…'
+        - action='win.clear-marks' label='Clear All Marks'
+        - action='win.copy-marked-text' label='Copy Marked Text'
+        - label='Style All Occurrences of Token'
+          <submenu>
+            - 
+              <section>
+                - action='win.style-token-1' label='Using 1st Style'
+                - action='win.style-token-2' label='Using 2nd Style'
+                - action='win.style-token-3' label='Using 3rd Style'
+                - action='win.style-token-4' label='Using 4th Style'
+                - action='win.style-token-5' label='Using 5th Style'
+        - label='Clear Style'
+          <submenu>
+            - 
+              <section>
+                - action='win.clear-style-1' label='Clear 1st Style'
+                - action='win.clear-style-2' label='Clear 2nd Style'
+                - action='win.clear-style-3' label='Clear 3rd Style'
+                - action='win.clear-style-4' label='Clear 4th Style'
+                - action='win.clear-style-5' label='Clear 5th Style'
+            - 
+              <section>
+                - action='win.clear-all-styles' label='Clear All Styles'
+        - label='Jump Up'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control><Alt>1' action='win.jump-up-1' label='1st Style'
+                - accel='<Control><Alt>2' action='win.jump-up-2' label='2nd Style'
+                - accel='<Control><Alt>3' action='win.jump-up-3' label='3rd Style'
+                - accel='<Control><Alt>4' action='win.jump-up-4' label='4th Style'
+                - accel='<Control><Alt>5' action='win.jump-up-5' label='5th Style'
+            - 
+              <section>
+                - accel='<Alt><Shift>m' action='win.jump-up-mark' label='Find Mark Style'
+        - label='Jump Down'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control>1' action='win.jump-down-1' label='1st Style'
+                - accel='<Control>2' action='win.jump-down-2' label='2nd Style'
+                - accel='<Control>3' action='win.jump-down-3' label='3rd Style'
+                - accel='<Control>4' action='win.jump-down-4' label='4th Style'
+                - accel='<Control>5' action='win.jump-down-5' label='5th Style'
+            - 
+              <section>
+                - accel='<Alt>m' action='win.jump-down-mark' label='Find Mark Style'
+        - label='Bookmark'
+          <submenu>
+            - 
+              <section>
+                - action='win.toggle-bookmark' label='Toggle Bookmark'
+                - action='win.next-bookmark' label='Next Bookmark'
+                - action='win.previous-bookmark' label='Previous Bookmark'
+                - action='win.clear-bookmarks' label='Clear All Bookmarks'
+            - 
+              <section>
+                - action='win.cut-bookmarked-lines' label='Cut Bookmarked Lines'
+                - action='win.copy-bookmarked-lines' label='Copy Bookmarked Lines'
+                - action='win.paste-to-bookmarked-lines' label='Paste to (Replace) Bookmarked Lines'
+                - action='win.remove-bookmarked-lines' label='Remove Bookmarked Lines'
+                - action='win.remove-unbookmarked-lines' label='Remove Non-Bookmarked Lines'
+                - action='win.inverse-bookmarks' label='Inverse Bookmarks'
+- label='View'
+  <submenu>
+    - 
+      <section>
+        - action='win.word-wrap' label='Word Wrap'
+        - action='win.show-whitespace' label='Show Whitespace'
+        - action='win.document-map' label='Document Map'
+    - 
+      <section>
+        - action='win.zoom-in' label='Zoom In'
+        - action='win.zoom-out' label='Zoom Out'
+        - action='win.zoom-reset' label='Reset Zoom'
+    - 
+      <section>
+        - action='win.full-screen' label='Full Screen'
+    - 
+      <section>
+        - action='win.next-tab' label='Next Tab'
+        - action='win.previous-tab' label='Previous Tab'
+        - action='win.next-recent-tab' label='Next Recent Tab'
+        - action='win.previous-recent-tab' label='Previous Recent Tab'
+        - action='win.move-tab-forward' label='Move Tab Forward'
+        - action='win.move-tab-backward' label='Move Tab Backward'
+        - action='win.pin-tab' label='Pin Tab'
+        - action='win.unpin-tab' label='Unpin Tab'
+    - 
+      <section>
+        - action='win.switch-view' label='Focus on Another View'
+        - action='win.sync-vertical-scrolling' label='Synchronise Vertical Scrolling'
+        - action='win.sync-horizontal-scrolling' label='Synchronise Horizontal Scrolling'
+        - label='Move/Clone Current Document'
+          <submenu>
+            - 
+              <section>
+                - action='win.move-to-other-view' label='Move to Other View'
+                - action='win.clone-to-other-view' label='Clone to Other View'
+    - 
+      <section>
+        - action='win.command-palette' label='Command Palette…'
+- label='Encoding'
+  <submenu>
+    - 
+      <section>
+        - action='win.encode-utf8' label='Encode in UTF-8'
+        - action='win.encode-utf8-bom' label='Encode in UTF-8-BOM'
+        - action='win.encode-utf16be-bom' label='Encode in UTF-16 BE BOM'
+        - action='win.encode-utf16le-bom' label='Encode in UTF-16 LE BOM'
+        - label='Character Sets'
+          <submenu>
+            - 
+              <section>
+                - label='Unicode'
+                  <submenu>
+                    - action='win.reinterpret' label='UTF-8' target='UTF-8'
+                    - action='win.reinterpret' label='UTF-8 BOM' target='UTF-8+bom'
+                    - action='win.reinterpret' label='UTF-16 LE' target='UTF-16LE'
+                    - action='win.reinterpret' label='UTF-16 LE BOM' target='UTF-16LE+bom'
+                    - action='win.reinterpret' label='UTF-16 BE' target='UTF-16BE'
+                    - action='win.reinterpret' label='UTF-16 BE BOM' target='UTF-16BE+bom'
+                - label='Western European'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1252' target='windows-1252'
+                    - action='win.reinterpret' label='ISO-8859-15' target='ISO-8859-15'
+                    - action='win.reinterpret' label='Mac Roman' target='macintosh'
+                - label='Central European'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1250' target='windows-1250'
+                    - action='win.reinterpret' label='ISO-8859-2' target='ISO-8859-2'
+                    - action='win.reinterpret' label='ISO-8859-16' target='ISO-8859-16'
+                - label='Southern European'
+                  <submenu>
+                    - action='win.reinterpret' label='ISO-8859-3' target='ISO-8859-3'
+                - label='Nordic'
+                  <submenu>
+                    - action='win.reinterpret' label='ISO-8859-10' target='ISO-8859-10'
+                - label='Baltic'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1257' target='windows-1257'
+                    - action='win.reinterpret' label='ISO-8859-13' target='ISO-8859-13'
+                    - action='win.reinterpret' label='ISO-8859-4' target='ISO-8859-4'
+                - label='Celtic'
+                  <submenu>
+                    - action='win.reinterpret' label='ISO-8859-14' target='ISO-8859-14'
+                - label='Cyrillic'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1251' target='windows-1251'
+                    - action='win.reinterpret' label='ISO-8859-5' target='ISO-8859-5'
+                    - action='win.reinterpret' label='KOI8-R' target='KOI8-R'
+                    - action='win.reinterpret' label='KOI8-U' target='KOI8-U'
+                    - action='win.reinterpret' label='IBM866' target='IBM866'
+                    - action='win.reinterpret' label='Mac Cyrillic' target='x-mac-cyrillic'
+                - label='Greek'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1253' target='windows-1253'
+                    - action='win.reinterpret' label='ISO-8859-7' target='ISO-8859-7'
+                - label='Turkish'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1254' target='windows-1254'
+                - label='Hebrew'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1255' target='windows-1255'
+                    - action='win.reinterpret' label='ISO-8859-8' target='ISO-8859-8'
+                    - action='win.reinterpret' label='ISO-8859-8-I' target='ISO-8859-8-I'
+                - label='Arabic'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1256' target='windows-1256'
+                    - action='win.reinterpret' label='ISO-8859-6' target='ISO-8859-6'
+                - label='Vietnamese'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1258' target='windows-1258'
+                - label='Thai'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-874' target='windows-874'
+                - label='East Asian'
+                  <submenu>
+                    - action='win.reinterpret' label='GBK' target='GBK'
+                    - action='win.reinterpret' label='GB18030' target='gb18030'
+                    - action='win.reinterpret' label='Big5' target='Big5'
+                    - action='win.reinterpret' label='Shift__JIS' target='Shift_JIS'
+                    - action='win.reinterpret' label='EUC-JP' target='EUC-JP'
+                    - action='win.reinterpret' label='ISO-2022-JP' target='ISO-2022-JP'
+                    - action='win.reinterpret' label='EUC-KR' target='EUC-KR'
+                - label='Other'
+                  <submenu>
+                    - action='win.reinterpret' label='x-user-defined' target='x-user-defined'
+    - 
+      <section>
+        - action='win.convert-to-ansi' label='Convert to ANSI (Windows-1252)'
+        - action='win.convert-to-utf8' label='Convert to UTF-8'
+        - action='win.convert-to-utf8-bom' label='Convert to UTF-8-BOM'
+        - action='win.convert-to-utf16be-bom' label='Convert to UTF-16 BE BOM'
+        - action='win.convert-to-utf16le-bom' label='Convert to UTF-16 LE BOM'
+- label='Language'
+  <submenu>
+    - 
+      <section>
+        - action='win.choose-language' label='Set Language…'
+- label='Settings'
+  <submenu>
+    - 
+      <section>
+        - action='win.open-settings' label='Open Settings (config.toml)'
+        - action='win.open-keyboard-shortcuts' label='Open Keyboard Shortcuts (keys.toml)'
+    - 
+      <section>
+        - action='win.set-as-default-editor' label='Set as Default Editor…'
+- label='Tools'
+  <submenu>
+    - 
+      <section>
+        - label='Compare'
+          <submenu>
+            - 
+              <section>
+                - action='win.compare' label='Compare'
+                - action='win.compare-with-file' label='Compare with File…'
+                - action='win.compare-with-clipboard' label='Compare with Clipboard'
+                - action='win.compare-with-saved' label='Compare with Saved Version'
+            - 
+              <section>
+                - action='win.previous-difference' label='Previous Difference'
+                - action='win.next-difference' label='Next Difference'
+            - 
+              <section>
+                - action='win.compare-ignore-whitespace' label='Ignore Whitespace'
+                - action='win.compare-ignore-case' label='Ignore Case'
+            - 
+              <section>
+                - action='win.clear-compare' label='Clear Compare'
+        - label='JSON'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control><Alt><Shift>m' action='win.format-json' label='Format JSON'
+                - accel='<Control><Alt><Shift>c' action='win.minify-json' label='Minify JSON'
+                - accel='<Control><Alt><Shift>j' action='win.validate-json' label='Validate JSON'
+        - label='XML'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control><Alt><Shift>b' action='win.format-xml' label='Format XML'
+                - accel='<Control><Alt><Shift>x' action='win.validate-xml' label='Validate XML'
+- label='Help'
+  <submenu>
+    - 
+      <section>
+        - action='win.keyboard-shortcuts' label='Keyboard Shortcuts'
+        - action='win.about' label='About Stet'
+- 
+  <section>
+    - action='win.check-for-updates' label='Check for Updates…'
+# main without recent files
+- label='File'
+  <submenu>
+    - 
+      <section>
+        - action='win.new-tab' label='New'
+        - action='win.open' label='Open…'
+        - action='win.quick-open' label='Quick Open…'
+        - action='win.reload-from-disk' label='Reload from Disk'
+    - 
+      <section>
+        - action='win.save' label='Save'
+        - action='win.save-as' label='Save As…'
+        - action='win.save-all' label='Save All'
+        - action='win.rename-file' label='Rename…'
+    - 
+      <section>
+        - action='win.open-containing-folder' label='Open Containing Folder'
+        - action='win.open-terminal-here' label='Open Terminal Here'
+    - 
+      <section>
+        - action='win.close-tab' label='Close'
+        - action='win.close-all' label='Close All'
+        - action='win.restore-closed-tab' label='Restore Closed Tab'
+        - action='win.forget-drafts' label='Forget Unsaved Drafts…'
+        - action='win.move-to-trash' label='Move to Trash…'
+        - action='win.close-others' label='Close Others'
+        - action='win.close-to-the-right' label='Close to the Right'
+    - 
+      <section>
+        - action='app.quit' label='Quit'
+- label='Edit'
+  <submenu>
+    - 
+      <section>
+        - accel='<Control>z' action='win.undo' label='Undo'
+        - accel='<Control>y' action='win.redo' label='Redo'
+    - 
+      <section>
+        - accel='<Control>x' action='win.cut' label='Cut'
+        - accel='<Control>c' action='win.copy' label='Copy'
+        - accel='<Control>v' action='win.paste' label='Paste'
+        - accel='Delete' action='win.delete' label='Delete'
+    - 
+      <section>
+        - accel='<Control>a' action='win.select-all' label='Select All'
+        - action='win.column-begin-end-select' label='Begin/End Select in Column Mode'
+        - action='win.column-editor' label='Column Editor…'
+    - 
+      <section>
+        - label='Copy to Clipboard'
+          <submenu>
+            - 
+              <section>
+                - action='win.copy-full-path' label='Copy Full Path'
+                - action='win.copy-file-name' label='Copy File Name'
+                - action='win.copy-directory-path' label='Copy Directory Path'
+        - label='Convert Case to'
+          <submenu>
+            - 
+              <section>
+                - accel='<Alt><Shift>u' action='win.uppercase' label='UPPERCASE'
+                - accel='<Control>u' action='win.lowercase' label='lowercase'
+                - accel='<Alt>u' action='win.proper-case' label='Proper Case'
+                - action='win.proper-case-blend' label='Proper Case (blend)'
+                - accel='<Control><Alt>u' action='win.sentence-case' label='Sentence case'
+                - action='win.sentence-case-blend' label='Sentence case (blend)'
+                - action='win.invert-case' label='iNVERT cASE'
+        - label='Line Operations'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control>d' action='win.duplicate-line' label='Duplicate Current Line'
+                - accel='<Control>l' action='win.cut-line' label='Cut Current Line'
+                - accel='<Control><Shift>x' action='win.copy-line' label='Copy Current Line'
+                - accel='<Control><Shift>l' action='win.delete-line' label='Delete Current Line'
+                - accel='<Control>t' action='win.transpose-line' label='Transpose Current Line'
+            - 
+              <section>
+                - accel='<Control><Shift>Up' action='win.move-line-up' label='Move Up Current Line'
+                - accel='<Control><Shift>Down' action='win.move-line-down' label='Move Down Current Line'
+                - accel='<Control>j' action='win.join-lines' label='Join Lines'
+                - accel='<Control><Alt>Return' action='win.blank-line-above' label='Insert Blank Line Above Current'
+                - accel='<Control><Alt><Shift>Return' action='win.blank-line-below' label='Insert Blank Line Below Current'
+            - 
+              <section>
+                - action='win.remove-duplicate-lines' label='Remove Duplicate Lines'
+                - action='win.remove-consecutive-duplicate-lines' label='Remove Consecutive Duplicate Lines'
+                - action='win.remove-empty-lines' label='Remove Empty Lines'
+                - action='win.remove-blank-lines' label='Remove Empty Lines (Containing Blank Characters)'
+                - action='win.reverse-lines' label='Reverse Line Order'
+            - 
+              <section>
+                - action='win.sort-lexical-ascending' label='Sort Lines Lexicographically Ascending'
+                - action='win.sort-lexical-descending' label='Sort Lines Lexicographically Descending'
+                - action='win.sort-ignore-case-ascending' label='Sort Lines Lex. Ascending Ignoring Case'
+                - action='win.sort-ignore-case-descending' label='Sort Lines Lex. Descending Ignoring Case'
+                - action='win.sort-integer-ascending' label='Sort Lines As Integers Ascending'
+                - action='win.sort-integer-descending' label='Sort Lines As Integers Descending'
+                - action='win.sort-decimal-comma-ascending' label='Sort Lines As Decimals (Comma) Ascending'
+                - action='win.sort-decimal-comma-descending' label='Sort Lines As Decimals (Comma) Descending'
+                - action='win.sort-decimal-dot-ascending' label='Sort Lines As Decimals (Dot) Ascending'
+                - action='win.sort-decimal-dot-descending' label='Sort Lines As Decimals (Dot) Descending'
+                - action='win.sort-length-ascending' label='Sort Lines By Length Ascending'
+                - action='win.sort-length-descending' label='Sort Lines By Length Descending'
+        - label='Comment/Uncomment'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control>q' action='win.toggle-comment' label='Toggle Single Line Comment'
+                - accel='<Control>k' action='win.comment-lines' label='Single Line Comment'
+                - accel='<Control><Shift>k' action='win.uncomment-lines' label='Single Line Uncomment'
+            - 
+              <section>
+                - accel='<Control><Shift>q' action='win.toggle-block-comment' label='Block Comment'
+        - label='EOL Conversion'
+          <submenu>
+            - 
+              <section>
+                - action='win.eol-crlf' label='Windows (CR LF)'
+                - action='win.eol-lf' label='Unix (LF)'
+                - action='win.eol-cr' label='Macintosh (CR)'
+        - label='Blank Operations'
+          <submenu>
+            - 
+              <section>
+                - action='win.trim-trailing' label='Trim Trailing Space'
+                - action='win.trim-leading' label='Trim Leading Space'
+                - action='win.trim-both' label='Trim Leading and Trailing Space'
+            - 
+              <section>
+                - action='win.tabs-to-spaces' label='TAB to Space'
+                - action='win.spaces-to-tabs' label='Space to TAB (All)'
+                - action='win.spaces-to-tabs-leading' label='Space to TAB (Leading)'
+    - 
+      <section>
+        - action='win.add-prefix-suffix' label='Add Prefix/Suffix…'
+        - action='win.insert-numbers' label='Insert Numbers…'
+- label='Search'
+  <submenu>
+    - 
+      <section>
+        - action='win.find' label='Find…'
+        - action='win.find-in-files' label='Find in Files…'
+        - action='win.find-next' label='Find Next'
+        - action='win.find-previous' label='Find Previous'
+        - action='win.replace' label='Replace…'
+        - accel='<Control><Alt>f' action='win.select-and-find-next' label='Select and Find Next'
+        - accel='<Control><Alt><Shift>f' action='win.select-and-find-previous' label='Select and Find Previous'
+    - 
+      <section>
+        - action='win.search-results' label='Search Results Window'
+        - action='win.next-search-result' label='Next Search Result'
+        - action='win.previous-search-result' label='Previous Search Result'
+    - 
+      <section>
+        - action='win.go-to-line' label='Go to Line…'
+        - action='win.go-back' label='Go Back'
+        - action='win.go-forward' label='Go Forward'
+        - accel='<Control>b' action='win.go-to-matching-brace' label='Go to Matching Brace'
+        - accel='<Control><Alt>b' action='win.select-to-matching-brace' label='Select to Matching Brace'
+    - 
+      <section>
+        - action='win.mark' label='Mark…'
+        - action='win.clear-marks' label='Clear All Marks'
+        - action='win.copy-marked-text' label='Copy Marked Text'
+        - label='Style All Occurrences of Token'
+          <submenu>
+            - 
+              <section>
+                - action='win.style-token-1' label='Using 1st Style'
+                - action='win.style-token-2' label='Using 2nd Style'
+                - action='win.style-token-3' label='Using 3rd Style'
+                - action='win.style-token-4' label='Using 4th Style'
+                - action='win.style-token-5' label='Using 5th Style'
+        - label='Clear Style'
+          <submenu>
+            - 
+              <section>
+                - action='win.clear-style-1' label='Clear 1st Style'
+                - action='win.clear-style-2' label='Clear 2nd Style'
+                - action='win.clear-style-3' label='Clear 3rd Style'
+                - action='win.clear-style-4' label='Clear 4th Style'
+                - action='win.clear-style-5' label='Clear 5th Style'
+            - 
+              <section>
+                - action='win.clear-all-styles' label='Clear All Styles'
+        - label='Jump Up'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control><Alt>1' action='win.jump-up-1' label='1st Style'
+                - accel='<Control><Alt>2' action='win.jump-up-2' label='2nd Style'
+                - accel='<Control><Alt>3' action='win.jump-up-3' label='3rd Style'
+                - accel='<Control><Alt>4' action='win.jump-up-4' label='4th Style'
+                - accel='<Control><Alt>5' action='win.jump-up-5' label='5th Style'
+            - 
+              <section>
+                - accel='<Alt><Shift>m' action='win.jump-up-mark' label='Find Mark Style'
+        - label='Jump Down'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control>1' action='win.jump-down-1' label='1st Style'
+                - accel='<Control>2' action='win.jump-down-2' label='2nd Style'
+                - accel='<Control>3' action='win.jump-down-3' label='3rd Style'
+                - accel='<Control>4' action='win.jump-down-4' label='4th Style'
+                - accel='<Control>5' action='win.jump-down-5' label='5th Style'
+            - 
+              <section>
+                - accel='<Alt>m' action='win.jump-down-mark' label='Find Mark Style'
+        - label='Bookmark'
+          <submenu>
+            - 
+              <section>
+                - action='win.toggle-bookmark' label='Toggle Bookmark'
+                - action='win.next-bookmark' label='Next Bookmark'
+                - action='win.previous-bookmark' label='Previous Bookmark'
+                - action='win.clear-bookmarks' label='Clear All Bookmarks'
+            - 
+              <section>
+                - action='win.cut-bookmarked-lines' label='Cut Bookmarked Lines'
+                - action='win.copy-bookmarked-lines' label='Copy Bookmarked Lines'
+                - action='win.paste-to-bookmarked-lines' label='Paste to (Replace) Bookmarked Lines'
+                - action='win.remove-bookmarked-lines' label='Remove Bookmarked Lines'
+                - action='win.remove-unbookmarked-lines' label='Remove Non-Bookmarked Lines'
+                - action='win.inverse-bookmarks' label='Inverse Bookmarks'
+- label='View'
+  <submenu>
+    - 
+      <section>
+        - action='win.word-wrap' label='Word Wrap'
+        - action='win.show-whitespace' label='Show Whitespace'
+        - action='win.document-map' label='Document Map'
+    - 
+      <section>
+        - action='win.zoom-in' label='Zoom In'
+        - action='win.zoom-out' label='Zoom Out'
+        - action='win.zoom-reset' label='Reset Zoom'
+    - 
+      <section>
+        - action='win.full-screen' label='Full Screen'
+    - 
+      <section>
+        - action='win.next-tab' label='Next Tab'
+        - action='win.previous-tab' label='Previous Tab'
+        - action='win.next-recent-tab' label='Next Recent Tab'
+        - action='win.previous-recent-tab' label='Previous Recent Tab'
+        - action='win.move-tab-forward' label='Move Tab Forward'
+        - action='win.move-tab-backward' label='Move Tab Backward'
+        - action='win.pin-tab' label='Pin Tab'
+        - action='win.unpin-tab' label='Unpin Tab'
+    - 
+      <section>
+        - action='win.switch-view' label='Focus on Another View'
+        - action='win.sync-vertical-scrolling' label='Synchronise Vertical Scrolling'
+        - action='win.sync-horizontal-scrolling' label='Synchronise Horizontal Scrolling'
+        - label='Move/Clone Current Document'
+          <submenu>
+            - 
+              <section>
+                - action='win.move-to-other-view' label='Move to Other View'
+                - action='win.clone-to-other-view' label='Clone to Other View'
+    - 
+      <section>
+        - action='win.command-palette' label='Command Palette…'
+- label='Encoding'
+  <submenu>
+    - 
+      <section>
+        - action='win.encode-utf8' label='Encode in UTF-8'
+        - action='win.encode-utf8-bom' label='Encode in UTF-8-BOM'
+        - action='win.encode-utf16be-bom' label='Encode in UTF-16 BE BOM'
+        - action='win.encode-utf16le-bom' label='Encode in UTF-16 LE BOM'
+        - label='Character Sets'
+          <submenu>
+            - 
+              <section>
+                - label='Unicode'
+                  <submenu>
+                    - action='win.reinterpret' label='UTF-8' target='UTF-8'
+                    - action='win.reinterpret' label='UTF-8 BOM' target='UTF-8+bom'
+                    - action='win.reinterpret' label='UTF-16 LE' target='UTF-16LE'
+                    - action='win.reinterpret' label='UTF-16 LE BOM' target='UTF-16LE+bom'
+                    - action='win.reinterpret' label='UTF-16 BE' target='UTF-16BE'
+                    - action='win.reinterpret' label='UTF-16 BE BOM' target='UTF-16BE+bom'
+                - label='Western European'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1252' target='windows-1252'
+                    - action='win.reinterpret' label='ISO-8859-15' target='ISO-8859-15'
+                    - action='win.reinterpret' label='Mac Roman' target='macintosh'
+                - label='Central European'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1250' target='windows-1250'
+                    - action='win.reinterpret' label='ISO-8859-2' target='ISO-8859-2'
+                    - action='win.reinterpret' label='ISO-8859-16' target='ISO-8859-16'
+                - label='Southern European'
+                  <submenu>
+                    - action='win.reinterpret' label='ISO-8859-3' target='ISO-8859-3'
+                - label='Nordic'
+                  <submenu>
+                    - action='win.reinterpret' label='ISO-8859-10' target='ISO-8859-10'
+                - label='Baltic'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1257' target='windows-1257'
+                    - action='win.reinterpret' label='ISO-8859-13' target='ISO-8859-13'
+                    - action='win.reinterpret' label='ISO-8859-4' target='ISO-8859-4'
+                - label='Celtic'
+                  <submenu>
+                    - action='win.reinterpret' label='ISO-8859-14' target='ISO-8859-14'
+                - label='Cyrillic'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1251' target='windows-1251'
+                    - action='win.reinterpret' label='ISO-8859-5' target='ISO-8859-5'
+                    - action='win.reinterpret' label='KOI8-R' target='KOI8-R'
+                    - action='win.reinterpret' label='KOI8-U' target='KOI8-U'
+                    - action='win.reinterpret' label='IBM866' target='IBM866'
+                    - action='win.reinterpret' label='Mac Cyrillic' target='x-mac-cyrillic'
+                - label='Greek'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1253' target='windows-1253'
+                    - action='win.reinterpret' label='ISO-8859-7' target='ISO-8859-7'
+                - label='Turkish'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1254' target='windows-1254'
+                - label='Hebrew'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1255' target='windows-1255'
+                    - action='win.reinterpret' label='ISO-8859-8' target='ISO-8859-8'
+                    - action='win.reinterpret' label='ISO-8859-8-I' target='ISO-8859-8-I'
+                - label='Arabic'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1256' target='windows-1256'
+                    - action='win.reinterpret' label='ISO-8859-6' target='ISO-8859-6'
+                - label='Vietnamese'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-1258' target='windows-1258'
+                - label='Thai'
+                  <submenu>
+                    - action='win.reinterpret' label='Windows-874' target='windows-874'
+                - label='East Asian'
+                  <submenu>
+                    - action='win.reinterpret' label='GBK' target='GBK'
+                    - action='win.reinterpret' label='GB18030' target='gb18030'
+                    - action='win.reinterpret' label='Big5' target='Big5'
+                    - action='win.reinterpret' label='Shift__JIS' target='Shift_JIS'
+                    - action='win.reinterpret' label='EUC-JP' target='EUC-JP'
+                    - action='win.reinterpret' label='ISO-2022-JP' target='ISO-2022-JP'
+                    - action='win.reinterpret' label='EUC-KR' target='EUC-KR'
+                - label='Other'
+                  <submenu>
+                    - action='win.reinterpret' label='x-user-defined' target='x-user-defined'
+    - 
+      <section>
+        - action='win.convert-to-ansi' label='Convert to ANSI (Windows-1252)'
+        - action='win.convert-to-utf8' label='Convert to UTF-8'
+        - action='win.convert-to-utf8-bom' label='Convert to UTF-8-BOM'
+        - action='win.convert-to-utf16be-bom' label='Convert to UTF-16 BE BOM'
+        - action='win.convert-to-utf16le-bom' label='Convert to UTF-16 LE BOM'
+- label='Language'
+  <submenu>
+    - 
+      <section>
+        - action='win.choose-language' label='Set Language…'
+- label='Settings'
+  <submenu>
+    - 
+      <section>
+        - action='win.open-settings' label='Open Settings (config.toml)'
+        - action='win.open-keyboard-shortcuts' label='Open Keyboard Shortcuts (keys.toml)'
+    - 
+      <section>
+        - action='win.set-as-default-editor' label='Set as Default Editor…'
+- label='Tools'
+  <submenu>
+    - 
+      <section>
+        - label='Compare'
+          <submenu>
+            - 
+              <section>
+                - action='win.compare' label='Compare'
+                - action='win.compare-with-file' label='Compare with File…'
+                - action='win.compare-with-clipboard' label='Compare with Clipboard'
+                - action='win.compare-with-saved' label='Compare with Saved Version'
+            - 
+              <section>
+                - action='win.previous-difference' label='Previous Difference'
+                - action='win.next-difference' label='Next Difference'
+            - 
+              <section>
+                - action='win.compare-ignore-whitespace' label='Ignore Whitespace'
+                - action='win.compare-ignore-case' label='Ignore Case'
+            - 
+              <section>
+                - action='win.clear-compare' label='Clear Compare'
+        - label='JSON'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control><Alt><Shift>m' action='win.format-json' label='Format JSON'
+                - accel='<Control><Alt><Shift>c' action='win.minify-json' label='Minify JSON'
+                - accel='<Control><Alt><Shift>j' action='win.validate-json' label='Validate JSON'
+        - label='XML'
+          <submenu>
+            - 
+              <section>
+                - accel='<Control><Alt><Shift>b' action='win.format-xml' label='Format XML'
+                - accel='<Control><Alt><Shift>x' action='win.validate-xml' label='Validate XML'
+- label='Help'
+  <submenu>
+    - 
+      <section>
+        - action='win.keyboard-shortcuts' label='Keyboard Shortcuts'
+        - action='win.about' label='About Stet'
+- 
+  <section>
+    - action='win.check-for-updates' label='Check for Updates…'
+# tab
+- 
+  <section>
+    - action='win.pin-tab' hidden-when='action-disabled' label='Pin Tab'
+    - action='win.unpin-tab' hidden-when='action-disabled' label='Unpin Tab'
+- 
+  <section>
+    - action='win.close-tab' label='Close'
+    - action='win.close-others' label='Close Others'
+    - action='win.close-to-the-right' label='Close to the Right'
+- 
+  <section>
+    - action='win.save' label='Save'
+    - action='win.save-as' label='Save As…'
+- 
+  <section>
+    - action='win.copy-full-path' label='Copy Full Path'
+    - action='win.copy-file-name' label='Copy File Name'
+    - action='win.copy-directory-path' label='Copy Directory Path'
+- 
+  <section>
+    - action='win.open-containing-folder' label='Open Containing Folder'
+    - action='win.open-terminal-here' label='Open Terminal Here'
+- 
+  <section>
+    - action='win.rename-file' label='Rename…'
+    - action='win.move-to-trash' label='Move to Trash…'
+# editor
+- 
+  <section>
+    - label='Convert Case to'
+      <submenu>
+        - 
+          <section>
+            - accel='<Alt><Shift>u' action='win.uppercase' label='UPPERCASE'
+            - accel='<Control>u' action='win.lowercase' label='lowercase'
+            - accel='<Alt>u' action='win.proper-case' label='Proper Case'
+            - action='win.proper-case-blend' label='Proper Case (blend)'
+            - accel='<Control><Alt>u' action='win.sentence-case' label='Sentence case'
+            - action='win.sentence-case-blend' label='Sentence case (blend)'
+            - action='win.invert-case' label='iNVERT cASE'
+    - label='Comment/Uncomment'
+      <submenu>
+        - 
+          <section>
+            - accel='<Control>q' action='win.toggle-comment' label='Toggle Single Line Comment'
+            - accel='<Control>k' action='win.comment-lines' label='Single Line Comment'
+            - accel='<Control><Shift>k' action='win.uncomment-lines' label='Single Line Uncomment'
+        - 
+          <section>
+            - accel='<Control><Shift>q' action='win.toggle-block-comment' label='Block Comment'
+    - label='Line Operations'
+      <submenu>
+        - 
+          <section>
+            - accel='<Control>d' action='win.duplicate-line' label='Duplicate Current Line'
+            - accel='<Control>l' action='win.cut-line' label='Cut Current Line'
+            - accel='<Control><Shift>x' action='win.copy-line' label='Copy Current Line'
+            - accel='<Control><Shift>l' action='win.delete-line' label='Delete Current Line'
+            - accel='<Control>t' action='win.transpose-line' label='Transpose Current Line'
+        - 
+          <section>
+            - accel='<Control><Shift>Up' action='win.move-line-up' label='Move Up Current Line'
+            - accel='<Control><Shift>Down' action='win.move-line-down' label='Move Down Current Line'
+            - accel='<Control>j' action='win.join-lines' label='Join Lines'
+            - accel='<Control><Alt>Return' action='win.blank-line-above' label='Insert Blank Line Above Current'
+            - accel='<Control><Alt><Shift>Return' action='win.blank-line-below' label='Insert Blank Line Below Current'
+        - 
+          <section>
+            - action='win.remove-duplicate-lines' label='Remove Duplicate Lines'
+            - action='win.remove-consecutive-duplicate-lines' label='Remove Consecutive Duplicate Lines'
+            - action='win.remove-empty-lines' label='Remove Empty Lines'
+            - action='win.remove-blank-lines' label='Remove Empty Lines (Containing Blank Characters)'
+            - action='win.reverse-lines' label='Reverse Line Order'
+        - 
+          <section>
+            - action='win.sort-lexical-ascending' label='Sort Lines Lexicographically Ascending'
+            - action='win.sort-lexical-descending' label='Sort Lines Lexicographically Descending'
+            - action='win.sort-ignore-case-ascending' label='Sort Lines Lex. Ascending Ignoring Case'
+            - action='win.sort-ignore-case-descending' label='Sort Lines Lex. Descending Ignoring Case'
+            - action='win.sort-integer-ascending' label='Sort Lines As Integers Ascending'
+            - action='win.sort-integer-descending' label='Sort Lines As Integers Descending'
+            - action='win.sort-decimal-comma-ascending' label='Sort Lines As Decimals (Comma) Ascending'
+            - action='win.sort-decimal-comma-descending' label='Sort Lines As Decimals (Comma) Descending'
+            - action='win.sort-decimal-dot-ascending' label='Sort Lines As Decimals (Dot) Ascending'
+            - action='win.sort-decimal-dot-descending' label='Sort Lines As Decimals (Dot) Descending'
+            - action='win.sort-length-ascending' label='Sort Lines By Length Ascending'
+            - action='win.sort-length-descending' label='Sort Lines By Length Descending'
+- 
+  <section>
+    - accel='<Control><Alt>f' action='win.select-and-find-next' label='Select and Find Next'
+    - accel='<Control>b' action='win.go-to-matching-brace' label='Go to Matching Brace'
+# line endings
+- label='Save line endings as'
+  <section>
+    - action='win.eol-crlf' label='Windows (CR LF)'
+    - action='win.eol-lf' label='Unix (LF)'
+    - action='win.eol-cr' label='Macintosh (CR)'

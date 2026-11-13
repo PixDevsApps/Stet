@@ -1,4 +1,4 @@
-//! GActions, accelerators and the hamburger menu, all generated from the registry in
+//! GActions, accelerators and the menus, all generated from the registry in
 //! `stet_domain::actions`. Nothing here decides what exists; it only wires it up.
 
 use crate::window::{Window, grouped_entries};
@@ -6,11 +6,11 @@ use gtk4 as gtk;
 use gtk4::{gio, glib};
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use stet_domain::actions::{
-    ActionId, ActionKind, ActionScope, EDITOR_MENU, EditorMenuItem, KeyScope, Menu,
-    OVERRIDDEN_BUILTINS, RECENT_SUBMENU, TAB_MENU, submenu_rank,
+    ActionId, ActionKind, ActionScope, KeyScope, MenuItem, MenuList, MenuTree, Menus,
+    OVERRIDDEN_BUILTINS,
 };
 use stet_domain::settings::Keymap;
 
@@ -146,14 +146,123 @@ pub fn editor_controller(store: &gio::ListStore) -> gtk::ShortcutController {
 /// The name of the editors' shortcut controller, for the self-test.
 pub const EDITOR_SHORTCUTS: &str = "stet-editor-shortcuts";
 
-/// Doubles underscores, which menus would otherwise read as mnemonics.
-fn escape_label(label: &str) -> String {
-    label.replace('_', "__")
+/// The menus' structure, built once: what is available does not change while Stet runs.
+fn menus() -> &'static Menus {
+    static MENUS: LazyLock<Menus> = LazyLock::new(|| Menus::new(available));
+    &MENUS
+}
+
+/// What a menu shows that the registry cannot know.
+struct Shown<'a> {
+    keymap: &'a Keymap,
+    recent: &'a [PathBuf],
+}
+
+/// The hamburger menu, with the recent files in File › Open Recent.
+pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
+    gio_menu(&menus().main, &Shown { keymap, recent })
+}
+
+/// The tab strip's context menu.
+pub fn tab_menu(keymap: &Keymap) -> gio::Menu {
+    gio_menu(
+        &menus().tab,
+        &Shown {
+            keymap,
+            recent: &[],
+        },
+    )
+}
+
+/// What the editor's context menu adds to GtkTextView's own.
+pub fn editor_menu(keymap: &Keymap) -> gio::Menu {
+    gio_menu(
+        &menus().editor,
+        &Shown {
+            keymap,
+            recent: &[],
+        },
+    )
+}
+
+/// The status bar's line-ending menu, with the default keys.
+pub fn eol_menu() -> gio::Menu {
+    let keymap = Keymap::default();
+    gio_menu(
+        &menus().line_endings,
+        &Shown {
+            keymap: &keymap,
+            recent: &[],
+        },
+    )
+}
+
+/// `tree` as a GMenu: its items, then a section per non-empty section.
+fn gio_menu(tree: &MenuTree, shown: &Shown) -> gio::Menu {
+    let menu = gio::Menu::new();
+    for item in &tree.items {
+        append(&menu, item, shown);
+    }
+    for section in &tree.sections {
+        let target = gio::Menu::new();
+        for item in &section.items {
+            append(&target, item, shown);
+        }
+        if target.n_items() > 0 {
+            menu.append_section(section.label, &target);
+        }
+    }
+    menu
+}
+
+fn append(menu: &gio::Menu, item: &MenuItem, shown: &Shown) {
+    match item {
+        MenuItem::Action(id) => menu.append_item(&action_item(*id, shown.keymap)),
+        MenuItem::ActionWhenEnabled(id) => {
+            let item = action_item(*id, shown.keymap);
+            item.set_attribute_value("hidden-when", Some(&"action-disabled".to_variant()));
+            menu.append_item(&item);
+        }
+        MenuItem::Submenu { label, menu: tree } => {
+            if !tree.lists().any(|list| is_empty(list, shown)) {
+                menu.append_submenu(Some(label), &gio_menu(tree, shown));
+            }
+        }
+        MenuItem::List(id, MenuList::RecentFiles) => {
+            for path in shown.recent {
+                let Some(target) = path.to_str() else {
+                    continue;
+                };
+                let name = path.file_name().map_or_else(
+                    || target.to_owned(),
+                    |name| name.to_string_lossy().into_owned(),
+                );
+                menu.append_item(&value_item(*id, &name, target));
+            }
+        }
+        MenuItem::List(id, MenuList::Encodings) => {
+            for (group, entries) in grouped_entries() {
+                let submenu = gio::Menu::new();
+                for entry in entries {
+                    submenu.append_item(&value_item(*id, &entry.short_label(), &entry.id()));
+                }
+                menu.append_submenu(Some(group), &submenu);
+            }
+        }
+    }
+}
+
+/// Whether `list` has no entries now.
+fn is_empty(list: MenuList, shown: &Shown) -> bool {
+    match list {
+        MenuList::RecentFiles => shown.recent.is_empty(),
+        MenuList::Encodings => false,
+    }
 }
 
 /// A menu entry for `id`. GTK shows an application accelerator by itself; the text view's
 /// own keys and the editors' shortcuts are shown through the `accel` attribute.
-fn item(id: ActionId, keymap: &Keymap) -> gio::MenuItem {
+fn action_item(id: ActionId, keymap: &Keymap) -> gio::MenuItem {
     let item = gio::MenuItem::new(Some(id.label()), Some(&detailed_name(id)));
     if keymap.accels(id).is_empty()
         && let Some(key) = keymap.keys(id).first()
@@ -163,173 +272,77 @@ fn item(id: ActionId, keymap: &Keymap) -> gio::MenuItem {
     item
 }
 
-/// One item per encoding, grouped in submenus, each running `id` with the encoding's id.
-fn character_sets(id: ActionId, target: &gio::Menu) {
-    for (group, entries) in grouped_entries() {
-        let submenu = gio::Menu::new();
-        for entry in entries {
-            submenu.append_item(&encoding_item(id, &entry.short_label(), &entry.id()));
-        }
-        target.append_submenu(Some(group), &submenu);
-    }
-}
-
-fn encoding_item(id: ActionId, label: &str, encoding: &str) -> gio::MenuItem {
-    let item = gio::MenuItem::new(Some(&escape_label(label)), None);
-    item.set_action_and_target_value(Some(&detailed_name(id)), Some(&encoding.to_variant()));
+/// An entry running `id` with `value`, labelled `label`; underscores are doubled, as menus
+/// would otherwise read them as mnemonics.
+fn value_item(id: ActionId, label: &str, value: &str) -> gio::MenuItem {
+    let item = gio::MenuItem::new(Some(&label.replace('_', "__")), None);
+    item.set_action_and_target_value(Some(&detailed_name(id)), Some(&value.to_variant()));
     item
-}
-
-/// The status bar's line-ending menu: the registry's EOL conversions.
-pub fn eol_menu() -> gio::Menu {
-    let menu = gio::Menu::new();
-    let section = gio::Menu::new();
-    for id in [ActionId::EolCrLf, ActionId::EolLf, ActionId::EolCr] {
-        section.append_item(&item(id, &Keymap::default()));
-    }
-    menu.append_section(Some("Save line endings as"), &section);
-    menu
-}
-
-/// The submenu of the hamburger menu named `name`, by section.
-fn submenu(name: &str, keymap: &Keymap) -> gio::Menu {
-    let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
-    for id in ActionId::ALL.into_iter().filter(|id| available(*id)) {
-        if let Some(place) = id.spec().menu.filter(|place| place.submenu == Some(name)) {
-            sections
-                .entry(place.section)
-                .or_default()
-                .append_item(&item(id, keymap));
-        }
-    }
-    let menu = gio::Menu::new();
-    for section in sections.values() {
-        menu.append_section(None, section);
-    }
-    menu
-}
-
-/// The tab strip's context menu (`stet_domain::actions::TAB_MENU`).
-pub fn tab_menu(keymap: &Keymap) -> gio::Menu {
-    let menu = gio::Menu::new();
-    for ids in TAB_MENU {
-        let section = gio::Menu::new();
-        for id in ids.iter().filter(|id| available(**id)) {
-            let item = item(*id, keymap);
-            if matches!(id, ActionId::PinTab | ActionId::UnpinTab) {
-                item.set_attribute_value("hidden-when", Some(&"action-disabled".to_variant()));
-            }
-            section.append_item(&item);
-        }
-        menu.append_section(None, &section);
-    }
-    menu
-}
-
-/// What the editor's context menu adds to GtkTextView's own (`EDITOR_MENU`).
-pub fn editor_menu(keymap: &Keymap) -> gio::Menu {
-    let menu = gio::Menu::new();
-    for items in EDITOR_MENU {
-        let section = gio::Menu::new();
-        for entry in *items {
-            match entry {
-                EditorMenuItem::Submenu(name) => {
-                    section.append_submenu(Some(name), &submenu(name, keymap));
-                }
-                EditorMenuItem::Action(id) => section.append_item(&item(*id, keymap)),
-            }
-        }
-        menu.append_section(None, &section);
-    }
-    menu
-}
-
-/// The hamburger menu: one submenu per `Menu`, one section per registry section, the recent
-/// files in File › Open Recent and every encoding in Encoding › Character Sets.
-pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
-    let root = gio::Menu::new();
-    for menu in Menu::ALL {
-        let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
-        let mut nested: BTreeMap<(u8, usize, &str), BTreeMap<u8, gio::Menu>> = BTreeMap::new();
-        for id in ActionId::ALL.into_iter().filter(|id| available(*id)) {
-            let spec = id.spec();
-            let Some(place) = spec.menu.filter(|place| place.menu == menu) else {
-                continue;
-            };
-            let target = match place.submenu {
-                None => sections.entry(place.section).or_default(),
-                Some(submenu) => nested
-                    .entry((place.parent_section, submenu_rank(submenu), submenu))
-                    .or_default()
-                    .entry(place.section)
-                    .or_default(),
-            };
-            if spec.kind == ActionKind::WithString {
-                if id == ActionId::OpenRecent {
-                    for path in recent {
-                        let Some(target_path) = path.to_str() else {
-                            continue;
-                        };
-                        let name = path.file_name().map_or_else(
-                            || target_path.to_owned(),
-                            |name| name.to_string_lossy().into_owned(),
-                        );
-                        let item = gio::MenuItem::new(Some(&escape_label(&name)), None);
-                        item.set_action_and_target_value(
-                            Some(&detailed_name(id)),
-                            Some(&target_path.to_variant()),
-                        );
-                        target.append_item(&item);
-                    }
-                } else if id == ActionId::Reinterpret {
-                    character_sets(id, target);
-                }
-                continue;
-            }
-            target.append_item(&item(id, keymap));
-        }
-        for ((parent_section, _, name), submenu_sections) in nested {
-            if name == RECENT_SUBMENU && recent.is_empty() {
-                continue;
-            }
-            let submenu = gio::Menu::new();
-            for section in submenu_sections
-                .values()
-                .filter(|section| section.n_items() > 0)
-            {
-                submenu.append_section(None, section);
-            }
-            sections
-                .entry(parent_section)
-                .or_default()
-                .append_submenu(Some(name), &submenu);
-        }
-        let submenu = gio::Menu::new();
-        for section in sections.values() {
-            submenu.append_section(None, section);
-        }
-        root.append_submenu(Some(menu.label()), &submenu);
-    }
-    // Below the submenus, the items of the first page itself.
-    let mut sections: BTreeMap<u8, gio::Menu> = BTreeMap::new();
-    for id in ActionId::ALL.into_iter().filter(|id| available(*id)) {
-        if let Some(place) = id.spec().menu.filter(|place| place.menu == Menu::Main) {
-            sections
-                .entry(place.section)
-                .or_default()
-                .append_item(&item(id, keymap));
-        }
-    }
-    for section in sections.values() {
-        root.append_section(None, section);
-    }
-    root
 }
 
 #[cfg(test)]
 mod tests {
     use super::detailed_name;
+    use gtk4::gio;
     use stet_domain::actions::{ActionId, ActionScope};
+
+    /// `model` as indented text: each item's attributes, then its links.
+    fn dump(model: &gio::MenuModel, depth: usize, out: &mut String) {
+        use gtk4::gio::prelude::*;
+        use std::fmt::Write as _;
+        let indent = "  ".repeat(depth);
+        for index in 0..model.n_items() {
+            let mut attributes = Vec::new();
+            let iter = model.iterate_item_attributes(index);
+            while let Some((name, value)) = MenuAttributeIterExt::next(&iter) {
+                attributes.push(format!("{name}={}", value.print(true)));
+            }
+            attributes.sort();
+            let _ = writeln!(out, "{indent}- {}", attributes.join(" "));
+            let mut links = Vec::new();
+            let iter = model.iterate_item_links(index);
+            while let Some((name, child)) = MenuLinkIterExt::next(&iter) {
+                links.push((name.to_string(), child));
+            }
+            links.sort_by(|a, b| a.0.cmp(&b.0));
+            for (name, child) in links {
+                let _ = writeln!(out, "{indent}  <{name}>");
+                dump(&child, depth + 2, out);
+            }
+        }
+    }
+
+    /// The GMenus the window shows: labels, actions, targets, attributes and links. GIO
+    /// builds them without a display.
+    #[test]
+    fn the_menus_keep_their_models() {
+        use gtk4::prelude::*;
+        use std::fmt::Write as _;
+        use std::os::unix::ffi::OsStrExt as _;
+        use std::path::PathBuf;
+        let keymap = stet_domain::settings::Keymap::default();
+        let recent = [
+            PathBuf::from("/home/user/notes/todo_list.txt"),
+            PathBuf::from("/tmp/a.md"),
+            PathBuf::from(std::ffi::OsStr::from_bytes(b"/tmp/bad\xff.txt")),
+            PathBuf::from("/"),
+        ];
+        let mut out = String::new();
+        for (name, model) in [
+            (
+                "main with recent files",
+                super::menu_model(&recent, &keymap),
+            ),
+            ("main without recent files", super::menu_model(&[], &keymap)),
+            ("tab", super::tab_menu(&keymap)),
+            ("editor", super::editor_menu(&keymap)),
+            ("line endings", super::eol_menu()),
+        ] {
+            writeln!(out, "# {name}").unwrap();
+            dump(model.upcast_ref(), 0, &mut out);
+        }
+        insta::assert_snapshot!(out);
+    }
 
     #[test]
     fn detailed_names_carry_the_scope_and_resolve() {

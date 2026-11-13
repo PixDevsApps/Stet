@@ -2,12 +2,15 @@
 //! [`ActionId::ALL`]'s: menus list their entries in it, and the palette starts from it.
 
 use super::Menu::{Edit, Encoding, File, Help, Language, Main, Search, Settings, Tools, View};
+use super::menu::{
+    BLANK_SUBMENU, BOOKMARK_SUBMENU, CASE_SUBMENU, CHARACTER_SETS_SUBMENU, CLEAR_STYLE_SUBMENU,
+    COMMENT_SUBMENU, COMPARE_SUBMENU, COPY_SUBMENU, EOL_SUBMENU, JSON_SUBMENU, JUMP_DOWN_SUBMENU,
+    JUMP_UP_SUBMENU, LINES_SUBMENU, MOVE_CLONE_SUBMENU, RECENT_SUBMENU, STYLE_TOKEN_SUBMENU,
+    XML_SUBMENU,
+};
 use super::{
-    ActionKind, ActionScope, ActionSpec, BLANK_SUBMENU, BOOKMARK_SUBMENU, CASE_SUBMENU,
-    CHARACTER_SETS_SUBMENU, CLEAR_STYLE_SUBMENU, COMMENT_SUBMENU, COMPARE_SUBMENU, COPY_SUBMENU,
-    EOL_SUBMENU, JSON_SUBMENU, JUMP_DOWN_SUBMENU, JUMP_UP_SUBMENU, KeyScope, Keys, LINES_SUBMENU,
-    MOVE_CLONE_SUBMENU, MenuPlace, RECENT_SUBMENU, STYLE_TOKEN_SUBMENU, XML_SUBMENU, command,
-    editing, in_compare, in_search, jump, sort, toggle, with_encoding,
+    ActionKind, ActionScope, ActionSpec, KeyScope, Keys, MenuPlace, command, editing, in_compare,
+    in_search, jump, sort, toggle, with_encoding,
 };
 
 /// Generates [`ActionId`], [`ActionId::ALL`] and [`ActionId::spec`] from one table of
@@ -1303,8 +1306,9 @@ actions! {
 
 #[cfg(test)]
 mod tests {
+    use crate::actions::menu::EOL_SUBMENU;
     use crate::actions::{
-        Accelerator, ActionId, ActionKind, ActionScope, EOL_SUBMENU, KeyScope, Menu, MenuPlace,
+        Accelerator, ActionId, ActionKind, ActionScope, KeyScope, Menu, MenuPlace,
     };
     use std::collections::{HashMap, HashSet};
 
