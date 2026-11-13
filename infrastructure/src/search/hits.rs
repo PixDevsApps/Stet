@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use super::matcher::Match;
-use super::text::{ByteCursor, count_chars};
+use stet_domain::text::offset::{ByteCursor, count_chars};
 
 /// The longest line text a [`Hit`] carries.
 pub const MAX_LINE_CHARS: usize = 500;

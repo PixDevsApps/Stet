@@ -1,7 +1,7 @@
 //! Large column edits as one replacement of their line range (ADR-003 amendment).
 
 use super::editing::ColumnEdit;
-use crate::text::edit::ByteCursor;
+use crate::text::offset::ByteCursor;
 use crate::text::{LineIndex, TextEdit};
 use std::ops::Range;
 

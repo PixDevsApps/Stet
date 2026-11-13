@@ -1,6 +1,7 @@
 //! Edits in character offsets, the unit `GtkTextIter` counts, so they apply to the buffer
 //! without conversion (ADR-003).
 
+use super::offset::ByteCursor;
 use std::fmt;
 use std::ops::Range;
 
@@ -122,37 +123,6 @@ pub fn apply(text: &str, edits: Vec<TextEdit>) -> Result<String, EditError> {
     }
     out.push_str(&text[copied..]);
     Ok(out)
-}
-
-/// Converts non-decreasing character offsets to byte offsets in one pass.
-pub(crate) struct ByteCursor<'a> {
-    text: &'a str,
-    chars: usize,
-    bytes: usize,
-}
-
-impl<'a> ByteCursor<'a> {
-    pub(crate) fn new(text: &'a str) -> Self {
-        Self {
-            text,
-            chars: 0,
-            bytes: 0,
-        }
-    }
-
-    /// The byte offset of character `target`; `target` must not be below an earlier call's.
-    pub(crate) fn byte_at(&mut self, target: usize) -> usize {
-        debug_assert!(target >= self.chars, "ByteCursor moved backwards");
-        while self.chars < target {
-            let next = self.text[self.bytes..]
-                .chars()
-                .next()
-                .expect("character offset within the text");
-            self.bytes += next.len_utf8();
-            self.chars += 1;
-        }
-        self.bytes
-    }
 }
 
 /// Which side of a replaced range a position inside it moves to.

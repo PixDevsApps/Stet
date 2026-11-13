@@ -12,7 +12,7 @@ pub mod xml;
 use std::fmt;
 use std::ops::Range;
 
-use crate::text::edit::ByteCursor;
+use crate::text::offset::ByteCursor;
 use crate::text::{BULK_EDIT_THRESHOLD, Bias, LineIndex, Position, TextEdit, map_offset};
 
 /// The part of the text an operation works on.

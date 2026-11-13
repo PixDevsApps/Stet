@@ -3,6 +3,7 @@ pub mod edit;
 pub mod eol;
 pub mod index;
 pub mod lines;
+pub mod offset;
 pub mod selection;
 pub mod words;
 

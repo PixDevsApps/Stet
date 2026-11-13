@@ -1,12 +1,12 @@
-//! Offset conversions over UTF-8 text in one forward pass.
+//! Offset conversions over UTF-8 text in one forward pass: characters, bytes and lines.
 
 /// Characters in `bytes`: the bytes that do not continue a UTF-8 sequence.
-pub(crate) fn count_chars(bytes: &[u8]) -> usize {
+pub fn count_chars(bytes: &[u8]) -> usize {
     bytes.iter().filter(|&&byte| (byte as i8) >= -0x40).count()
 }
 
 /// The start of the character after the one at byte `at` (one past the end at the end).
-pub(crate) fn next_boundary(bytes: &[u8], at: usize) -> usize {
+pub fn next_boundary(bytes: &[u8], at: usize) -> usize {
     let mut next = at + 1;
     while bytes.get(next).is_some_and(|&byte| byte & 0xC0 == 0x80) {
         next += 1;
@@ -16,7 +16,7 @@ pub(crate) fn next_boundary(bytes: &[u8], at: usize) -> usize {
 
 /// The byte offset of character `target`, walking from byte `byte`, which is character
 /// `chars`. `None` beyond the end of `text`.
-pub(crate) fn char_to_byte(text: &str, byte: usize, chars: usize, target: usize) -> Option<usize> {
+pub fn char_to_byte(text: &str, byte: usize, chars: usize, target: usize) -> Option<usize> {
     const BLOCK: usize = 64;
     if target < chars {
         return char_to_byte(text, 0, 0, target);
@@ -42,7 +42,8 @@ pub(crate) fn char_to_byte(text: &str, byte: usize, chars: usize, target: usize)
 }
 
 /// Converts non-decreasing byte offsets to character offsets.
-pub(crate) struct CharCursor<'a> {
+#[derive(Debug, Clone)]
+pub struct CharCursor<'a> {
     bytes: &'a [u8],
     byte: usize,
     chars: usize,
@@ -50,7 +51,7 @@ pub(crate) struct CharCursor<'a> {
 
 impl<'a> CharCursor<'a> {
     /// A cursor at byte `byte`, which is character `chars`.
-    pub(crate) fn at(text: &'a str, byte: usize, chars: usize) -> Self {
+    pub fn at(text: &'a str, byte: usize, chars: usize) -> Self {
         Self {
             bytes: text.as_bytes(),
             byte,
@@ -58,7 +59,7 @@ impl<'a> CharCursor<'a> {
         }
     }
 
-    pub(crate) fn char_at(&mut self, byte: usize) -> usize {
+    pub fn char_at(&mut self, byte: usize) -> usize {
         if byte < self.byte {
             self.byte = 0;
             self.chars = 0;
@@ -70,14 +71,15 @@ impl<'a> CharCursor<'a> {
 }
 
 /// Converts non-decreasing character offsets to byte offsets.
-pub(crate) struct ByteCursor<'a> {
+#[derive(Debug, Clone)]
+pub struct ByteCursor<'a> {
     text: &'a str,
     byte: usize,
     chars: usize,
 }
 
 impl<'a> ByteCursor<'a> {
-    pub(crate) fn new(text: &'a str) -> Self {
+    pub fn new(text: &'a str) -> Self {
         Self {
             text,
             byte: 0,
@@ -86,7 +88,7 @@ impl<'a> ByteCursor<'a> {
     }
 
     /// The byte offset of character `chars`, or the end of the text beyond it.
-    pub(crate) fn byte_at(&mut self, chars: usize) -> usize {
+    pub fn byte_at(&mut self, chars: usize) -> usize {
         match char_to_byte(self.text, self.byte, self.chars, chars) {
             Some(byte) => {
                 self.byte = byte;
@@ -99,7 +101,8 @@ impl<'a> ByteCursor<'a> {
 }
 
 /// Counts line feeds up to non-decreasing byte offsets.
-pub(crate) struct LineCursor<'a> {
+#[derive(Debug, Clone)]
+pub struct LineCursor<'a> {
     bytes: &'a [u8],
     byte: usize,
     line: usize,
@@ -107,7 +110,7 @@ pub(crate) struct LineCursor<'a> {
 
 impl<'a> LineCursor<'a> {
     /// A cursor at byte `byte` of `text`.
-    pub(crate) fn at(text: &'a str, byte: usize) -> Self {
+    pub fn at(text: &'a str, byte: usize) -> Self {
         let bytes = text.as_bytes();
         Self {
             bytes,
@@ -117,7 +120,7 @@ impl<'a> LineCursor<'a> {
     }
 
     /// The zero-based line of byte `byte`.
-    pub(crate) fn line_at(&mut self, byte: usize) -> usize {
+    pub fn line_at(&mut self, byte: usize) -> usize {
         if byte < self.byte {
             self.byte = 0;
             self.line = 0;
@@ -131,6 +134,7 @@ impl<'a> LineCursor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn converts_offsets() {
@@ -158,5 +162,24 @@ mod tests {
         assert_eq!(lines.line_at(7), 1);
         assert_eq!(lines.line_at(0), 0);
         assert_eq!(next_boundary(text.as_bytes(), 1), 3);
+    }
+
+    proptest! {
+        #[test]
+        fn cursors_agree_with_char_indices(text in "[a\\né日\\u{1F600}]{0,300}", picks in prop::collection::vec(0usize..320, 0..12)) {
+            let starts: Vec<usize> = text.char_indices().map(|(byte, _)| byte).chain([text.len()]).collect();
+            let mut picks = picks;
+            picks.sort_unstable();
+            let mut bytes = ByteCursor::new(&text);
+            let mut chars = CharCursor::at(&text, 0, 0);
+            for pick in picks {
+                let expected = starts.get(pick).copied().unwrap_or(text.len());
+                prop_assert_eq!(bytes.byte_at(pick), expected);
+                if let Some(&byte) = starts.get(pick) {
+                    prop_assert_eq!(chars.char_at(byte), pick);
+                    prop_assert_eq!(char_to_byte(&text, 0, 0, pick), Some(byte));
+                }
+            }
+        }
     }
 }

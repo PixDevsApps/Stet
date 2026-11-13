@@ -16,7 +16,6 @@ mod hits;
 mod matcher;
 pub mod parity;
 mod replace;
-mod text;
 
 #[cfg(test)]
 mod tests;
@@ -27,4 +26,4 @@ pub use replace::ReplaceAll;
 
 pub(crate) use hits::make_hit;
 pub(crate) use matcher::{JIT_STACK, pcre2_message};
-pub(crate) use text::next_boundary;
+pub(crate) use stet_domain::text::offset::next_boundary;
