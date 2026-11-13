@@ -1,25 +1,26 @@
 //! Search without a toolkit: the query model, Extended-mode escapes, the translation of
 //! Boost-style regex syntax into the PCRE2 dialect that GtkSourceView and our own matcher
-//! share, and replacement templates (ADR-005).
+//! share, and replacement templates (ADR-005). [`replace_files`] writes replacements back into
+//! files, and [`report`] words the counts and the results panel.
 //!
 //! The buffer is LF-normalized (ADR-008) and holds U+2400 in place of NUL (ADR-007). Whatever
 //! is searched for or inserted is normalized the same way, so `\r\n` in a query finds a line
 //! break and `\r\n` in a replacement inserts one.
 
-pub mod extended;
-pub mod history;
+mod extended;
+mod history;
 mod pattern;
+pub mod replace_files;
 pub mod report;
-pub mod smart;
-pub mod template;
+mod smart;
+mod template;
 mod translate;
 
 use std::borrow::Cow;
 use std::ops::Range;
 
 pub use extended::unescape;
-pub use history::{History, Recall, SearchHistory};
-pub use report::ScopeKind;
+pub use history::{HISTORY_LIMIT, History, Recall, SearchHistory};
 pub use smart::SmartHighlight;
 pub use template::{Captures, Template, TemplateWarning};
 pub use translate::{Target, TranslateError, Translated, translate, translate_for};
@@ -30,7 +31,7 @@ pub enum SearchMode {
     /// Literal text.
     #[default]
     Normal,
-    /// Literal text with backslash escapes ([`extended::unescape`]).
+    /// Literal text with backslash escapes ([`unescape`]).
     Extended,
     /// A regular expression in Boost-style syntax, run by PCRE2 after translation.
     Regex,

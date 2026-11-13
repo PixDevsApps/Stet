@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use pcre2::bytes::{CaptureLocations, Regex, RegexBuilder};
 use stet_domain::search::{Captures, Query, TranslateError, Translated, translate};
 
-use stet_domain::text::offset::{CharCursor, LineCursor, char_to_byte, next_boundary};
+use stet_domain::text::{CharCursor, LineCursor, char_to_byte, next_boundary};
 
 /// GtkSourceView compiles with newline convention ANY and Unicode `\R` (`implregex.c`); the
 /// `pcre2` crate has no option for either, so they lead the pattern.

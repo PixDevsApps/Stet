@@ -1,29 +1,20 @@
-//! Document and window naming: untitled numbers, tab titles and the window title.
+//! Documents: their names and titles, how paths are shown, and what is detected from their
+//! text (indentation, language) or named on the command line (a line and column).
+
+pub mod indent;
+pub mod language;
+pub mod location;
+mod untitled;
 
 use std::path::{Path, PathBuf};
 
+pub use untitled::{
+    FIRST_LINE_CHARS, FIRST_LINE_READ, FIRST_LINE_SCAN, extension_from_globs, first_line_name,
+    next_untitled_number, save_file_name, untitled_name,
+};
+
+/// The application's name, as window titles show it.
 pub const APP_NAME: &str = "Stet";
-
-/// `Untitled N`.
-pub fn untitled_name(number: u32) -> String {
-    format!("Untitled {number}")
-}
-
-/// The lowest number from 1 that no open untitled tab uses, so a closed tab's number is reused.
-pub fn next_untitled_number(used: impl IntoIterator<Item = u32>) -> u32 {
-    let mut used: Vec<u32> = used.into_iter().collect();
-    used.sort_unstable();
-    used.dedup();
-    let mut candidate = 1;
-    for number in used {
-        if number == candidate {
-            candidate += 1;
-        } else if number > candidate {
-            break;
-        }
-    }
-    candidate
-}
 
 /// The tab label: the name, with a dot in front while there are unsaved changes.
 pub fn tab_title(name: &str, dirty: bool) -> String {
@@ -97,16 +88,6 @@ mod tests {
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert_eq!(shell_quote("$HOME/x"), "'$HOME/x'");
         assert_eq!(shell_quote(""), "''");
-    }
-
-    #[test]
-    fn untitled_numbers_reuse_the_lowest_gap() {
-        assert_eq!(next_untitled_number([]), 1);
-        assert_eq!(next_untitled_number([1, 2, 3]), 4);
-        assert_eq!(next_untitled_number([2, 3]), 1);
-        assert_eq!(next_untitled_number([1, 3, 3, 4]), 2);
-        assert_eq!(next_untitled_number([5, 1]), 2);
-        assert_eq!(untitled_name(2), "Untitled 2");
     }
 
     #[test]

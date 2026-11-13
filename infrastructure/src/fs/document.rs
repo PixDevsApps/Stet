@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use encoding_rs::{Encoding, UTF_8};
-use stet_domain::text::eol::{Eol, EolStats};
+use stet_domain::text::{Eol, EolStats};
 
 use super::load::{LoadError, load};
 use super::meta::FileMeta;

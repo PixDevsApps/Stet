@@ -40,7 +40,7 @@ use std::process::Command;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime};
 use stet_domain::actions::ActionId;
-use stet_domain::language::hint_ids;
+use stet_domain::document::language::hint_ids;
 use stet_domain::theme::Rgb;
 use stet_infrastructure::xdg::StetDirs;
 

@@ -23,12 +23,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
-use stet_domain::document::{tilde, untitled_name};
-use stet_domain::indent::Indentation;
+use stet_domain::document::indent::Indentation;
+use stet_domain::document::{
+    FIRST_LINE_READ, FIRST_LINE_SCAN, first_line_name, tilde, untitled_name,
+};
 use stet_domain::ops::pretty::FormatKind;
-use stet_domain::session::{Fingerprint, TabRecord};
+use stet_domain::session::{Fingerprint, RecordId, TabRecord};
 use stet_domain::text::{EolStats, Position};
-use stet_domain::untitled::{FIRST_LINE_READ, FIRST_LINE_SCAN, first_line_name};
 use stet_domain::view::{DEFAULT_TAB_WIDTH, MAX_UNDO_LEVELS};
 use stet_infrastructure::encoding::DetectionSource;
 use stet_infrastructure::fs::{DocumentFormat, EncodingChoice, SizeClass};
@@ -403,7 +404,7 @@ mod imp {
         /// GTK keeps one caret per buffer.
         pub selection: RefCell<Option<(gtk::TextMark, gtk::TextMark)>>,
         /// A clone's own id in the session.
-        pub clone_id: RefCell<Option<String>>,
+        pub clone_id: RefCell<Option<RecordId>>,
         /// The restored first visible line, kept until the view is first shown and has a
         /// scroll position of its own.
         pub top_line: Cell<Option<usize>>,
@@ -769,7 +770,7 @@ impl EditorPage {
     }
 
     /// This tab's own id in the session when it is a clone, made on first use.
-    pub fn clone_id(&self) -> String {
+    pub fn clone_id(&self) -> RecordId {
         self.imp()
             .clone_id
             .borrow_mut()
@@ -777,7 +778,7 @@ impl EditorPage {
             .clone()
     }
 
-    pub fn set_clone_id(&self, id: String) {
+    pub fn set_clone_id(&self, id: RecordId) {
         self.imp().clone_id.replace(Some(id));
     }
 

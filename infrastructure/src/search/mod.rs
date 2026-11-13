@@ -26,4 +26,4 @@ pub use replace::ReplaceAll;
 
 pub(crate) use hits::make_hit;
 pub(crate) use matcher::{JIT_STACK, pcre2_message};
-pub(crate) use stet_domain::text::offset::next_boundary;
+pub(crate) use stet_domain::text::next_boundary;

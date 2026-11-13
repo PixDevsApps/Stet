@@ -12,7 +12,7 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use stet_domain::indent::{self, Indentation};
+use stet_domain::document::indent::{self, Indentation};
 use stet_domain::ops::lines::{self, Scope};
 
 /// The widths the popover offers.

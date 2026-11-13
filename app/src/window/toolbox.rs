@@ -15,7 +15,7 @@ use sourceview5::prelude::*;
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
-use stet_domain::indent::Indentation;
+use stet_domain::document::indent::Indentation;
 use stet_domain::marks::Footprint;
 use stet_domain::ops::case::{self, Case};
 use stet_domain::ops::comment::{self, CommentTokens};

@@ -14,9 +14,9 @@ use gtk4::gio;
 use sourceview5::prelude::*;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use stet_domain::indent;
-use stet_domain::language as hints;
-use stet_domain::language::HEAD_BYTES;
+use stet_domain::document::indent;
+use stet_domain::document::language as hints;
+use stet_domain::document::language::HEAD_BYTES;
 use stet_domain::ops::pretty::{self, FormatKind};
 use stet_domain::text::{
     DISPLAY_BREAK_CHARS, LONG_LINE_CHARS, LongestLine, Position, break_long_lines, line_count,
@@ -141,7 +141,7 @@ impl Window {
         let caret = Caret::Open(
             location
                 .position
-                .map(stet_domain::location::LineCol::position),
+                .map(stet_domain::document::location::LineCol::position),
         );
         if !self.fill(&page, read, TextOrigin::File, caret).await {
             if self.tab_page(&page).is_some() {

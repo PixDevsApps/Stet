@@ -29,9 +29,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 use stet_domain::document::tilde;
+use stet_domain::document::{extension_from_globs, save_file_name};
 use stet_domain::nav::{History, Location, Mru};
 use stet_domain::text::TextEdit;
-use stet_domain::untitled::{extension_from_globs, save_file_name};
 
 /// How long Ctrl+Tab has to be held before the switcher shows, so a quick tap never flashes it.
 pub const SWITCHER_DELAY: Duration = Duration::from_millis(120);

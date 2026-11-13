@@ -4,7 +4,7 @@ use encoding_rs::{
     BIG5, EUC_KR, Encoding, GB18030, GBK, ISO_2022_JP, ISO_8859_15, SHIFT_JIS, UTF_8, UTF_16BE,
     UTF_16LE, WINDOWS_1251, WINDOWS_1252,
 };
-use stet_domain::text::eol::Eol;
+use stet_domain::text::Eol;
 
 pub(crate) struct Fixture {
     pub name: &'static str,

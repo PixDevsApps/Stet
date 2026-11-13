@@ -1,5 +1,5 @@
-//! Names for untitled documents: the tab shows the first line that has text, and Save As
-//! proposes a file name made from it.
+//! Names for untitled documents: each has a number ("Untitled N"), the tab shows the first
+//! line that has text, and Save As proposes a file name made from it.
 
 /// How many characters of the first line a tab shows before an ellipsis.
 pub const FIRST_LINE_CHARS: usize = 30;
@@ -13,6 +13,27 @@ pub const FIRST_LINE_READ: usize = 256;
 
 /// The longest proposed file name, in bytes, below the 255 that Linux file systems allow.
 const MAX_FILE_NAME_BYTES: usize = 200;
+
+/// `Untitled N`.
+pub fn untitled_name(number: u32) -> String {
+    format!("Untitled {number}")
+}
+
+/// The lowest number from 1 that no open untitled tab uses, so a closed tab's number is reused.
+pub fn next_untitled_number(used: impl IntoIterator<Item = u32>) -> u32 {
+    let mut used: Vec<u32> = used.into_iter().collect();
+    used.sort_unstable();
+    used.dedup();
+    let mut candidate = 1;
+    for number in used {
+        if number == candidate {
+            candidate += 1;
+        } else if number > candidate {
+            break;
+        }
+    }
+    candidate
+}
 
 /// The name of an untitled document whose text starts with `lines`: the first of the first
 /// [`FIRST_LINE_SCAN`] lines that isn't blank, with control characters as spaces, runs of
@@ -131,6 +152,16 @@ mod tests {
 
     fn name(text: &str) -> Option<String> {
         first_line_name(text.lines())
+    }
+
+    #[test]
+    fn untitled_numbers_reuse_the_lowest_gap() {
+        assert_eq!(next_untitled_number([]), 1);
+        assert_eq!(next_untitled_number([1, 2, 3]), 4);
+        assert_eq!(next_untitled_number([2, 3]), 1);
+        assert_eq!(next_untitled_number([1, 3, 3, 4]), 2);
+        assert_eq!(next_untitled_number([5, 1]), 2);
+        assert_eq!(untitled_name(2), "Untitled 2");
     }
 
     #[test]

@@ -33,7 +33,9 @@ Versions on the development machine (2026-09-30): gtk4 4.22.4, libadwaita 1.9.3,
 notes/               repository root (this checkout's folder keeps the M0 working name)
   Cargo.toml         workspace: edition 2024, resolver 3, default-members = ["app"], publish = false
   app/               crate `stet` (binary): the only production crate that links GTK
-  domain/            crate `stet-domain`: pure logic
+  domain/            crate `stet-domain`: pure logic, one module per bounded context (ADR-020): text,
+                     document, search, ops, column, diff, marks, nav, fuzzy, session, settings,
+                     actions, view, theme, updates; `domain/src/lib.rs` says what each holds
   infrastructure/    crate `stet-infrastructure`: std I/O
   assets/            brand/ (SVG icon masters), icons/ (PNG exports); provenance in docs/ASSETS.md
   packaging/         PKGBUILD.in, the desktop file, the metainfo, dependency-licenses.json and licenses/;

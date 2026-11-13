@@ -270,11 +270,11 @@ fn kill_9_victim() {
             if (step + index).is_multiple_of(5) {
                 tab.dirty = false;
                 tab.backup = None;
-                next.removed.push(id);
+                next.removed.push(record_id(&id));
             } else {
                 let len = 100_000 * (index + 1) + step % 7 * 997;
                 let text = marked_text(&id, epoch + step as u128, len);
-                next.backups.push((id, Arc::from(text)));
+                next.backups.push((record_id(&id), Arc::from(text)));
             }
             next.session.tabs.push(tab);
         }

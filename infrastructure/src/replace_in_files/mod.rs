@@ -10,7 +10,7 @@
 //!   U+2400, so the query means what it means in an open document, Extended `\r\n` included.
 //!   Only the replacements are encoded; every other byte is copied from the file
 //!   (`plan::plan`).
-//! - Files left alone, with the reason ([`stet_domain::replace_files::Skip`]): binary, lossy
+//! - Files left alone, with the reason ([`stet_domain::search::replace_files::Skip`]): binary, lossy
 //!   or malformed decodes, replacements the encoding can't represent, read-only files, files
 //!   over the size limit, files that changed between reading and writing, and the rare edits
 //!   that would join a lone CR and a lone LF.
@@ -34,7 +34,7 @@ use std::time::{Duration, Instant};
 
 use ignore::{DirEntry, WalkBuilder, WalkState};
 use std::sync::mpsc::Sender;
-use stet_domain::replace_files::Skip;
+use stet_domain::search::replace_files::Skip;
 use stet_domain::search::{Query, Template};
 
 use crate::find_in_files::error_path;

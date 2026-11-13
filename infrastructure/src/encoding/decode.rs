@@ -1,6 +1,6 @@
 use encoding_rs::{CoderResult, Encoder, EncoderResult, Encoding, UTF_8};
 use memchr::memmem;
-use stet_domain::text::eol::{EolStats, LfNormalizer};
+use stet_domain::text::{EolStats, LfNormalizer};
 
 use super::{PLACEHOLDER, PLACEHOLDER_UTF8, bom_bytes};
 

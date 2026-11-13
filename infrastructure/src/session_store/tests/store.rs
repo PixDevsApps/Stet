@@ -626,11 +626,12 @@ fn ids_never_escape_the_backup_directory() {
         Err(StoreError::InvalidId(_))
     ));
 
+    // The empty id is the one invalid id a `RecordId` holds; it would name `backup/.txt`.
     store
         .commit(Snapshot {
             session: restored.session,
-            backups: vec![("../evil".into(), Arc::from("x"))],
-            removed: vec!["../outside".into()],
+            backups: vec![(RecordId::default(), Arc::from("x"))],
+            removed: vec![RecordId::default()],
             adopted_orphans: vec![
                 outside.clone(),
                 dir.path().join("backup/orphaned/../../lock"),
@@ -815,7 +816,7 @@ fn a_stopped_writer_is_reported() {
 
 #[test]
 fn new_ids_are_valid_unique_and_ordered() {
-    let ids: Vec<String> = (0..1000).map(|_| new_id()).collect();
+    let ids: Vec<RecordId> = (0..1000).map(|_| new_id()).collect();
     assert!(ids.iter().all(|id| is_valid_id(id)));
     let mut sorted = ids.clone();
     sorted.sort();
@@ -882,12 +883,12 @@ fn app_snapshots(steps: &[[(u8, String); 4]]) -> (Vec<Snapshot>, BTreeMap<String
             match action {
                 2 => {
                     open.insert(id.to_owned(), text.clone());
-                    next.backups.push((id.to_owned(), Arc::from(text.as_str())));
+                    next.backups.push((record_id(id), Arc::from(text.as_str())));
                 }
                 1 if open.contains_key(id) => {}
                 _ => {
                     if open.remove(id).is_some() {
-                        next.removed.push(id.to_owned());
+                        next.removed.push(record_id(id));
                     }
                 }
             }
@@ -952,7 +953,7 @@ proptest::proptest! {
         for dir in [one_by_one.path(), folded.path()] {
             proptest::prop_assert_eq!(&backup_texts(dir), &expected);
             let manifest = manifest_on_disk(dir, "session.json");
-            let referenced: Vec<&str> = manifest.backup_ids().collect();
+            let referenced: Vec<&str> = manifest.backup_ids().map(RecordId::as_str).collect();
             let open: Vec<&str> = expected.keys().map(String::as_str).collect();
             proptest::prop_assert_eq!(referenced, open);
         }

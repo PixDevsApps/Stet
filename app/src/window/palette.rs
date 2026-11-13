@@ -8,8 +8,8 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 use stet_domain::actions::ActionId;
+use stet_domain::document::location::{LineCol, parse_line_col};
 use stet_domain::fuzzy;
-use stet_domain::location::{LineCol, parse_line_col};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {

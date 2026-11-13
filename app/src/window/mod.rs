@@ -55,9 +55,9 @@ use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
 use stet_domain::actions::{Accelerator, ActionId, ActionKind};
+use stet_domain::document::location::{self, LineCol};
 use stet_domain::document::{next_untitled_number, tab_title, window_title};
-use stet_domain::location::{self, LineCol};
-use stet_domain::recent::RecentFiles;
+use stet_domain::nav::RecentFiles;
 use stet_domain::text::Position;
 
 pub use compare::CompareRun;

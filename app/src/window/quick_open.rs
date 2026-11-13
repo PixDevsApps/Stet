@@ -22,9 +22,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use stet_domain::document::location::LineCol;
 use stet_domain::document::tilde;
-use stet_domain::location::LineCol;
-use stet_domain::quick_open::{
+use stet_domain::nav::quick_open::{
     PROJECT_FILE_CAP, Request, Row, SHOWN_LIMIT, Source, rank_groups, runs,
 };
 use stet_infrastructure::project::{WalkSummary, project_root, walk_project};

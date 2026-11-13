@@ -7,7 +7,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use stet_domain::session::Session;
+use stet_domain::session::{RecordId, Session};
 use stet_domain::text::normalize_to_lf;
 
 /// The regular files in `backup/`; directories and symlinks are left alone.
@@ -66,14 +66,14 @@ pub(super) fn restore(layout: &Layout) -> Result<Restored, StoreError> {
         if tab
             .backup
             .as_ref()
-            .is_some_and(|id| !scan.backups.contains_key(id))
+            .is_some_and(|id| !scan.backups.contains_key(id.as_str()))
         {
             missing_backups.push(tab.id.clone());
             tab.backup = None;
         }
     }
 
-    let referenced: BTreeSet<&str> = session.backup_ids().collect();
+    let referenced: BTreeSet<&str> = session.backup_ids().map(RecordId::as_str).collect();
     let unreferenced = scan
         .backups
         .iter()

@@ -1,8 +1,8 @@
 //! Quick open (Ctrl+P) without a toolkit: what a query asks for, how the open documents,
 //! the recent files and the project's files rank.
 
+use crate::document::location::{LineCol, parse_line_col, split_location};
 use crate::fuzzy;
-use crate::location::{LineCol, parse_line_col, split_location};
 use std::ops::Range;
 
 /// How many rows the popup shows.

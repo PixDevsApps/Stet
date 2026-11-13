@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use stet_domain::session::TabRecord;
+use stet_domain::session::{RecordId, TabRecord};
 use stet_infrastructure::session_store::{StoreError, new_id};
 
 /// How long a starting instance retries a locked store
@@ -20,7 +20,7 @@ pub const FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone)]
 pub struct TabSession {
     /// The tab's id in `session.json`, also the name of its backup.
-    pub id: String,
+    pub id: RecordId,
     /// A restored tab that was not shown yet: its text is still in its backup or file, and
     /// the session keeps this record for it unchanged.
     pub stub: Option<Box<TabRecord>>,

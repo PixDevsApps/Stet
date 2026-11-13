@@ -86,7 +86,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
-use stet_domain::session::{Session, is_valid_id};
+use stet_domain::session::{RecordId, Session, is_valid_id};
 use writer::{BackupWriter, Reply, Request, Shared};
 
 /// How often [`SessionStore::open_waiting`] tries a locked store again.
@@ -101,10 +101,10 @@ pub struct Snapshot {
     pub session: Session,
     /// Backup texts by id, written before the manifest. A queued text for the same id is
     /// replaced, not written.
-    pub backups: Vec<(String, Arc<str>)>,
+    pub backups: Vec<(RecordId, Arc<str>)>,
     /// Backups no longer needed (tab saved, closed or reverted), deleted after the manifest.
     /// An id the session still references is kept.
-    pub removed: Vec<String>,
+    pub removed: Vec<RecordId>,
     /// Paths from [`Restored::orphans`] whose text the session now holds in its own backups,
     /// deleted after the manifest.
     pub adopted_orphans: Vec<PathBuf>,
@@ -136,7 +136,7 @@ pub struct Restored {
     pub source: ManifestSource,
     /// Tabs whose backup was missing, by id. Their `backup` is now `None`, so they reopen
     /// from their file or empty; warn about lost changes when `dirty` is set.
-    pub missing_backups: Vec<String>,
+    pub missing_backups: Vec<RecordId>,
     /// Texts that no manifest references, oldest first, to reopen as untitled tabs.
     pub orphans: Vec<Orphan>,
 }
@@ -372,6 +372,9 @@ impl Drop for SessionStore {
 }
 
 /// A new tab or backup id: a UUIDv7, so ids sort by creation time.
-pub fn new_id() -> String {
-    uuid::Uuid::now_v7().to_string()
+pub fn new_id() -> RecordId {
+    uuid::Uuid::now_v7()
+        .to_string()
+        .parse()
+        .expect("a UUID is hex digits and dashes")
 }

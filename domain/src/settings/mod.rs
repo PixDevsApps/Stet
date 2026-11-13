@@ -13,7 +13,7 @@ use std::time::Duration;
 use toml::Spanned;
 use toml::de::{DeTable, DeValue};
 
-use crate::indent::Indentation;
+use crate::document::indent::Indentation;
 use crate::view::{DEFAULT_FONT_SIZE_PT, HIGHLIGHT_MAX_BYTES, HIGHLIGHT_MAX_LINES};
 
 pub use keymap::Keymap;

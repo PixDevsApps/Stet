@@ -11,7 +11,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::panic;
 use std::path::Path;
 use std::sync::Mutex;
-use stet_domain::session::TabRecord;
+use stet_domain::session::{RecordId, TabRecord};
 
 const WAIT: Duration = Duration::from_secs(30);
 
@@ -68,24 +68,28 @@ fn gated(
     (hook, Gate { entered, open })
 }
 
+fn record_id(text: &str) -> RecordId {
+    text.parse().unwrap()
+}
+
 fn untitled(id: &str, number: u32) -> TabRecord {
     TabRecord {
-        id: id.into(),
+        id: record_id(id),
         display_name: format!("new {number}"),
         untitled_number: Some(number),
         dirty: true,
-        backup: Some(id.into()),
+        backup: Some(record_id(id)),
         ..TabRecord::default()
     }
 }
 
 fn file_tab(id: &str, path: &str, dirty: bool) -> TabRecord {
     TabRecord {
-        id: id.into(),
+        id: record_id(id),
         path: Some(path.into()),
         display_name: path.rsplit('/').next().unwrap().into(),
         dirty,
-        backup: dirty.then(|| id.to_owned()),
+        backup: dirty.then(|| record_id(id)),
         ..TabRecord::default()
     }
 }
@@ -103,9 +107,9 @@ fn snapshot(session: Session, backups: &[(&str, &str)], removed: &[&str]) -> Sna
         session,
         backups: backups
             .iter()
-            .map(|&(id, text)| (id.to_owned(), Arc::from(text)))
+            .map(|&(id, text)| (record_id(id), Arc::from(text)))
             .collect(),
-        removed: removed.iter().map(|&id| id.to_owned()).collect(),
+        removed: removed.iter().map(|&id| record_id(id)).collect(),
         adopted_orphans: Vec::new(),
     }
 }

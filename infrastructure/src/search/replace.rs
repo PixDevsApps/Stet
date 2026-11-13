@@ -6,7 +6,7 @@ use stet_domain::search::Template;
 use stet_domain::text::{BULK_EDIT_THRESHOLD, TextEdit};
 
 use super::matcher::{Match, MatchCaptures, Matcher, Matches, Scope, SearchError};
-use stet_domain::text::offset::{ByteCursor, CharCursor};
+use stet_domain::text::{ByteCursor, CharCursor};
 
 /// The result of a Replace All: edits in character offsets of the searched text, in order,
 /// never overlapping. Apply them in one user action.

@@ -2,7 +2,7 @@ use std::fmt;
 
 use encoding_rs::{Encoder, EncoderResult, Encoding, UTF_8, UTF_16LE};
 use memchr::memmem;
-use stet_domain::text::eol::Eol;
+use stet_domain::text::Eol;
 
 use super::{PLACEHOLDER_UTF8, bom_bytes, is_utf16};
 

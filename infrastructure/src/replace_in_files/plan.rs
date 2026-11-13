@@ -6,8 +6,8 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
 use encoding_rs::Encoding;
-use stet_domain::replace_files::{LfText, RawEdit, Skip, apply_raw, raw_edits};
 use stet_domain::search::Template;
+use stet_domain::search::replace_files::{LfText, RawEdit, Skip, apply_raw, raw_edits};
 
 use crate::encoding::{bom_bytes, decode, detect, encode};
 use crate::fs::{

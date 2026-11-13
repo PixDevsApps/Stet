@@ -22,12 +22,13 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
+use stet_domain::document::location::LineCol;
 use stet_domain::document::tilde;
-use stet_domain::location::LineCol;
+use stet_domain::search::SearchOptions;
+use stet_domain::search::report::ScopeKind;
 use stet_domain::search::report::{
     count_message, counted, replace_in_documents_message, replace_message, results_heading,
 };
-use stet_domain::search::{ScopeKind, SearchOptions};
 use stet_infrastructure::find_in_files::DEFAULT_MAX_HITS;
 use stet_infrastructure::search::{Match, SearchError, document_hits};
 

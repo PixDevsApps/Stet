@@ -36,12 +36,12 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use stet_domain::document::language::HEAD_BYTES;
 use stet_domain::document::next_untitled_number;
-use stet_domain::language::HEAD_BYTES;
-use stet_domain::recent::RecentFiles;
-use stet_domain::search::{History, SearchHistory, history::HISTORY_LIMIT};
+use stet_domain::nav::RecentFiles;
+use stet_domain::search::{HISTORY_LIMIT, History, SearchHistory};
 use stet_domain::session::{
-    BackupAction, BackupState, SCHEMA_VERSION, Session, TabRecord, WindowState,
+    BackupAction, BackupState, RecordId, SCHEMA_VERSION, Session, TabRecord, ViewSlot, WindowState,
 };
 use stet_domain::text::line_count;
 use stet_domain::view::Zoom;
@@ -76,7 +76,7 @@ pub struct WindowSession {
     /// The session the last commit sent, to skip commits that would change nothing.
     last: RefCell<Option<Session>>,
     /// Backups of closed tabs, removed by the next commit.
-    removed: RefCell<Vec<String>>,
+    removed: RefCell<Vec<RecordId>>,
     /// Recovered orphan files whose tab closed, deleted by the next commit.
     adopted: RefCell<Vec<PathBuf>>,
     tick: RefCell<Option<glib::SourceId>>,
@@ -90,7 +90,7 @@ pub struct WindowSession {
 }
 
 /// Backup texts by id, for a commit.
-type Texts = Vec<(String, Arc<str>)>;
+type Texts = Vec<(RecordId, Arc<str>)>;
 
 /// A `--wait` command line and how many of its tabs are still open.
 struct WaitGroup {
@@ -246,7 +246,7 @@ impl Window {
             .set((window.split_position > 0).then_some(window.split_position));
 
         let initial = self.pages();
-        let missing: BTreeSet<&str> = missing_backups.iter().map(String::as_str).collect();
+        let missing: BTreeSet<&RecordId> = missing_backups.iter().collect();
         // A document's record comes before its clones'.
         let mut pages: Vec<Option<EditorPage>> = Vec::with_capacity(session.tabs.len());
         for record in &session.tabs {
@@ -258,7 +258,7 @@ impl Window {
                     .find(|(other, _)| other.clone_of.is_none() && other.id == *of)
                     .and_then(|(_, page)| page.clone())
                     .map(|source| self.add_clone_stub(&source, record)),
-                None => Some(self.add_stub(record, missing.contains(record.id.as_str()))),
+                None => Some(self.add_stub(record, missing.contains(&record.id))),
             };
             pages.push(page);
         }
@@ -319,7 +319,7 @@ impl Window {
             })
         });
         let page = self.add_page_in(
-            usize::from(record.view.min(1)),
+            record.view.index(),
             DocState {
                 path: record.path.clone(),
                 untitled,
@@ -360,7 +360,7 @@ impl Window {
         clone.set_clone_id(record.id.clone());
         clone.set_top_line(Some(record.first_visible_line));
         clone.set_pending_record(record.clone());
-        self.attach_page(usize::from(record.view.min(1)), &clone, false);
+        self.attach_page(record.view.index(), &clone, false);
         if record.pinned {
             self.set_pinned(&clone, true);
         }
@@ -907,7 +907,7 @@ impl Window {
         let mut active_tab = None;
         let mut other_tab = None;
         // The documents recorded so far, by a tab of each and its record's id.
-        let mut recorded: Vec<(EditorPage, String)> = Vec::new();
+        let mut recorded: Vec<(EditorPage, RecordId)> = Vec::new();
         for page in self.pages() {
             if !page.session().waits.is_empty() || page.state().temporary.is_some() {
                 continue;
@@ -918,7 +918,7 @@ impl Window {
             if other.as_ref() == Some(&page) {
                 other_tab = Some(tabs.len());
             }
-            let view = u8::from(self.view_of(&page) == Some(1));
+            let view = ViewSlot::from_index(self.view_of(&page).unwrap_or(0));
             if let Some((_, of)) = recorded.iter().find(|(doc, _)| doc.same_document(&page)) {
                 tabs.push(self.clone_record(&page, of.clone(), view));
                 continue;
@@ -1046,7 +1046,7 @@ impl Window {
     }
 
     /// `page` as `session.json` keeps it, in `view`.
-    fn tab_record(&self, page: &EditorPage, view: u8) -> TabRecord {
+    fn tab_record(&self, page: &EditorPage, view: ViewSlot) -> TabRecord {
         let state = page.state();
         let session = page.session().clone();
         let loading = page.is_loading();
@@ -1098,7 +1098,7 @@ impl Window {
     }
 
     /// A clone in `view` of the document recorded as `of`: its own place only.
-    fn clone_record(&self, page: &EditorPage, of: String, view: u8) -> TabRecord {
+    fn clone_record(&self, page: &EditorPage, of: RecordId, view: ViewSlot) -> TabRecord {
         let (caret, selection) = if page.is_loading() {
             (0, None)
         } else {

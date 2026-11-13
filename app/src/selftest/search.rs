@@ -595,7 +595,7 @@ impl Harness {
                 .split('|')
                 .filter(|entry| !entry.is_empty())
                 .map(str::to_owned),
-            stet_domain::search::history::HISTORY_LIMIT,
+            stet_domain::search::HISTORY_LIMIT,
         );
         match field {
             Field::Find => history.find = list,

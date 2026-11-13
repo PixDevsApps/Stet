@@ -9,7 +9,7 @@ use std::mem;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::Instant;
-use stet_domain::session::{SCHEMA_VERSION, Session, is_valid_id};
+use stet_domain::session::{RecordId, SCHEMA_VERSION, Session, is_valid_id};
 
 pub(super) type Reply<T> = mpsc::Sender<Result<T, StoreError>>;
 
@@ -164,7 +164,7 @@ impl BackupWriter {
             removed,
             adopted_orphans,
         } = snapshot;
-        for id in removed {
+        for id in removed.into_iter().map(String::from) {
             if is_valid_id(&id) {
                 self.pending.remove(&id);
                 self.removals.insert(id);
@@ -173,6 +173,7 @@ impl BackupWriter {
             }
         }
         for (id, text) in backups {
+            let id = String::from(id);
             if is_valid_id(&id) {
                 self.removals.remove(&id);
                 self.pending.insert(id, text);
@@ -303,7 +304,7 @@ impl BackupWriter {
     fn drop_dangling_references(&self, session: &mut Session) {
         for tab in &mut session.tabs {
             if let Some(id) = &tab.backup
-                && !self.on_disk.contains(id)
+                && !self.on_disk.contains(id.as_str())
             {
                 tracing::warn!(tab = %tab.id, "a tab references a backup that was never written; dropping the reference");
                 tab.backup = None;
@@ -314,7 +315,7 @@ impl BackupWriter {
     /// Deletes removed backups that `session` (now on disk) doesn't reference, and adopted
     /// orphans. A failed deletion leaves a file that the next load treats as an orphan.
     fn delete_obsolete(&mut self, session: &Session) {
-        let referenced: BTreeSet<&str> = session.backup_ids().collect();
+        let referenced: BTreeSet<&str> = session.backup_ids().map(RecordId::as_str).collect();
         for id in mem::take(&mut self.removals) {
             if referenced.contains(id.as_str()) {
                 continue;
@@ -339,7 +340,11 @@ impl BackupWriter {
     fn load(&mut self) -> Result<Restored, StoreError> {
         let _ = self.write();
         let restored = restore::restore(&self.layout)?;
-        self.on_disk = restored.session.backup_ids().map(str::to_owned).collect();
+        self.on_disk = restored
+            .session
+            .backup_ids()
+            .map(|id| id.as_str().to_owned())
+            .collect();
         self.written = Some(restored.session.clone());
         Ok(restored)
     }
