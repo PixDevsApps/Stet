@@ -5,6 +5,7 @@ use std::ops::Range;
 use grep_matcher::{ByteSet, LineMatchKind, LineTerminator, Match, Matcher, NoCaptures, NoError};
 use grep_searcher::{Searcher, Sink, SinkMatch};
 use stet_domain::search::{Query, SearchMode, Target, TranslateError, translate_for, unescape};
+use stet_domain::text::LineNumber;
 
 use crate::files::CancelToken;
 use crate::search::{Hit, JIT_STACK, PatternError, make_hit, next_boundary, pcre2_message};
@@ -254,7 +255,13 @@ impl Sink for FileSink<'_> {
         let spans = self.matcher.ranges(buffer, range.clone());
         let mut spans = spans.iter().peekable();
         let mut line_start = range.start;
-        for (number, line) in (found.line_number().unwrap_or(1)..).zip(found.lines()) {
+        let first = found
+            .line_number()
+            .and_then(|number| usize::try_from(number).ok())
+            .and_then(LineNumber::new)
+            .unwrap_or(LineNumber::FIRST);
+        for (offset, line) in found.lines().enumerate() {
+            let number = (first.index() + offset).number();
             let line_end = line_start + line.len();
             let open_end = !line.ends_with(b"\n");
             let mut ranges = Vec::new();

@@ -13,7 +13,7 @@
 
 use std::ops::Range;
 
-use crate::text::{CharOffset, LineIndex, TextEdit};
+use crate::text::{CharOffset, Line, LineIndex, TextEdit};
 
 use super::{Bookmarks, Marks};
 
@@ -76,8 +76,8 @@ pub struct Step {
     pub len_before: usize,
     pub len_after: usize,
     /// The lines the step replaced, before and after it.
-    pub lines_before: Range<usize>,
-    pub lines_after: Range<usize>,
+    pub lines_before: Range<Line>,
+    pub lines_after: Range<Line>,
     /// The bookmarks on those lines, before and after.
     pub before: Bookmarks,
     pub after: Bookmarks,
@@ -125,13 +125,13 @@ impl Step {
     }
 }
 
-fn within(bookmarks: &Bookmarks, lines: &Range<usize>) -> Bookmarks {
+fn within(bookmarks: &Bookmarks, lines: &Range<Line>) -> Bookmarks {
     bookmarks.in_lines(lines.clone()).iter().copied().collect()
 }
 
 /// The bookmarks GTK left after replaying a step (`current`, which GTK moved along with the
 /// text outside the step's `lines`), with those on `lines` replaced by the step's own.
-fn restore(current: &Bookmarks, lines: &Range<usize>, own: &Bookmarks) -> Bookmarks {
+fn restore(current: &Bookmarks, lines: &Range<Line>, own: &Bookmarks) -> Bookmarks {
     current
         .lines()
         .iter()
@@ -238,11 +238,11 @@ mod tests {
     use crate::marks::delete_unbookmarked_lines;
     use crate::text::OffsetRange;
     use crate::text::apply;
-    use crate::text::testing::{at, chars as char_range};
+    use crate::text::testing::{at, chars as char_range, indexes, line};
     use proptest::prelude::*;
 
     fn bookmarks(lines: &[usize]) -> Bookmarks {
-        lines.iter().copied().collect()
+        lines.iter().copied().map(line).collect()
     }
 
     /// A text of `count` lines named after their numbers.
@@ -293,7 +293,7 @@ mod tests {
         let restored = history
             .undone(step.footprint.inverse(), text.chars().count(), &collapsed)
             .unwrap();
-        assert_eq!(restored.lines(), &[0, 2, 4]);
+        assert_eq!(indexes(restored.lines()), [0, 2, 4]);
         assert_eq!(history.undoable(), 0);
         assert_eq!(
             history.undone(step.footprint.inverse(), text.chars().count(), &collapsed),
@@ -303,7 +303,7 @@ mod tests {
         let redone = history
             .redone(step.footprint, after_text.chars().count(), &bookmarks(&[0]))
             .unwrap();
-        assert_eq!(redone.lines(), &[0, 1, 2]);
+        assert_eq!(indexes(redone.lines()), [0, 1, 2]);
         assert_eq!(history.undoable(), 1);
     }
 
@@ -341,8 +341,8 @@ mod tests {
         // with one the user set meanwhile (6), and leaves those of the step collapsed (2).
         let text = numbered(8);
         let index = LineIndex::new(&text);
-        let start = index.line_chars(2).start;
-        let end = index.line_chars(4).end;
+        let start = index.line_chars(line(2)).start;
+        let end = index.line_chars(line(4)).end;
         let edits = [TextEdit::new(start..end, "joined")];
         let step = Step::new(
             &edits,
@@ -352,21 +352,21 @@ mod tests {
             &bookmarks(&[2, 5]),
         )
         .unwrap();
-        assert_eq!(step.lines_before, 2..5);
-        assert_eq!(step.lines_after, 2..3);
-        assert_eq!(step.before.lines(), &[3]);
-        assert_eq!(step.after.lines(), &[2]);
+        assert_eq!(step.lines_before.get(), 2..5);
+        assert_eq!(step.lines_after.get(), 2..3);
+        assert_eq!(indexes(step.before.lines()), [3]);
+        assert_eq!(indexes(step.after.lines()), [2]);
         let mut history = BookmarkHistory::default();
         history.record(step.clone());
         let current = bookmarks(&[2, 6, 7]);
         let restored = history
             .undone(step.footprint.inverse(), text.chars().count(), &current)
             .unwrap();
-        assert_eq!(restored.lines(), &[3, 6, 7]);
+        assert_eq!(indexes(restored.lines()), [3, 6, 7]);
         let redone = history
             .redone(step.footprint, step.len_after, &bookmarks(&[2, 3, 4, 5]))
             .unwrap();
-        assert_eq!(redone.lines(), &[2, 3, 4, 5]);
+        assert_eq!(indexes(redone.lines()), [2, 3, 4, 5]);
     }
 
     #[test]
@@ -474,10 +474,10 @@ mod tests {
             let old: Vec<&str> = text.split('\n').collect();
             let new: Vec<&str> = after.split('\n').collect();
             prop_assert_eq!(
-                &old[..step.lines_before.start],
-                &new[..step.lines_after.start]
+                &old[..step.lines_before.start.get()],
+                &new[..step.lines_after.start.get()]
             );
-            prop_assert_eq!(&old[step.lines_before.end..], &new[step.lines_after.end..]);
+            prop_assert_eq!(&old[step.lines_before.end.get()..], &new[step.lines_after.end.get()..]);
 
             let mut history = BookmarkHistory::default();
             history.record(step.clone());

@@ -213,7 +213,7 @@ fn regex_templates_replace_as_replace_all_does() {
     assert_eq!(plan.bytes, b"EXAMPLE at alice\r\nTEST at bob\r\n");
     assert_eq!(plan.replacements, 2);
     assert_eq!(plan.hits.len(), 2);
-    assert_eq!(plan.hits[1].line_number, 2);
+    assert_eq!(plan.hits[1].line_number.get(), 2);
     assert_eq!(plan.hits[1].line_text, "TEST at bob");
     assert_eq!(
         plan.hits[1].match_ranges,
@@ -693,10 +693,10 @@ fn lines_report_the_replaced_text() {
         .unwrap()
         .unwrap();
     assert_eq!(plan.bytes, b"one\r\n2\r\n2 2\r\n2\r\n");
-    let lines: Vec<(u64, &str)> = plan
+    let lines: Vec<(usize, &str)> = plan
         .hits
         .iter()
-        .map(|hit| (hit.line_number, hit.line_text.as_str()))
+        .map(|hit| (hit.line_number.get(), hit.line_text.as_str()))
         .collect();
     assert_eq!(lines, [(2, "2"), (3, "2 2")]);
     assert_eq!(Eol::CrLf.as_str(), "\r\n");

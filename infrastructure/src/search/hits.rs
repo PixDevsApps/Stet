@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use super::matcher::Match;
-use stet_domain::text::{ByteCursor, CharOffset, count_chars};
+use stet_domain::text::{ByteCursor, CharOffset, LineNumber, count_chars};
 
 /// The longest line text a [`Hit`] carries.
 pub(super) const MAX_LINE_CHARS: usize = 500;
@@ -12,8 +12,7 @@ const CONTEXT_CHARS: usize = 40;
 /// results panel shows both.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hit {
-    /// One-based.
-    pub line_number: u64,
+    pub line_number: LineNumber,
     /// The line without its line break, decoded as UTF-8 with U+FFFD for invalid bytes. A line
     /// longer than `MAX_LINE_CHARS` is cut to a window that starts a little before its first
     /// match.
@@ -55,7 +54,7 @@ pub fn document_hits(text: &str, matches: &[Match]) -> Vec<Hit> {
             i += 1;
         }
         hits.push(make_hit(
-            line as u64 + 1,
+            line.number(),
             &bytes[line_start..line_end],
             &ranges,
         ));
@@ -65,7 +64,7 @@ pub fn document_hits(text: &str, matches: &[Match]) -> Vec<Hit> {
 
 /// A hit from the raw bytes of a line (its line break may be included) and the byte ranges
 /// of its matches.
-pub(crate) fn make_hit(line_number: u64, line: &[u8], ranges: &[Range<usize>]) -> Hit {
+pub(crate) fn make_hit(line_number: LineNumber, line: &[u8], ranges: &[Range<usize>]) -> Hit {
     let line = line.strip_suffix(b"\n").unwrap_or(line);
     let line = line.strip_suffix(b"\r").unwrap_or(line);
     let clip = |range: &Range<usize>| {
@@ -113,7 +112,7 @@ fn decode_lossy(line: &[u8], ranges: &[Range<usize>]) -> (String, Vec<Range<usiz
 }
 
 /// Cuts a long line to [`MAX_LINE_CHARS`] around its first match.
-fn window(line_number: u64, text: String, ranges: Vec<Range<usize>>) -> Hit {
+fn window(line_number: LineNumber, text: String, ranges: Vec<Range<usize>>) -> Hit {
     if count_chars(text.as_bytes()) <= MAX_LINE_CHARS {
         return Hit {
             line_number,
@@ -144,6 +143,7 @@ fn window(line_number: u64, text: String, ranges: Vec<Range<usize>>) -> Hit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stet_domain::text::Line;
 
     #[test]
     fn groups_matches_by_line() {
@@ -152,22 +152,22 @@ mod tests {
             Match {
                 start: CharOffset::new(4),
                 end: CharOffset::new(7),
-                line: 0,
+                line: Line::new(0),
             },
             Match {
                 start: CharOffset::new(14),
                 end: CharOffset::new(17),
-                line: 1,
+                line: Line::new(1),
             },
             Match {
                 start: CharOffset::new(18),
                 end: CharOffset::new(21),
-                line: 1,
+                line: Line::new(1),
             },
         ];
         let hits = document_hits(text, &matches);
         assert_eq!(hits.len(), 2);
-        assert_eq!(hits[0].line_number, 1);
+        assert_eq!(hits[0].line_number, LineNumber::FIRST);
         assert_eq!(hits[0].line_text, "one two");
         assert_eq!(
             hits[0].match_ranges.as_slice(),
@@ -180,7 +180,11 @@ mod tests {
 
     #[test]
     fn decodes_invalid_bytes_and_moves_ranges() {
-        let hit = make_hit(3, b"a\xffb\xe9\xffcd\r\n", std::slice::from_ref(&(5..7)));
+        let hit = make_hit(
+            LineNumber::new(3).unwrap(),
+            b"a\xffb\xe9\xffcd\r\n",
+            std::slice::from_ref(&(5..7)),
+        );
         assert_eq!(hit.line_text, "a\u{FFFD}b\u{FFFD}\u{FFFD}cd");
         assert_eq!(&hit.line_text[hit.match_ranges[0].clone()], "cd");
     }
@@ -188,7 +192,11 @@ mod tests {
     #[test]
     fn cuts_long_lines_around_the_first_match() {
         let line = format!("{}needle{}", "x".repeat(1000), "y".repeat(1000));
-        let hit = make_hit(1, line.as_bytes(), std::slice::from_ref(&(1000..1006)));
+        let hit = make_hit(
+            LineNumber::FIRST,
+            line.as_bytes(),
+            std::slice::from_ref(&(1000..1006)),
+        );
         assert_eq!(hit.line_text.chars().count(), MAX_LINE_CHARS);
         assert_eq!(hit.line_offset, CharOffset::new(960));
         assert_eq!(&hit.line_text[hit.match_ranges[0].clone()], "needle");

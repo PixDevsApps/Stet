@@ -1,4 +1,4 @@
-use crate::text::{Bias, CharOffset, TextEdit, map_offset};
+use crate::text::{Bias, CharOffset, Line, TextEdit, map_offset};
 
 /// A caret position: a document and a character offset in it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -75,7 +75,7 @@ impl<D: PartialEq + Clone> History<D> {
 
     /// Records a jump source or target. A location near the current entry replaces it; any
     /// other drops the forward entries and becomes the newest one.
-    pub fn record(&mut self, location: Location<D>, line_of: impl Fn(&D, CharOffset) -> usize) {
+    pub fn record(&mut self, location: Location<D>, line_of: impl Fn(&D, CharOffset) -> Line) {
         if let Some(current) = self.entries.get_mut(self.current)
             && current.doc == location.doc
             && line_of(&location.doc, current.offset)
@@ -97,7 +97,7 @@ impl<D: PartialEq + Clone> History<D> {
     pub fn back(
         &mut self,
         here: Location<D>,
-        line_of: impl Fn(&D, CharOffset) -> usize,
+        line_of: impl Fn(&D, CharOffset) -> Line,
     ) -> Option<Location<D>> {
         self.record(here, line_of);
         self.current = self.current.checked_sub(1)?;
@@ -109,7 +109,7 @@ impl<D: PartialEq + Clone> History<D> {
     pub fn forward(
         &mut self,
         here: Location<D>,
-        line_of: impl Fn(&D, CharOffset) -> usize,
+        line_of: impl Fn(&D, CharOffset) -> Line,
     ) -> Option<Location<D>> {
         self.record(here, line_of);
         if !self.can_go_forward() {
@@ -161,8 +161,8 @@ mod tests {
     use crate::text::testing as chars;
 
     /// Every document has 100-character lines.
-    fn line_of(_doc: &&str, offset: CharOffset) -> usize {
-        offset.get() / 100
+    fn line_of(_doc: &&str, offset: CharOffset) -> Line {
+        Line::new(offset.get() / 100)
     }
 
     fn at(doc: &'static str, line: usize) -> Location<&'static str> {

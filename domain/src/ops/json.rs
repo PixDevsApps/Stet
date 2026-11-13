@@ -217,19 +217,28 @@ mod tests {
     fn errors_point_at_the_character() {
         let error = validate("[1, 2 3]").unwrap_err();
         assert_eq!(error.message, "expected `,` or `]`");
-        assert_eq!((error.line, error.column, error.offset.get()), (1, 7, 6));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (1, 7, 6)
+        );
         let error = validate("{\"é\": x}").unwrap_err();
         assert_eq!(error.message, "expected value");
-        assert_eq!((error.line, error.column, error.offset.get()), (1, 7, 6));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (1, 7, 6)
+        );
         let error = validate("{\n  \"a\": 1,\n  }").unwrap_err();
-        assert_eq!((error.line, error.column, error.offset.get()), (3, 3, 14));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (3, 3, 14)
+        );
         assert_eq!(
             error.to_string(),
             format!("{} at line 3, column 3", error.message)
         );
         let error = validate("[1,").unwrap_err();
         assert_eq!(error.message, "EOF while parsing a value");
-        assert_eq!((error.line, error.column), (1, 3));
+        assert_eq!((error.line.get(), error.column.get()), (1, 3));
         assert!(validate("").is_err());
         assert!(validate("[1] [2]").is_err());
         assert!(validate("[1,]").is_err());
@@ -272,7 +281,10 @@ mod tests {
         let text = "x\n  [1,]\n";
         let error =
             format_target(text, &Target::Selection(chars(2..8)), Indent::default()).unwrap_err();
-        assert_eq!((error.line, error.column, error.offset.get()), (2, 6, 7));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (2, 6, 7)
+        );
     }
 
     fn space() -> impl Strategy<Value = String> {
@@ -376,7 +388,7 @@ mod tests {
                 let index = LineIndex::new(&text);
                 prop_assert!(error.offset <= index.end_char());
                 let position = index.position(error.offset);
-                prop_assert_eq!((error.line, error.column), (position.line + 1, position.column + 1));
+                prop_assert_eq!((error.line, error.column), (position.line.number(), position.column_number()));
                 prop_assert!(format(&text, Indent::default()).is_err());
             } else {
                 prop_assert!(format(&text, Indent::default()).is_ok());

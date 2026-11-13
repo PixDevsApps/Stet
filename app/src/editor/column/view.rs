@@ -4,7 +4,9 @@
 //! hidden; the view paints the rectangle itself.
 
 use super::{Motion, clipboard, edit, keys, paint};
-use crate::convert::{BufferPositions, IterPosition, saturating_i32, saturating_usize, to_usize};
+use crate::convert::{
+    BufferPositions, IterPosition, saturating_i32, saturating_usize, to_tab_width, to_usize,
+};
 use crate::runtime::Debounce;
 use crate::sys;
 use gtk4 as gtk;
@@ -24,18 +26,19 @@ use stet_domain::column::{
     text_width, type_text, visual_column,
 };
 use stet_domain::marks::Footprint;
-use stet_domain::text::TextEdit;
+use stet_domain::text::{Line, TextEdit, VisualColumn};
+use stet_domain::view::TabWidth;
 
 /// How long a column typing burst stays open without a keystroke (ADR-016).
 pub const BURST_IDLE: Duration = Duration::from_millis(1000);
 
 /// The furthest column a cursor may reach, past the end of its line.
-const MAX_COLUMN: usize = 1 << 16;
+const MAX_COLUMN: VisualColumn = VisualColumn::new(1 << 16);
 
 /// Keeps a document's bookmarks and marks across a large column edit: called with the
 /// edit's lines, its edits in the buffer's offsets before it, and what applies it, which
 /// returns the footprint of the replacements it made.
-pub type ColumnTracker = Rc<dyn Fn(Range<usize>, &[TextEdit], &mut dyn FnMut() -> Footprint)>;
+pub type ColumnTracker = Rc<dyn Fn(Range<Line>, &[TextEdit], &mut dyn FnMut() -> Footprint)>;
 
 /// Blank space a comparison puts between lines so that equal lines face each other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,7 +46,7 @@ pub enum Pad {
     /// The view's top margin, above the first line.
     Above(i32),
     /// Space below `line`, from a tag's `pixels-below-lines`.
-    Below { line: usize, pixels: i32 },
+    Below { line: Line, pixels: i32 },
     /// The view's bottom margin, after the last line.
     End(i32),
 }
@@ -72,7 +75,7 @@ mod imp {
         pub burst: Cell<bool>,
         pub burst_timer: Debounce,
         /// Begin/End Select: the line (a mark, so edits above move it) and the column.
-        pub begin: RefCell<Option<(gtk::TextMark, usize)>>,
+        pub begin: RefCell<Option<(gtk::TextMark, VisualColumn)>>,
         /// An Alt+drag is in progress.
         pub dragging: Cell<bool>,
         pub keys: OnceCell<gtk::EventControllerKey>,
@@ -87,7 +90,7 @@ mod imp {
         /// The empty lines a comparison colours, in order, with the scheme style of their
         /// background, painted here because GTK paints no paragraph background on a line
         /// without characters.
-        pub empty_lines: RefCell<Vec<(usize, &'static str)>>,
+        pub empty_lines: RefCell<Vec<(Line, &'static str)>>,
     }
 
     impl fmt::Debug for StetView {
@@ -334,8 +337,8 @@ impl StetView {
         let _ = self.imp().keys.set(controller);
     }
 
-    pub(super) fn tab(&self) -> usize {
-        self.tab_width().max(1) as usize
+    pub(super) fn tab(&self) -> TabWidth {
+        to_tab_width(self.tab_width())
     }
 
     /// The width of one cell (a space) in pixels.
@@ -343,8 +346,8 @@ impl StetView {
         f64::from(crate::editor::tabstops::space_advance(self)) / f64::from(gtk::pango::SCALE)
     }
 
-    pub(super) fn last_line(&self) -> usize {
-        self.buffer().total_lines() - 1
+    pub(super) fn last_line(&self) -> Line {
+        self.buffer().last_line()
     }
 
     /// Runs `f` with the buffer hooks letting its edits and caret moves through.
@@ -372,7 +375,7 @@ impl StetView {
 
     /// The empty lines to paint in their scheme style's background, in order, after a
     /// comparison set them.
-    pub fn set_empty_lines(&self, lines: Vec<(usize, &'static str)>) {
+    pub fn set_empty_lines(&self, lines: Vec<(Line, &'static str)>) {
         self.imp().empty_lines.replace(lines);
         self.queue_draw();
     }
@@ -392,9 +395,9 @@ impl StetView {
     }
 
     /// The text of `line`, without its line break.
-    pub fn line_text(&self, line: usize) -> String {
+    pub fn line_text(&self, line: Line) -> String {
         let buffer = self.buffer();
-        let Some(start) = buffer.iter_at_line_number(line) else {
+        let Some(start) = buffer.iter_at_line_start(line) else {
             return String::new();
         };
         let mut end = start;
@@ -407,8 +410,8 @@ impl StetView {
     /// The line and visual column of `iter`.
     pub fn visual_pos(&self, iter: &gtk::TextIter) -> VisualPos {
         VisualPos::new(
-            iter.line_number(),
-            ViewExt::visual_column(self, iter) as usize,
+            iter.buffer_line(),
+            VisualColumn::new(ViewExt::visual_column(self, iter) as usize),
         )
     }
 
@@ -521,7 +524,7 @@ impl StetView {
             Motion::LineStart => {
                 cursor.column = home_column(&self.line_text(cursor.line), cursor.column, tab);
             }
-            Motion::LineEnd => cursor.column = text_width(&self.line_text(cursor.line), 0, tab),
+            Motion::LineEnd => cursor.column = end_column(&self.line_text(cursor.line), tab),
             Motion::PageUp => cursor.line = cursor.line.saturating_sub(self.page_lines()),
             Motion::PageDown => cursor.line = (cursor.line + self.page_lines()).min(last),
         }
@@ -533,7 +536,7 @@ impl StetView {
     fn page_lines(&self) -> usize {
         let buffer = self.buffer();
         let line_height = buffer
-            .iter_at_line_number(0)
+            .iter_at_line_start(Line::ZERO)
             .map_or(1, |iter| self.line_yrange(&iter).1.max(1));
         to_usize((self.visible_rect().height() / line_height).max(1))
     }
@@ -564,7 +567,7 @@ impl StetView {
         self.close_burst();
         let buffer = self.buffer();
         if let Some((mark, column)) = self.imp().begin.take() {
-            let line = buffer.iter_at_mark(&mark).line_number();
+            let line = buffer.iter_at_mark(&mark).buffer_line();
             buffer.delete_mark(&mark);
             let cursor = self
                 .rect()
@@ -576,7 +579,7 @@ impl StetView {
             .rect()
             .map_or_else(|| self.caret_pos(), |rect| rect.cursor);
         self.end_column_mode(Collapse::Cursor);
-        let Some(line_start) = buffer.iter_at_line_number(begin.line) else {
+        let Some(line_start) = buffer.iter_at_line_start(begin.line) else {
             return;
         };
         let mark = buffer.create_mark(None, &line_start, true);
@@ -604,7 +607,10 @@ impl StetView {
         let target = if self.overwrites() && rect.is_empty() {
             let left = rect.left();
             let width = text_width(typed, left, tab);
-            Rect::new((rect.anchor.line, left), (rect.cursor.line, left + width))
+            Rect::new(
+                VisualPos::new(rect.anchor.line, left),
+                VisualPos::new(rect.cursor.line, left + width),
+            )
         } else {
             rect
         };
@@ -629,9 +635,9 @@ impl StetView {
         let typed = if self.is_insert_spaces_instead_of_tabs() {
             let width = match usize::try_from(self.indent_width()) {
                 Ok(width) if width > 0 => width,
-                _ => self.tab(),
+                _ => self.tab().get(),
             };
-            " ".repeat(width - rect.left() % width)
+            " ".repeat(width - rect.left().get() % width)
         } else {
             "\t".to_owned()
         };
@@ -688,7 +694,7 @@ impl StetView {
             }
             None => {
                 let caret = self.caret_pos();
-                let rect = Rect::new((self.last_line(), caret.column), caret);
+                let rect = Rect::new(VisualPos::new(self.last_line(), caret.column), caret);
                 edit::apply(self, rect, rect.lines(), |text, index, rect| {
                     editor.apply(text, index, rect, tab)
                 })?;
@@ -708,7 +714,7 @@ impl StetView {
             saturating_i32(y),
         );
         let (line_start, _) = self.line_at_y(by);
-        let line = line_start.line_number();
+        let line = line_start.buffer_line();
         let text = self.line_text(line);
         let tab = self.tab();
         let mut end = line_start;
@@ -716,24 +722,24 @@ impl StetView {
             end.forward_to_line_end();
         }
         let end_x = f64::from(self.iter_location(&end).x());
-        let width = text_width(&text, 0, tab);
+        let line_end = end_column(&text, tab);
         let bx = f64::from(bx);
         if bx >= end_x {
             let extra = saturating_usize(((bx - end_x) / self.advance()).round());
-            return VisualPos::new(line, (width + extra).min(MAX_COLUMN));
+            return VisualPos::new(line, (line_end + extra).min(MAX_COLUMN));
         }
         // The character (grapheme) that contains the point; `iter_at_location` would round to
         // the nearest boundary instead, past a tab from its right half.
         let Some((iter, _)) = self.iter_at_position(saturating_i32(bx), by) else {
-            return VisualPos::new(line, width);
+            return VisualPos::new(line, line_end);
         };
         let offset = |iter: &gtk::TextIter| iter.column();
         let start = visual_column(&text, offset(&iter), tab);
-        if iter.line_number() != line {
+        if iter.buffer_line() != line {
             return VisualPos::new(line, start);
         }
         let mut next = iter;
-        if !next.forward_cursor_position() || next.line_number() != iter.line_number() {
+        if !next.forward_cursor_position() || next.buffer_line() != iter.buffer_line() {
             next = end;
         }
         let cells = visual_column(&text, offset(&next), tab) - start;
@@ -749,7 +755,7 @@ impl StetView {
     pub fn point_of(&self, pos: VisualPos) -> (f64, f64) {
         let iter = self.iter_at_pos(pos);
         let location = self.iter_location(&iter);
-        let at = locate(&self.line_text(iter.line_number()), pos.column, self.tab());
+        let at = locate(&self.line_text(iter.buffer_line()), pos.column, self.tab());
         let x = f64::from(location.x()) + (at.offset_cells() as f64 + 0.25) * self.advance();
         let y = f64::from(location.y()) + f64::from(location.height()) / 2.0;
         let (wx, wy) = self.buffer_to_window_coords(
@@ -799,4 +805,9 @@ impl StetView {
     pub fn pointer_end(&self) {
         self.imp().dragging.set(false);
     }
+}
+
+/// The visual column at the end of `line`, a line without its line break.
+fn end_column(line: &str, tab: TabWidth) -> VisualColumn {
+    VisualColumn::ZERO + text_width(line, VisualColumn::ZERO, tab)
 }

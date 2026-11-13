@@ -9,7 +9,8 @@ use super::{
     Change, Doc, Target, char_len, delete_lines, is_blank, is_blank_char, leading_blanks,
     replace_lines, trailing_blanks,
 };
-use crate::text::{Bias, CharOffset, TextEdit, map_offset};
+use crate::text::{Bias, CharOffset, Line, OffsetRange, TextEdit, map_offset};
+use crate::view::TabWidth;
 
 /// Which repeated lines [`remove_duplicates`] removes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,14 +98,14 @@ pub fn delete(text: &str, target: &Target) -> Change {
     if lines.is_empty() {
         return Change::default();
     }
-    let caret = if lines.end < doc.line_count() {
+    let caret = if lines.end < doc.end_line() {
         doc.start(lines.start)
-    } else if lines.start > 0 {
+    } else if lines.start > Line::ZERO {
         doc.start(lines.start - 1)
     } else {
         CharOffset::ZERO
     };
-    Change::new(delete_lines(&doc, lines), Some(caret..caret))
+    Change::new(delete_lines(&doc, lines.iter()), Some(caret..caret))
 }
 
 /// Swaps the lines of the target with the line above (Ctrl+Shift+Up). The selection moves
@@ -112,7 +113,7 @@ pub fn delete(text: &str, target: &Target) -> Change {
 pub fn move_up(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
-    if lines.is_empty() || lines.start == 0 {
+    if lines.is_empty() || lines.start == Line::ZERO {
         return Change::default();
     }
     let above = lines.start - 1;
@@ -128,7 +129,7 @@ pub fn move_up(text: &str, target: &Target) -> Change {
 pub fn move_down(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
-    if lines.is_empty() || lines.end >= doc.line_count() {
+    if lines.is_empty() || lines.end >= doc.end_line() {
         return Change::default();
     }
     let below = lines.end;
@@ -150,16 +151,16 @@ pub fn join(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let mut lines = doc.lines(target);
     let selection = selection_of(&doc, target);
-    if lines.len() == 1 && selection.is_some() && lines.end < doc.line_count() {
+    if lines.iter().len() == 1 && selection.is_some() && lines.end < doc.end_line() {
         lines.end += 1;
     }
-    if lines.len() < 2 {
+    if lines.iter().len() < 2 {
         return Change::default();
     }
     let (first, last) = (lines.start, lines.end - 1);
     let mut edits = Vec::new();
-    match (first..=last).find(|&line| !is_blank(doc.line(line))) {
-        None => match (first..=last).find(|&line| !doc.line(line).is_empty()) {
+    match lines.iter().find(|&line| !is_blank(doc.line(line))) {
+        None => match lines.iter().find(|&line| !doc.line(line).is_empty()) {
             None => edits.push(TextEdit::delete(doc.start(first)..doc.end(last))),
             Some(kept) => {
                 edits.push(TextEdit::delete(doc.start(first)..doc.start(kept)));
@@ -171,7 +172,7 @@ pub fn join(text: &str, target: &Target) -> Change {
                 edits.push(TextEdit::delete(doc.start(first)..doc.start(kept)));
             }
             let mut ends_blank = doc.line(kept).ends_with(is_blank_char);
-            for line in kept + 1..=last {
+            for line in (kept + 1..lines.end).iter() {
                 let content = doc.line(line);
                 let indent = leading_blanks(content);
                 let rest = &content[indent..];
@@ -234,8 +235,9 @@ pub fn remove_duplicates(text: &str, target: &Target, which: Duplicates) -> Chan
     let doc = Doc::new(text);
     let mut seen = HashSet::new();
     let mut previous = None;
-    let repeated: Vec<usize> = doc
+    let repeated: Vec<Line> = doc
         .lines(target)
+        .iter()
         .filter(|&line| {
             let content = doc.line(line);
             match which {
@@ -250,8 +252,9 @@ pub fn remove_duplicates(text: &str, target: &Target, which: Duplicates) -> Chan
 /// Removes the empty lines of the target, or also the lines of spaces and tabs.
 pub fn remove_empty(text: &str, target: &Target, which: EmptyLines) -> Change {
     let doc = Doc::new(text);
-    let empty: Vec<usize> = doc
+    let empty: Vec<Line> = doc
         .lines(target)
+        .iter()
         .filter(|&line| match which {
             EmptyLines::Empty => doc.line(line).is_empty(),
             EmptyLines::Blank => is_blank(doc.line(line)),
@@ -264,7 +267,7 @@ pub fn remove_empty(text: &str, target: &Target, which: EmptyLines) -> Change {
 pub fn trim(text: &str, target: &Target, which: Trim) -> Change {
     let doc = Doc::new(text);
     let mut edits = Vec::new();
-    for line in doc.lines(target) {
+    for line in doc.lines(target).iter() {
         let content = doc.line(line);
         let (start, end) = (doc.start(line), doc.end(line));
         let lead = if which == Trim::Trailing {
@@ -292,12 +295,12 @@ pub fn trim(text: &str, target: &Target, which: Trim) -> Change {
 }
 
 /// Replaces tabs with spaces up to the next tab stop. Columns count characters, like
-/// GtkSourceView's visual column. A tab width of 0 counts as 1.
-pub fn tabs_to_spaces(text: &str, target: &Target, tab_width: usize, scope: Scope) -> Change {
+/// GtkSourceView's visual column.
+pub fn tabs_to_spaces(text: &str, target: &Target, tab_width: TabWidth, scope: Scope) -> Change {
     let doc = Doc::new(text);
-    let width = tab_width.max(1);
+    let width = tab_width.get();
     let mut edits = Vec::new();
-    for line in doc.lines(target) {
+    for line in doc.lines(target).iter() {
         let content = doc.line(line);
         let limit = match scope {
             Scope::Leading => leading_blanks(content),
@@ -319,12 +322,12 @@ pub fn tabs_to_spaces(text: &str, target: &Target, tab_width: usize, scope: Scop
 }
 
 /// Rewrites runs of spaces and tabs as tabs up to the last tab stop they cross, then spaces,
-/// keeping every column. A single space stays a space. A tab width of 0 counts as 1.
-pub fn spaces_to_tabs(text: &str, target: &Target, tab_width: usize, scope: Scope) -> Change {
+/// keeping every column. A single space stays a space.
+pub fn spaces_to_tabs(text: &str, target: &Target, tab_width: TabWidth, scope: Scope) -> Change {
     let doc = Doc::new(text);
-    let width = tab_width.max(1);
+    let width = tab_width.get();
     let mut edits = Vec::new();
-    for line in doc.lines(target) {
+    for line in doc.lines(target).iter() {
         let content = doc.line(line);
         let limit = match scope {
             Scope::Leading => leading_blanks(content),
@@ -373,7 +376,7 @@ struct BlankRun {
 
 impl BlankRun {
     /// The edit that rewrites the run, ending at visual column `end`, with tabs.
-    fn retabbed(&self, doc: &Doc<'_>, line: usize, end: usize, width: usize) -> Option<TextEdit> {
+    fn retabbed(&self, doc: &Doc<'_>, line: Line, end: usize, width: usize) -> Option<TextEdit> {
         let single_space = !self.tabs && self.length == 1;
         if single_space || (self.column / width + 1) * width > end {
             return None;
@@ -392,7 +395,7 @@ impl BlankRun {
 pub fn sort(text: &str, target: &Target, key: SortKey, order: Order) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
-    let old: Vec<&str> = lines.clone().map(|line| doc.line(line)).collect();
+    let old: Vec<&str> = lines.iter().map(|line| doc.line(line)).collect();
     let new = sort_lines(&old, key, order);
     Change::new(replace_lines(&doc, lines, &old, &new), None)
 }
@@ -401,7 +404,7 @@ pub fn sort(text: &str, target: &Target, key: SortKey, order: Order) -> Change {
 pub fn reverse(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
-    let old: Vec<&str> = lines.clone().map(|line| doc.line(line)).collect();
+    let old: Vec<&str> = lines.iter().map(|line| doc.line(line)).collect();
     let new: Vec<&str> = old.iter().rev().copied().collect();
     Change::new(replace_lines(&doc, lines, &old, &new), None)
 }
@@ -639,6 +642,10 @@ mod tests {
         Target::Selection(chars(range))
     }
 
+    fn tab(cells: u8) -> TabWidth {
+        TabWidth::new(cells).unwrap()
+    }
+
     #[test]
     fn duplicate_copies_the_caret_line_below_and_keeps_the_caret() {
         let change = duplicate("one\ntwo\nthree", &Target::caret(at(5)));
@@ -665,7 +672,10 @@ mod tests {
     #[test]
     fn duplicate_copies_whole_lines_for_line_and_document_targets() {
         assert_eq!(
-            run("a\nb\nc", &duplicate("a\nb\nc", &Target::Lines(0..2))),
+            run(
+                "a\nb\nc",
+                &duplicate("a\nb\nc", &Target::Lines(lines(0..2)))
+            ),
             "a\nb\na\nb\nc"
         );
         assert_eq!(
@@ -752,7 +762,7 @@ mod tests {
         assert_eq!(change.selection, Some(chars(4..4)));
         assert_eq!(run("one\n  two\nthree", &change), "one two\nthree");
         assert!(join("one\ntwo", &Target::caret(at(5))).is_empty());
-        assert!(join("one\ntwo", &Target::Lines(1..2)).is_empty());
+        assert!(join("one\ntwo", &Target::Lines(lines(1..2))).is_empty());
     }
 
     #[test]
@@ -858,21 +868,21 @@ mod tests {
         assert_eq!(
             run(
                 text,
-                &tabs_to_spaces(text, &Target::Document, 4, Scope::All)
+                &tabs_to_spaces(text, &Target::Document, tab(4), Scope::All)
             ),
             "    x   yz  !\n        q"
         );
         assert_eq!(
             run(
                 text,
-                &tabs_to_spaces(text, &Target::Document, 4, Scope::Leading)
+                &tabs_to_spaces(text, &Target::Document, tab(4), Scope::Leading)
             ),
             "    x\tyz\t!\n        q"
         );
         assert_eq!(
             run(
                 "é\tx",
-                &tabs_to_spaces("é\tx", &Target::Document, 0, Scope::All)
+                &tabs_to_spaces("é\tx", &Target::Document, tab(1), Scope::All)
             ),
             "é x"
         );
@@ -884,14 +894,14 @@ mod tests {
         assert_eq!(
             run(
                 text,
-                &spaces_to_tabs(text, &Target::Document, 4, Scope::All)
+                &spaces_to_tabs(text, &Target::Document, tab(4), Scope::All)
             ),
             "\t\tx = 1;\t\t// note\n\t  y\n abc d\n\t z"
         );
         assert_eq!(
             run(
                 text,
-                &spaces_to_tabs(text, &Target::Document, 4, Scope::Leading)
+                &spaces_to_tabs(text, &Target::Document, tab(4), Scope::Leading)
             ),
             "\t\tx = 1;      // note\n\t  y\n abc d\n\t z"
         );
@@ -899,11 +909,11 @@ mod tests {
 
     #[test]
     fn a_single_space_at_a_tab_stop_stays_a_space() {
-        assert!(spaces_to_tabs("abc d", &Target::Document, 4, Scope::All).is_empty());
+        assert!(spaces_to_tabs("abc d", &Target::Document, tab(4), Scope::All).is_empty());
         assert_eq!(
             run(
                 "ab  d",
-                &spaces_to_tabs("ab  d", &Target::Document, 4, Scope::All)
+                &spaces_to_tabs("ab  d", &Target::Document, tab(4), Scope::All)
             ),
             "ab\td"
         );
@@ -1280,13 +1290,14 @@ mod tests {
         #[test]
         fn tab_conversions_keep_every_column(
             (text, target) in text_and_target(),
-            width in 1usize..6,
+            cells in 1u8..6,
         ) {
+            let width = tab(cells);
             let range = naive_lines(&text, &target);
             let expanded = |text: &str| {
                 let mut lines = lines_of(text);
                 for line in &mut lines[range.clone()] {
-                    *line = naive_tabs_to_spaces(line, width);
+                    *line = naive_tabs_to_spaces(line, width.get());
                 }
                 lines.join("\n")
             };
@@ -1410,7 +1421,7 @@ mod tests {
                 trim(&text, &Target::Document, Trim::Trailing)
             }),
             ("tabs to spaces", &|| {
-                tabs_to_spaces(&text, &Target::Document, 4, Scope::All)
+                tabs_to_spaces(&text, &Target::Document, tab(4), Scope::All)
             }),
             ("toggle line comment", &|| {
                 comment::toggle_line(&text, &Target::Document, &tokens)

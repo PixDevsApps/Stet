@@ -154,7 +154,7 @@ impl Window {
         let mut body = format!(
             "Line {} has {} characters. Lines over {} characters would freeze the editor, \
              so Stet doesn't show them as they are.",
-            longest.line + 1,
+            longest.line.number(),
             grouped(longest.chars),
             grouped(LONG_LINE_CHARS)
         );

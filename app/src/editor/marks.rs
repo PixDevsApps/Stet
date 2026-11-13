@@ -15,7 +15,7 @@
 
 use super::edits::Applied;
 use super::page::EditorPage;
-use crate::convert::{BufferPositions, IterPosition, to_i32, to_usize, unit_to_u8};
+use crate::convert::{BufferPositions, IterPosition, line_to_i32, to_usize, unit_to_u8};
 use crate::sys;
 use crate::theme::scheme::{MARK_STYLE, TOKEN_STYLES};
 use gtk4 as gtk;
@@ -26,7 +26,7 @@ use sourceview5::prelude::*;
 use std::cell::{Cell, Ref, RefCell};
 use std::ops::Range;
 use stet_domain::marks::{BookmarkHistory, Bookmarks, Footprint, MarkStyle, Marks, Step};
-use stet_domain::text::{CharOffset, LineIndex, TextEdit};
+use stet_domain::text::{CharOffset, Line, LineIndex, TextEdit};
 
 /// The source-mark category of bookmarks.
 pub const BOOKMARK_CATEGORY: &str = "stet-bookmark";
@@ -73,10 +73,10 @@ pub fn bookmarks(buffer: &sourceview5::Buffer) -> Bookmarks {
         .source_marks_at_iter(&mut iter, Some(BOOKMARK_CATEGORY))
         .is_empty()
     {
-        lines.push(0);
+        lines.push(Line::ZERO);
     }
     while forward_to_bookmark(buffer, &mut iter) {
-        lines.push(iter.line_number());
+        lines.push(iter.buffer_line());
     }
     lines.into_iter().collect()
 }
@@ -118,17 +118,17 @@ pub fn set_bookmarks(buffer: &sourceview5::Buffer, lines: &Bookmarks) {
             break;
         }
     }
-    let count = buffer.total_lines();
-    for &line in lines.lines().iter().take_while(|&&line| line < count) {
-        if let Some(iter) = buffer.iter_at_line_number(line) {
+    let end = buffer.end_line();
+    for &line in lines.lines().iter().take_while(|&&line| line < end) {
+        if let Some(iter) = buffer.iter_at_line_start(line) {
             buffer.create_source_mark(None, BOOKMARK_CATEGORY, &iter);
         }
     }
 }
 
 /// Toggle Bookmark on `line`; returns whether it is bookmarked now.
-pub fn toggle_bookmark(buffer: &sourceview5::Buffer, line: usize) -> bool {
-    let Some(start) = buffer.iter_at_line_number(line) else {
+pub fn toggle_bookmark(buffer: &sourceview5::Buffer, line: Line) -> bool {
+    let Some(start) = buffer.iter_at_line_start(line) else {
         return false;
     };
     let mut end = start;
@@ -136,7 +136,7 @@ pub fn toggle_bookmark(buffer: &sourceview5::Buffer, line: usize) -> bool {
         end.forward_to_line_end();
     }
     let marked = !buffer
-        .source_marks_at_line(to_i32(line), Some(BOOKMARK_CATEGORY))
+        .source_marks_at_line(line_to_i32(line), Some(BOOKMARK_CATEGORY))
         .is_empty();
     if marked {
         buffer.remove_source_marks(&start, &end, Some(BOOKMARK_CATEGORY));
@@ -265,8 +265,8 @@ impl DocMarks {
                 footprint,
                 len_before: begun.len,
                 len_after: buffer.total_chars(),
-                lines_before: 0..0,
-                lines_after: 0..0,
+                lines_before: Line::ZERO..Line::ZERO,
+                lines_after: Line::ZERO..Line::ZERO,
                 before: Bookmarks::new(),
                 after: Bookmarks::new(),
                 marks: None,
@@ -289,7 +289,7 @@ impl DocMarks {
     pub fn track_lines(
         &self,
         buffer: &sourceview5::Buffer,
-        lines: Range<usize>,
+        lines: Range<Line>,
         logical: &[TextEdit],
         apply: impl FnOnce() -> Footprint,
     ) {
@@ -452,15 +452,15 @@ fn windows(buffer: &sourceview5::Buffer, views: &[sourceview5::View]) -> Vec<Ran
             let rect = view.visible_rect();
             let top = view
                 .iter_at_location(rect.x(), rect.y())
-                .map_or(0, |iter| iter.line_number());
+                .map_or(Line::ZERO, |iter| iter.buffer_line());
             let bottom = view
                 .iter_at_location(rect.x(), rect.y() + rect.height())
-                .map_or_else(|| buffer.total_lines(), |iter| iter.line_number());
+                .map_or_else(|| buffer.end_line(), |iter| iter.buffer_line());
             let start = buffer
-                .iter_at_line_number(top.saturating_sub(TAG_MARGIN_LINES))
+                .iter_at_line_start(top.saturating_sub(TAG_MARGIN_LINES))
                 .map_or(CharOffset::ZERO, |iter| iter.char_offset());
             let end = buffer
-                .iter_at_line_number(bottom.saturating_add(TAG_MARGIN_LINES))
+                .iter_at_line_start(bottom.saturating_add(TAG_MARGIN_LINES))
                 .map_or_else(|| buffer.end_char(), |iter| iter.char_offset());
             start..end
         })
@@ -526,7 +526,7 @@ impl EditorPage {
     }
 
     /// Toggle Bookmark on `line`; returns whether it is bookmarked now.
-    pub fn toggle_bookmark(&self, line: usize) -> bool {
+    pub fn toggle_bookmark(&self, line: Line) -> bool {
         toggle_bookmark(&self.buffer(), line)
     }
 

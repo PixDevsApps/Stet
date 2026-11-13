@@ -7,7 +7,7 @@ use std::path::Path;
 use encoding_rs::Encoding;
 use stet_domain::search::Template;
 use stet_domain::search::replace_files::{LfText, RawEdit, Skip, apply_raw, raw_edits};
-use stet_domain::text::{ByteOffset, CharOffset, Eol};
+use stet_domain::text::{ByteOffset, CharOffset, Eol, Line};
 
 use crate::encoding::{DocumentFormat, bom_bytes, decode, detect, encode};
 use crate::files::{CancelToken, FileError};
@@ -206,7 +206,7 @@ pub fn replaced_hits(
     let bytes = new_text.as_bytes();
     let mut matches = Vec::with_capacity(edits.len().min(limit));
     let mut shift: isize = 0;
-    let (mut line, mut line_from) = (0, 0);
+    let (mut line, mut line_from) = (Line::ZERO, 0);
     let (mut chars, mut chars_from) = (CharOffset::ZERO, 0);
     for (range, edit) in ranges.iter().zip(edits).take(limit) {
         let start = range.start.get().saturating_add_signed(shift);

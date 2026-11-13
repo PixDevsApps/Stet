@@ -22,7 +22,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use stet_domain::column::{ColumnEdit, ColumnError, Rect};
 use stet_domain::marks::Footprint;
-use stet_domain::text::{CharOffset, LineIndex, TextEdit};
+use stet_domain::text::{CharOffset, Line, LineIndex, TextEdit};
 
 /// What the last column operation did, for the self-test and the timings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,16 +38,16 @@ pub struct OpStats {
 
 /// The text of `lines` (clamped to the buffer), without the last line's break, and the
 /// character offset where it starts.
-pub(super) fn snapshot(view: &StetView, lines: Range<usize>) -> (usize, String, CharOffset) {
+pub(super) fn snapshot(view: &StetView, lines: Range<Line>) -> (Line, String, CharOffset) {
     let buffer = view.buffer();
     let last = view.last_line();
     let first = lines.start.min(last);
     let end_line = lines.end.saturating_sub(1).clamp(first, last);
     let start = buffer
-        .iter_at_line_number(first)
+        .iter_at_line_start(first)
         .unwrap_or_else(|| buffer.start_iter());
     let mut end = buffer
-        .iter_at_line_number(end_line)
+        .iter_at_line_start(end_line)
         .unwrap_or_else(|| buffer.end_iter());
     if !end.ends_line() {
         end.forward_to_line_end();
@@ -61,14 +61,15 @@ pub(super) fn snapshot(view: &StetView, lines: Range<usize>) -> (usize, String, 
 pub(super) fn apply(
     view: &StetView,
     rect: Rect,
-    lines: Range<usize>,
+    lines: Range<Line>,
     op: impl FnOnce(&str, &LineIndex, Rect) -> Result<ColumnEdit, ColumnError>,
 ) -> Result<Rect, ColumnError> {
     let started = Instant::now();
     let (first, text, base) = snapshot(view, lines);
     let index = LineIndex::new(&text);
-    let edit = op(&text, &index, rect.shift_lines(-first.cast_signed()))?;
-    let after = edit.rect.shift_lines(first.cast_signed());
+    let shift = (first - Line::ZERO).cast_signed();
+    let edit = op(&text, &index, rect.shift_lines(-shift))?;
+    let after = edit.rect.shift_lines(shift);
     let buffer = view.source_buffer();
     let applying = Instant::now();
     let bulk = edit.needs_bulk();
@@ -129,16 +130,17 @@ fn apply_bulk(
     edit: &ColumnEdit,
     text: &str,
     index: &LineIndex,
-    first: usize,
+    first: Line,
     base: CharOffset,
 ) -> Vec<TextEdit> {
     let started = Instant::now();
     let visible = view.visible_rect();
-    let line_at = |y: i32| view.line_at_y(y).0.line_number();
-    let near = line_at(visible.y() - visible.height()).saturating_sub(first)
-        ..line_at(visible.y() + 2 * visible.height()).saturating_sub(first) + 1;
+    let shift = first - Line::ZERO;
+    let line_at = |y: i32| view.line_at_y(y).0.buffer_line().saturating_sub(shift);
+    let near =
+        line_at(visible.y() - visible.height())..line_at(visible.y() + 2 * visible.height()) + 1;
     let line_of = |change: &TextEdit| index.line_of_char(change.start());
-    let part = |keep: &dyn Fn(usize) -> bool| ColumnEdit {
+    let part = |keep: &dyn Fn(Line) -> bool| ColumnEdit {
         edits: edit
             .edits
             .iter()
@@ -178,22 +180,23 @@ fn replace_lines(
     part: &ColumnEdit,
     text: &str,
     index: &LineIndex,
-    first: usize,
+    first: Line,
     base: CharOffset,
 ) -> Option<TextEdit> {
     let bulk = part.to_bulk(text, index)?;
-    let lines = bulk.lines.start + first..bulk.lines.end + first;
+    let shift = first - Line::ZERO;
+    let lines = bulk.lines.start + shift..bulk.lines.end + shift;
     let marks = source_marks(buffer, lines);
-    let keep: Vec<usize> = bulk.marks_to_restore(marks.iter().map(|(line, _)| line - first));
+    let keep: Vec<Line> = bulk.marks_to_restore(marks.iter().map(|(line, _)| *line - shift));
     replace(buffer, base, &bulk.edit);
     for (line, mark) in marks {
-        if !keep.contains(&(line - first)) {
+        if !keep.contains(&(line - shift)) {
             continue;
         }
         let name = mark.name();
         let category = mark.category();
         buffer.delete_mark(&mark);
-        if let Some(iter) = buffer.iter_at_line_number(line) {
+        if let Some(iter) = buffer.iter_at_line_start(line) {
             buffer.create_source_mark(name.as_deref(), &category, &iter);
         }
     }
@@ -203,14 +206,14 @@ fn replace_lines(
 /// The source marks on `lines`, with their line numbers.
 fn source_marks(
     buffer: &sourceview5::Buffer,
-    lines: Range<usize>,
-) -> Vec<(usize, sourceview5::Mark)> {
+    lines: Range<Line>,
+) -> Vec<(Line, sourceview5::Mark)> {
     let mut found = Vec::new();
-    let Some(mut iter) = buffer.iter_at_line_number(lines.start) else {
+    let Some(mut iter) = buffer.iter_at_line_start(lines.start) else {
         return found;
     };
     loop {
-        let line = iter.line_number();
+        let line = iter.buffer_line();
         if line >= lines.end {
             break;
         }
@@ -428,7 +431,7 @@ impl StetView {
         let buffer = self.buffer();
         let caret = buffer.iter_at_mark(&buffer.get_insert());
         if location.char_offset() == caret.char_offset()
-            && location.line_number() == rect.cursor.line
+            && location.buffer_line() == rect.cursor.line
             && !text.is_empty()
             && !text.contains(['\n', '\r'])
         {
@@ -460,7 +463,7 @@ impl StetView {
         if self.overwrites()
             && *from == caret
             && next == *to
-            && from.line_number() == rect.cursor.line
+            && from.buffer_line() == rect.cursor.line
         {
             return true;
         }

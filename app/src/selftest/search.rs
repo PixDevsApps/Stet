@@ -21,7 +21,7 @@ use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 use stet_domain::search::{History, SearchHistory, SearchMode, translate};
-use stet_domain::text::CharOffset;
+use stet_domain::text::{CharOffset, LineNumber};
 use stet_infrastructure::search::{Matcher, parity};
 
 pub(super) const COMMANDS: &[Command] = commands![
@@ -258,9 +258,8 @@ impl Harness {
         let buffer = page.buffer();
         let iter = |line: &str, column: &str| -> Result<gtk::TextIter, String> {
             let (line, column) = (number(line)?, number(column)?);
-            let mut iter = line
-                .checked_sub(1)
-                .and_then(|line| buffer.iter_at_line_number(line))
+            let mut iter = LineNumber::new(line)
+                .and_then(|number| buffer.iter_at_line_start(number.index()))
                 .ok_or_else(|| format!("there is no line {line}"))?;
             for _ in 1..column {
                 if iter.ends_line() {

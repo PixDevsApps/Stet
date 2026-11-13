@@ -10,6 +10,7 @@ use toml::de::{DeArray, DeValue};
 
 use super::{FileError, closest, entries, parse_toml};
 use crate::actions::{Accelerator, ActionId, KeyScope, Menu};
+use crate::text::LineNumber;
 
 /// The registry's keys, with the user's lists in place of an action's own.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -173,7 +174,7 @@ fn install(
     errors: &mut Vec<FileError>,
 ) -> HashMap<ActionId, Vec<String>> {
     let changed: Vec<ActionId> = lists.iter().map(|(id, _)| *id).collect();
-    let mut taken: HashMap<String, (ActionId, Option<usize>)> = HashMap::new();
+    let mut taken: HashMap<String, (ActionId, Option<LineNumber>)> = HashMap::new();
     for id in ActionId::ALL.into_iter().filter(|id| !changed.contains(id)) {
         for key in id.keys().all() {
             if let Some(key) = canonical(key) {

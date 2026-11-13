@@ -492,8 +492,8 @@ impl Window {
             return;
         };
         let buffer = new.buffer();
-        let line = hunk.right.start.min(buffer.total_lines() - 1);
-        if let Some(iter) = buffer.iter_at_line_number(line) {
+        let line = hunk.right.start.min(buffer.last_line());
+        if let Some(iter) = buffer.iter_at_line_start(line) {
             buffer.place_cursor(&iter);
             new.view()
                 .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);
@@ -554,8 +554,8 @@ impl Window {
             return;
         }
         let buffer = page.buffer();
-        let line = buffer.iter_at_mark(&buffer.get_insert()).line_number();
-        let last = buffer.total_lines() - 1;
+        let line = buffer.iter_at_mark(&buffer.get_insert()).buffer_line();
+        let last = buffer.last_line();
         let target = |index: usize| comparison.hunks[index].lines(side).start.min(last);
         let mut index = if forward {
             comparison.next_hunk(side, line).unwrap_or(0)
@@ -573,7 +573,7 @@ impl Window {
         }
         let target = target(index);
         self.note_jump();
-        if let Some(iter) = buffer.iter_at_line_number(target) {
+        if let Some(iter) = buffer.iter_at_line_start(target) {
             buffer.place_cursor(&iter);
             page.view()
                 .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);

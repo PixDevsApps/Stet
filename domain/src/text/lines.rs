@@ -3,16 +3,18 @@
 //! inserted raw: the loader finds them, and the document opens formatted or with breaks
 //! added for display.
 
+use super::units::Line;
+
 /// Lines longer than this many characters take the long-line path (PRD; S1).
 pub const LONG_LINE_CHARS: usize = 50_000;
 
 /// How many characters a display break leaves on each piece of a long line.
 pub const DISPLAY_BREAK_CHARS: usize = 1_000;
 
-/// The longest line of LF-separated text: its zero-based index and its length in characters.
+/// The longest line of LF-separated text and its length in characters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LongestLine {
-    pub line: usize,
+    pub line: Line,
     pub chars: usize,
 }
 
@@ -33,7 +35,10 @@ pub fn longest_line(text: &str) -> LongestLine {
         if end - start > longest.chars {
             let chars = text[start..end].chars().count();
             if chars > longest.chars {
-                longest = LongestLine { line, chars };
+                longest = LongestLine {
+                    line: Line::new(line),
+                    chars,
+                };
             }
         }
         start = end + 1;
@@ -73,24 +78,40 @@ pub fn break_long_lines(text: &str, width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::testing::line;
     use proptest::prelude::*;
 
     #[test]
     fn finds_the_longest_line_in_characters() {
-        assert_eq!(longest_line(""), LongestLine { line: 0, chars: 0 });
+        assert_eq!(longest_line(""), LongestLine::default());
         assert_eq!(
             longest_line("ab\nabcd\nabc"),
-            LongestLine { line: 1, chars: 4 }
+            LongestLine {
+                line: line(1),
+                chars: 4
+            }
         );
         // Three bytes but one character each: the byte length alone would pick line 0.
         assert_eq!(
             longest_line("ééé\nabcd\n"),
-            LongestLine { line: 1, chars: 4 }
+            LongestLine {
+                line: line(1),
+                chars: 4
+            }
         );
-        assert_eq!(longest_line("a\n\nabc"), LongestLine { line: 2, chars: 3 });
+        assert_eq!(
+            longest_line("a\n\nabc"),
+            LongestLine {
+                line: line(2),
+                chars: 3
+            }
+        );
         assert_eq!(
             longest_line("same\nsize"),
-            LongestLine { line: 0, chars: 4 }
+            LongestLine {
+                line: line(0),
+                chars: 4
+            }
         );
     }
 
@@ -128,8 +149,8 @@ mod tests {
                 .split('\n')
                 .map(|line| line.chars().count())
                 .enumerate()
-                .fold(LongestLine::default(), |best, (line, chars)| {
-                    if chars > best.chars { LongestLine { line, chars } } else { best }
+                .fold(LongestLine::default(), |best, (index, chars)| {
+                    if chars > best.chars { LongestLine { line: line(index), chars } } else { best }
                 });
             prop_assert_eq!(longest_line(&text), naive);
         }

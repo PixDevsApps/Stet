@@ -5,7 +5,7 @@
 use super::registry::{Command, commands};
 use super::script::boolean;
 use super::{Harness, StepResult, WAIT_TIMEOUT, build, equal, number};
-use crate::convert::{BufferPositions, IterPosition};
+use crate::convert::{BufferPositions, IterPosition, to_tab_width};
 use crate::editor::column::{StetView, dialog, keys};
 use crate::sys::accessible_text;
 use gtk4 as gtk;
@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
 use stet_domain::column::{Rect, VisualPos};
+use stet_domain::text::{LineNumber, VisualColumn};
 
 pub(super) const COMMANDS: &[Command] = commands![
     "column-select" (4, 4) => column_select,
@@ -59,13 +60,18 @@ fn ms(duration: Duration) -> String {
     format!("{:.1} ms", duration.as_secs_f64() * 1e3)
 }
 
-/// A 1-based line and column from the script.
+/// A line and visual column from the script, both counted from 1.
 fn pos(line: &str, column: &str) -> Result<VisualPos, String> {
     let (line, column) = (number(line)?, number(column)?);
-    if line == 0 || column == 0 {
-        return Err("lines and columns count from 1".to_owned());
+    match (LineNumber::new(line), column.checked_sub(1)) {
+        (Some(line), Some(column)) => Ok(VisualPos::new(line.index(), VisualColumn::new(column))),
+        _ => Err("lines and columns count from 1".to_owned()),
     }
-    Ok(VisualPos::new(line - 1, column - 1))
+}
+
+/// `pos` as the script writes it: line and visual column counted from 1.
+fn shown(pos: VisualPos) -> String {
+    format!("{}:{}", pos.line.number(), pos.column.get() + 1)
 }
 
 /// What GtkTextView does with committed text (`gtk_text_view_commit_text`): the selection
@@ -207,9 +213,8 @@ impl Harness {
         let page = self.page()?;
         let buffer = page.buffer();
         let line = number(&args[0])?;
-        let iter = line
-            .checked_sub(1)
-            .and_then(|line| buffer.iter_at_line_number(line))
+        let iter = LineNumber::new(line)
+            .and_then(|number| buffer.iter_at_line_start(number.index()))
             .ok_or_else(|| format!("there is no line {line}"))?;
         buffer.create_source_mark(None, MARK_CATEGORY, &iter);
         Ok(())
@@ -240,21 +245,22 @@ impl Harness {
     /// point of the widget that maps back to the same cell (what Alt+drag relies on).
     fn assert_hit_test(&self, args: &[String]) -> StepResult {
         let view = self.column_view()?;
-        let line = number(&args[0])?
-            .checked_sub(1)
-            .ok_or("lines count from 1")?;
-        let width =
-            stet_domain::column::text_width(&view.line_text(line), 0, view.tab_width() as usize);
+        let line = LineNumber::new(number(&args[0])?).ok_or("lines count from 1")?;
+        let width = stet_domain::column::text_width(
+            &view.line_text(line.index()),
+            VisualColumn::ZERO,
+            to_tab_width(view.tab_width()),
+        );
         let wrong: Vec<String> = (0..width + 4)
             .filter_map(|column| {
-                let pos = VisualPos::new(line, column);
+                let pos = VisualPos::new(line.index(), VisualColumn::new(column));
                 let (x, y) = view.point_of(pos);
                 let back = view.pos_at(x, y);
-                (back != pos).then(|| format!("{column}→{}", back.column))
+                (back != pos).then(|| format!("{column}→{}", back.column.get()))
             })
             .collect();
         if wrong.is_empty() {
-            println!("  # line {}: {} cells map back", line + 1, width + 4);
+            println!("  # line {line}: {} cells map back", width + 4);
             Ok(())
         } else {
             Err(format!(
@@ -269,13 +275,12 @@ impl Harness {
         let view = self.column_view()?;
         let line = number(&args[0])?;
         let visible = view.visible_rect();
-        let top = view.line_at_y(visible.y()).0.line_number() + 1;
+        let top = view.line_at_y(visible.y()).0.display_line();
         let bottom = view
             .line_at_y(visible.y() + visible.height())
             .0
-            .line_number()
-            + 1;
-        if (top..=bottom).contains(&line) {
+            .display_line();
+        if LineNumber::new(line).is_some_and(|line| (top..=bottom).contains(&line)) {
             Ok(())
         } else {
             Err(format!("lines {top} to {bottom} are visible, not {line}"))
@@ -417,11 +422,9 @@ impl Harness {
                 match rect {
                     Some(rect) if rect == wanted => Ok(()),
                     Some(rect) => Err(format!(
-                        "the rectangle is {}:{} to {}:{}",
-                        rect.anchor.line + 1,
-                        rect.anchor.column + 1,
-                        rect.cursor.line + 1,
-                        rect.cursor.column + 1
+                        "the rectangle is {} to {}",
+                        shown(rect.anchor),
+                        shown(rect.cursor)
                     )),
                     None => Err("column mode is off".to_owned()),
                 }

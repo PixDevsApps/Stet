@@ -1,6 +1,6 @@
 //! Offset conversions over UTF-8 text in one forward pass: characters, bytes and lines.
 
-use super::units::{Anchor, ByteOffset, CharOffset};
+use super::units::{Anchor, ByteOffset, CharOffset, Line};
 
 /// Characters in `bytes`: the bytes that do not continue a UTF-8 sequence.
 pub fn count_chars(bytes: &[u8]) -> usize {
@@ -113,7 +113,7 @@ impl<'a> ByteCursor<'a> {
 pub struct LineCursor<'a> {
     bytes: &'a [u8],
     byte: ByteOffset,
-    line: usize,
+    line: Line,
 }
 
 impl<'a> LineCursor<'a> {
@@ -123,15 +123,15 @@ impl<'a> LineCursor<'a> {
         Self {
             bytes,
             byte,
-            line: memchr::memchr_iter(b'\n', &bytes[..byte.get()]).count(),
+            line: Line::new(memchr::memchr_iter(b'\n', &bytes[..byte.get()]).count()),
         }
     }
 
-    /// The zero-based line of byte `byte`.
-    pub fn line_at(&mut self, byte: ByteOffset) -> usize {
+    /// The line of byte `byte`.
+    pub fn line_at(&mut self, byte: ByteOffset) -> Line {
         if byte < self.byte {
             self.byte = ByteOffset::ZERO;
-            self.line = 0;
+            self.line = Line::ZERO;
         }
         self.line += memchr::memchr_iter(b'\n', &self.bytes[self.byte.get()..byte.get()]).count();
         self.byte = byte;
@@ -180,8 +180,8 @@ mod tests {
         assert_eq!(char_to_byte(&long, start, chars(201)), Some(bytes(301)));
         assert_eq!(char_to_byte(&long, start, chars(202)), None);
         let mut lines = LineCursor::at(text, bytes(4));
-        assert_eq!(lines.line_at(bytes(7)), 1);
-        assert_eq!(lines.line_at(bytes(0)), 0);
+        assert_eq!(lines.line_at(bytes(7)), Line::new(1));
+        assert_eq!(lines.line_at(bytes(0)), Line::ZERO);
         assert_eq!(next_boundary(text.as_bytes(), 1), 3);
     }
 

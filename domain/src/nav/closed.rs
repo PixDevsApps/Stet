@@ -54,11 +54,12 @@ impl ClosedTabs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::Line;
 
     fn file(number: usize) -> ClosedTab {
         ClosedTab::File {
             path: PathBuf::from(format!("/tmp/{number}.txt")),
-            position: Position::new(number, 0),
+            position: Position::new(Line::new(number), 0),
         }
     }
 
@@ -95,7 +96,7 @@ mod tests {
         let mut closed = ClosedTabs::default();
         let untitled = ClosedTab::Untitled {
             text: "notes".to_owned(),
-            position: Position::new(0, 3),
+            position: Position::new(Line::ZERO, 3),
             language: Some("markdown".to_owned()),
             name: Some("Ideas".to_owned()),
         };

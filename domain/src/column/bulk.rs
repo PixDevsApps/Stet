@@ -2,7 +2,7 @@
 
 use super::editing::ColumnEdit;
 use crate::text::{ByteCursor, ByteOffset, CharOffset, OffsetRange};
-use crate::text::{LineIndex, TextEdit};
+use crate::text::{Line, LineIndex, TextEdit};
 use std::ops::Range;
 
 /// Above this many edits, a column edit goes to the buffer as one [`BulkEdit`].
@@ -20,15 +20,15 @@ pub struct BulkEdit {
     /// (without its `\n`).
     pub edit: TextEdit,
     /// The lines the edit rewrites, numbered before it.
-    pub lines: Range<usize>,
+    pub lines: Range<Line>,
     /// Lines the edit adds after the old last line (a paste past the end).
     pub appended_lines: usize,
 }
 
 impl BulkEdit {
     /// The lines among `marked_lines` whose marks the replacement collapses, sorted.
-    pub fn marks_to_restore(&self, marked_lines: impl IntoIterator<Item = usize>) -> Vec<usize> {
-        let mut lines: Vec<usize> = marked_lines
+    pub fn marks_to_restore(&self, marked_lines: impl IntoIterator<Item = Line>) -> Vec<Line> {
+        let mut lines: Vec<Line> = marked_lines
             .into_iter()
             .filter(|line| self.lines.contains(line))
             .collect();
@@ -76,6 +76,12 @@ impl ColumnEdit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::column::testing::pos;
+    use crate::text::OffsetRange;
+    use crate::text::testing::{indexes, line};
+    use crate::view::TabWidth;
+
+    const TAB: TabWidth = TabWidth::DEFAULT;
     use crate::column::editing::insert;
     use crate::column::{Block, Rect, paste};
     use crate::text::apply;
@@ -85,13 +91,14 @@ mod tests {
     fn a_bulk_edit_rewrites_the_touched_lines_once() {
         let text = "keep\nab\ncd\n\nkeep";
         let index = LineIndex::new(text);
-        let edit = insert(text, &index, Rect::new((1, 3), (3, 3)), "|", 4).unwrap();
+        let edit = insert(text, &index, Rect::new(pos(1, 3), pos(3, 3)), "|", TAB).unwrap();
         assert!(!edit.needs_bulk());
         let bulk = edit.to_bulk(text, &index).unwrap();
-        assert_eq!(bulk.lines, 1..4);
+        assert_eq!(bulk.lines.get(), 1..4);
         assert_eq!(bulk.edit, TextEdit::new(chars(5..11), "ab |\ncd |\n   |"));
         assert_eq!(bulk.appended_lines, 0);
-        assert_eq!(bulk.marks_to_restore([4, 2, 0, 3, 2]), [2, 3]);
+        let marked = [4, 2, 0, 3, 2].map(line);
+        assert_eq!(indexes(&bulk.marks_to_restore(marked)), [2, 3]);
         assert_eq!(
             apply(text, vec![bulk.edit]).unwrap(),
             apply(text, edit.edits).unwrap()
@@ -103,9 +110,9 @@ mod tests {
         let text = "a\nb";
         let index = LineIndex::new(text);
         let block = Block::from_text("1\n2\n3");
-        let edit = paste(text, &index, Rect::new((1, 1), (1, 1)), &block, 4);
+        let edit = paste(text, &index, Rect::new(pos(1, 1), pos(1, 1)), &block, TAB);
         let bulk = edit.to_bulk(text, &index).unwrap();
-        assert_eq!((bulk.lines.clone(), bulk.appended_lines), (1..2, 2));
+        assert_eq!((bulk.lines.get(), bulk.appended_lines), (1..2, 2));
         assert_eq!(apply(text, vec![bulk.edit]).unwrap(), "a\nb1\n 2\n 3");
     }
 
@@ -113,10 +120,10 @@ mod tests {
     fn needs_bulk_above_the_threshold() {
         let text = "x\n".repeat(BULK_THRESHOLD);
         let index = LineIndex::new(&text);
-        let rect = Rect::new((0, 0), (BULK_THRESHOLD - 1, 0));
-        assert!(!insert(&text, &index, rect, "-", 4).unwrap().needs_bulk());
-        let rect = Rect::new((0, 0), (BULK_THRESHOLD, 0));
-        assert!(insert(&text, &index, rect, "-", 4).unwrap().needs_bulk());
+        let rect = Rect::new(pos(0, 0), pos(BULK_THRESHOLD - 1, 0));
+        assert!(!insert(&text, &index, rect, "-", TAB).unwrap().needs_bulk());
+        let rect = Rect::new(pos(0, 0), pos(BULK_THRESHOLD, 0));
+        assert!(insert(&text, &index, rect, "-", TAB).unwrap().needs_bulk());
         assert_eq!(
             ColumnEdit {
                 edits: Vec::new(),

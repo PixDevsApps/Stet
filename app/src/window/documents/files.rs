@@ -758,6 +758,16 @@ fn absolute(cwd: &Path, path: &Path) -> PathBuf {
 mod tests {
     use super::*;
     use std::fs;
+    use std::num::NonZeroUsize;
+    use stet_domain::text::LineNumber;
+
+    /// Line `line`, column `column`, both counted from 1.
+    fn at(line: usize, column: Option<usize>) -> LineCol {
+        LineCol::new(
+            LineNumber::new(line).unwrap(),
+            column.and_then(NonZeroUsize::new),
+        )
+    }
 
     #[test]
     fn arguments_prefer_the_literal_path() {
@@ -768,20 +778,20 @@ mod tests {
 
         let located = resolve_argument(&dir, &OsString::from("b.txt:40"), None);
         assert_eq!(located.path, dir.join("b.txt"));
-        assert_eq!(located.position, Some(LineCol::new(40, None)));
+        assert_eq!(located.position, Some(at(40, None)));
 
         let located = resolve_argument(&dir, &OsString::from("odd:12"), None);
         assert_eq!(located.path, dir.join("odd:12"));
         assert_eq!(located.position, None);
 
-        let default = Some(LineCol::new(5, None));
+        let default = Some(at(5, None));
         let located = resolve_argument(&dir, &OsString::from("./b.txt"), default);
         assert_eq!(located.path, dir.join("b.txt"));
         assert_eq!(located.position, default);
 
         let located = resolve_argument(&dir, &OsString::from("/abs/new.rs:3:4"), None);
         assert_eq!(located.path, PathBuf::from("/abs/new.rs"));
-        assert_eq!(located.position, Some(LineCol::new(3, Some(4))));
+        assert_eq!(located.position, Some(at(3, Some(4))));
         fs::remove_dir_all(&dir).unwrap();
     }
 }

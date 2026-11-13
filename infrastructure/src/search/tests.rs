@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use proptest::prelude::*;
 use stet_domain::search::{Direction, Query, SearchMode, SearchOptions, Template, Wrap};
-use stet_domain::text::{CharOffset, TextEdit, apply};
+use stet_domain::text::{CharOffset, Line, TextEdit, apply};
 
 use super::*;
 
@@ -32,7 +32,7 @@ fn matched(start: usize, end: usize, line: usize) -> Match {
     Match {
         start: at(start),
         end: at(end),
-        line,
+        line: Line::new(line),
     }
 }
 
@@ -144,7 +144,7 @@ fn find_next_skips_an_empty_match_at_the_caret_and_wraps() {
         .unwrap()
         .unwrap();
     assert_eq!(
-        (next.found.start, next.found.line, next.wrapped),
+        (next.found.start, next.found.line.get(), next.wrapped),
         (at(2), 1, false)
     );
     let wrapped = caret
@@ -192,7 +192,7 @@ fn find_previous_and_its_window() {
         .find_next(&long, at(len), Direction::Backward, Wrap::Stop)
         .unwrap()
         .unwrap();
-    assert_eq!(spanning.found.line, 1);
+    assert_eq!(spanning.found.line.get(), 1);
 }
 
 #[test]
@@ -327,11 +327,11 @@ fn find_all_hits_group_by_line() {
     let hits = document_hits(text, &found.matches);
     assert_eq!(hits.len(), 2);
     assert_eq!(
-        (hits[0].line_number, hits[0].line_text.as_str()),
+        (hits[0].line_number.get(), hits[0].line_text.as_str()),
         (1, "alpha beta")
     );
     assert_eq!(
-        (hits[1].line_number, hits[1].match_ranges.clone()),
+        (hits[1].line_number.get(), hits[1].match_ranges.clone()),
         (3, vec![0..4, 5..9])
     );
 }

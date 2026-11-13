@@ -2,9 +2,11 @@
 //! cell by cell and turned back into text. Also the S5 prototype's checks and a timing report.
 
 use super::editing::insert;
+use super::testing::{col, pos, tab};
 use super::*;
 use crate::text::OffsetRange;
-use crate::text::{LineIndex, TextEdit, apply, normalize};
+use crate::text::{Line, LineIndex, TextEdit, VisualColumn, apply, normalize};
+use crate::view::TabWidth;
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 use std::ops::Range;
@@ -20,7 +22,8 @@ const SPACE: Cell = Cell::Char(' ');
 
 /// The cells of `text` when it starts at `column`: a tab is a `Tab` cell followed by `Fill`
 /// cells up to the next stop.
-fn render(text: &str, column: usize, tab: usize) -> Vec<Cell> {
+fn render(text: &str, column: usize, tab: TabWidth) -> Vec<Cell> {
+    let tab = tab.get();
     let mut cells = Vec::new();
     for ch in text.chars() {
         if ch == '\t' {
@@ -46,7 +49,7 @@ fn unrender(cells: &[Cell]) -> String {
 }
 
 /// What a line looks like: tabs are blank.
-fn display(line: &str, tab: usize) -> String {
+fn display(line: &str, tab: TabWidth) -> String {
     render(line, 0, tab)
         .iter()
         .map(|cell| match cell {
@@ -73,12 +76,13 @@ fn cut(cells: &mut [Cell], column: usize) {
 /// nothing is removed or inserted stays as it is.
 fn model_splice(
     line: &str,
-    left: usize,
-    right: usize,
+    left: VisualColumn,
+    right: VisualColumn,
     insert: &str,
     fill: usize,
-    tab: usize,
+    tab: TabWidth,
 ) -> String {
+    let (left, right) = (left.get(), right.get());
     let mut cells = render(line, 0, tab);
     let removes = right > left && left < cells.len();
     let mut edited = cells.clone();
@@ -104,9 +108,10 @@ fn model_splice(
 
 fn model_lines(
     text: &str,
-    lines: Range<usize>,
+    lines: Range<Line>,
     mut edit: impl FnMut(usize, &str) -> String,
 ) -> String {
+    let lines = lines.get();
     text.split('\n')
         .enumerate()
         .map(|(line, line_text)| {
@@ -120,11 +125,11 @@ fn model_lines(
         .join("\n")
 }
 
-fn model_copy(text: &str, rect: Rect, tab: usize) -> Vec<String> {
-    let (left, right) = (rect.left(), rect.right());
+fn model_copy(text: &str, rect: Rect, tab: TabWidth) -> Vec<String> {
+    let (left, right) = (rect.left().get(), rect.right().get());
     text.split('\n')
         .enumerate()
-        .filter(|(line, _)| rect.lines().contains(line))
+        .filter(|(line, _)| rect.lines().get().contains(line))
         .map(|(_, line)| {
             let mut cells = render(line, 0, tab);
             cut(&mut cells, left);
@@ -138,23 +143,23 @@ fn model_copy(text: &str, rect: Rect, tab: usize) -> Vec<String> {
         .collect()
 }
 
-fn model_paste(text: &str, rect: Rect, rows: &[String], tab: usize) -> String {
-    let (top, left, right) = (rect.top(), rect.left(), rect.right());
+fn model_paste(text: &str, rect: Rect, rows: &[String], tab: TabWidth) -> String {
+    let (top, left, right) = (rect.top().get(), rect.left(), rect.right());
     let width = rows
         .iter()
-        .map(|row| render(row, left, tab).len())
+        .map(|row| render(row, left.get(), tab).len())
         .max()
         .unwrap_or(0);
     let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
     for (line, line_text) in lines.iter_mut().enumerate() {
-        let right = if rect.lines().contains(&line) {
+        let right = if rect.lines().get().contains(&line) {
             right
         } else {
             left
         };
         match line.checked_sub(top).and_then(|i| rows.get(i)) {
             Some(row) => *line_text = model_splice(line_text, left, right, row, width, tab),
-            None if rect.lines().contains(&line) => {
+            None if rect.lines().get().contains(&line) => {
                 *line_text = model_splice(line_text, left, right, "", 0, tab);
             }
             None => {}
@@ -166,7 +171,7 @@ fn model_paste(text: &str, rect: Rect, rows: &[String], tab: usize) -> String {
         lines.push(if row.is_empty() {
             String::new()
         } else {
-            format!("{}{row}", " ".repeat(left))
+            format!("{}{row}", " ".repeat(left.get()))
         });
     }
     lines.join("\n")
@@ -179,11 +184,12 @@ enum Around {
 }
 
 /// How many cells Backspace (`before`) or Delete removes at `column` on the rectangle's lines.
-fn model_cells(text: &str, rect: Rect, column: usize, before: bool, tab: usize) -> usize {
+fn model_cells(text: &str, rect: Rect, column: VisualColumn, before: bool, tab: TabWidth) -> usize {
+    let column = column.get();
     let arounds: Vec<Around> = text
         .split('\n')
         .enumerate()
-        .filter(|(line, _)| rect.lines().contains(line))
+        .filter(|(line, _)| rect.lines().get().contains(line))
         .map(|(_, line)| {
             let cells = render(line, 0, tab);
             if cells.get(column) == Some(&Cell::Fill) {
@@ -244,12 +250,16 @@ fn text_strategy() -> impl Strategy<Value = String> {
 
 fn rect_strategy() -> impl Strategy<Value = Rect> {
     (0usize..7, 0usize..16, 0usize..7, 0usize..16)
-        .prop_map(|(top, left, bottom, right)| Rect::new((top, left), (bottom, right)))
+        .prop_map(|(top, left, bottom, right)| Rect::new(pos(top, left), pos(bottom, right)))
 }
 
 fn caret_strategy() -> impl Strategy<Value = Rect> {
     (0usize..7, 0usize..7, 0usize..16)
-        .prop_map(|(top, bottom, column)| Rect::new((top, column), (bottom, column)))
+        .prop_map(|(top, bottom, column)| Rect::new(pos(top, column), pos(bottom, column)))
+}
+
+fn tab_strategy() -> impl Strategy<Value = TabWidth> {
+    (1u8..9).prop_map(tab)
 }
 
 fn typed_strategy() -> impl Strategy<Value = String> {
@@ -272,7 +282,7 @@ fn applied(text: &str, index: &LineIndex, edit: &ColumnEdit) -> Result<String, T
         normalize(edit.edits.clone(), index.len_chars()),
         Ok(edit.edits.clone())
     );
-    let lines: Vec<usize> = edit
+    let lines: Vec<Line> = edit
         .edits
         .iter()
         .map(|edit| index.line_of_char(edit.start()))
@@ -289,7 +299,7 @@ fn applied(text: &str, index: &LineIndex, edit: &ColumnEdit) -> Result<String, T
     Ok(result)
 }
 
-fn trimmed_display(text: &str, tab: usize) -> Vec<String> {
+fn trimmed_display(text: &str, tab: TabWidth) -> Vec<String> {
     text.split('\n')
         .map(|line| display(line, tab).trim_end().to_owned())
         .collect()
@@ -301,7 +311,7 @@ proptest! {
         text in text_strategy(),
         rect in rect_strategy(),
         inserted in typed_strategy(),
-        tab in 1usize..9,
+        tab in tab_strategy(),
     ) {
         let index = LineIndex::new(&text);
         let edit = insert(&text, &index, rect, &inserted, tab).unwrap();
@@ -313,19 +323,20 @@ proptest! {
         );
         let width = text_width(&inserted, left, tab);
         prop_assert_eq!((edit.rect.left(), edit.rect.right()), (left + width, rect.right() + width));
-        let shown: Vec<char> = display(&format!("{}{inserted}", " ".repeat(left)), tab)
+        let cells = left.get();
+        let shown: Vec<char> = display(&format!("{}{inserted}", " ".repeat(cells)), tab)
             .chars()
-            .skip(left)
+            .skip(cells)
             .collect();
         for (line, (before, after)) in text.split('\n').zip(result.split('\n')).enumerate() {
-            if rect.lines().contains(&line) {
+            if rect.lines().get().contains(&line) {
                 let at = locate(after, left, tab);
                 prop_assert_eq!((at.inside_tab, at.virtual_space), (None, 0));
                 prop_assert!(after[at.byte_offset..].starts_with(inserted.as_str()));
-                let old: Vec<char> = display(before, tab).chars().chain(std::iter::repeat(' ')).take(left).collect();
+                let old: Vec<char> = display(before, tab).chars().chain(std::iter::repeat(' ')).take(cells).collect();
                 let new: Vec<char> = display(after, tab).chars().collect();
-                prop_assert_eq!(&new[..left], &old[..]);
-                prop_assert_eq!(&new[left..left + shown.len()], &shown[..]);
+                prop_assert_eq!(&new[..cells], &old[..]);
+                prop_assert_eq!(&new[cells..cells + shown.len()], &shown[..]);
             } else {
                 prop_assert_eq!(before, after);
             }
@@ -333,7 +344,7 @@ proptest! {
     }
 
     #[test]
-    fn delete_block_matches_the_model(text in text_strategy(), rect in rect_strategy(), tab in 1usize..9) {
+    fn delete_block_matches_the_model(text in text_strategy(), rect in rect_strategy(), tab in tab_strategy()) {
         let index = LineIndex::new(&text);
         let edit = delete_block(&text, &index, rect, tab);
         let result = applied(&text, &index, &edit)?;
@@ -346,12 +357,12 @@ proptest! {
     }
 
     #[test]
-    fn copy_matches_the_model(text in text_strategy(), rect in rect_strategy(), tab in 1usize..9) {
+    fn copy_matches_the_model(text in text_strategy(), rect in rect_strategy(), tab in tab_strategy()) {
         let index = LineIndex::new(&text);
         let block = copy(&text, &index, rect, tab);
         prop_assert_eq!(&block.rows, &model_copy(&text, rect, tab));
-        let left = rect.left();
-        for (row, line) in block.rows.iter().zip(text.split('\n').skip(rect.top())) {
+        let left = rect.left().get();
+        for (row, line) in block.rows.iter().zip(text.split('\n').skip(rect.top().get())) {
             prop_assert!(!row.contains('\n'));
             let shown: String = display(&format!("{}{row}", " ".repeat(left)), tab).chars().skip(left).collect();
             let line: String = display(line, tab).chars().skip(left).take(rect.width()).collect();
@@ -367,7 +378,7 @@ proptest! {
         text in text_strategy(),
         rect in rect_strategy(),
         rows in rows_strategy(),
-        tab in 1usize..9,
+        tab in tab_strategy(),
     ) {
         let index = LineIndex::new(&text);
         let block = Block { rows };
@@ -375,20 +386,27 @@ proptest! {
         let result = applied(&text, &index, &edit)?;
         prop_assert_eq!(result, model_paste(&text, rect, &block.rows, tab));
         let caret = rect.left() + block.width(rect.left(), tab);
-        prop_assert_eq!(edit.rect, Rect::new((rect.top() + block.rows.len() - 1, caret), (rect.top(), caret)));
+        prop_assert_eq!(
+            edit.rect,
+            Rect::new(
+                VisualPos::new(rect.top() + block.rows.len() - 1, caret),
+                VisualPos::new(rect.top(), caret),
+            )
+        );
     }
 
     #[test]
     fn copy_delete_paste_restores_what_the_lines_look_like(
         text in text_strategy(),
         rect in rect_strategy(),
-        tab in 1usize..9,
+        tab in tab_strategy(),
     ) {
         let index = LineIndex::new(&text);
         let block = copy(&text, &index, rect, tab);
         let deleted = applied(&text, &index, &delete_block(&text, &index, rect, tab))?;
         let index = LineIndex::new(&deleted);
-        let caret = Rect::new((rect.top(), rect.left()), (rect.top(), rect.left()));
+        let at = VisualPos::new(rect.top(), rect.left());
+        let caret = Rect::new(at, at);
         let pasted = applied(&deleted, &index, &paste(&deleted, &index, caret, &block, tab))?;
         let expected: Vec<String> = text.split('\n').map(|line| display(line, tab)).collect();
         let restored: Vec<String> = pasted.split('\n').map(|line| display(line, tab)).collect();
@@ -400,7 +418,7 @@ proptest! {
         text in text_strategy(),
         rect in rect_strategy(),
         typed in typed_strategy(),
-        tab in 1usize..9,
+        tab in tab_strategy(),
     ) {
         let (left, right) = (rect.left(), rect.right());
         let (mut current, mut caret) = (text.clone(), rect);
@@ -424,12 +442,12 @@ proptest! {
     fn backspace_and_delete_match_the_model(
         text in text_strategy(),
         rect in prop_oneof![caret_strategy(), rect_strategy()],
-        tab in 1usize..9,
+        tab in tab_strategy(),
     ) {
         let index = LineIndex::new(&text);
         let (left, right) = (rect.left(), rect.right());
         let back = backspace(&text, &index, rect, tab);
-        let (from, to) = if !rect.is_empty() || left == 0 {
+        let (from, to) = if !rect.is_empty() || left == col(0) {
             (left, right)
         } else {
             (left - model_cells(&text, rect, left, true, tab), left)
@@ -457,9 +475,9 @@ proptest! {
         (text, rect) in text_strategy().prop_flat_map(|text| {
             let lines = text.split('\n').count();
             (Just(text), (0..lines, 0usize..7, 0usize..16))
-        }).prop_map(|(text, (top, height, column))| (text, Rect::new((top + height, column), (top, column)))),
+        }).prop_map(|(text, (top, height, column))| (text, Rect::new(pos(top + height, column), pos(top, column)))),
         typed in typed_strategy(),
-        tab in 1usize..9,
+        tab in tab_strategy(),
     ) {
         let (mut current, mut caret) = (text.clone(), rect);
         for key in typed.chars() {
@@ -483,14 +501,14 @@ proptest! {
         text in text_strategy(),
         rect in rect_strategy(),
         typed in typed_strategy(),
-        tab in 1usize..9,
+        tab in tab_strategy(),
     ) {
         let index = LineIndex::new(&text);
-        let lines = rect.top().min(index.line_count() - 1)..rect.bottom().min(index.line_count() - 1) + 1;
+        let lines = rect.top().min(index.last_line())..rect.bottom().min(index.last_line()) + 1;
         let first = index.line_chars(lines.start).start;
         let window = &text[index.line_bytes(lines.start).start..index.line_bytes(lines.end - 1).end];
         let window_index = LineIndex::new(window);
-        let shift = isize::try_from(lines.start).unwrap();
+        let shift = isize::try_from(lines.start.get()).unwrap();
         let local = type_text(window, &window_index, rect.shift_lines(-shift), &typed, tab).unwrap();
         let whole = type_text(&text, &index, rect, &typed, tab).unwrap();
         let moved: Vec<_> = local
@@ -531,8 +549,10 @@ fn every_line(lines: &[String], edit: impl Fn(&str) -> String) -> String {
         .join("\n")
 }
 
+const TAB: TabWidth = TabWidth::DEFAULT;
+
 fn full_caret(column: usize) -> Rect {
-    Rect::new((LINES - 1, column), (0, column))
+    Rect::new(pos(LINES - 1, column), pos(0, column))
 }
 
 #[test]
@@ -541,28 +561,40 @@ fn s5_column_insert_lands_on_the_column_on_every_line() {
     let text = lines.join("\n");
     let index = LineIndex::new(&text);
     for column in [0, 10] {
-        let edit = insert(&text, &index, full_caret(column), "// ", 4).unwrap();
+        let edit = insert(&text, &index, full_caret(column), "// ", TAB).unwrap();
         assert_eq!(edit.edits.len(), LINES);
         assert!(edit.needs_bulk());
         let result = apply(&text, edit.edits.clone()).unwrap();
         assert_eq!(
             result,
             every_line(&lines, |line| model_splice(
-                line, column, column, "// ", 0, 4
+                line,
+                col(column),
+                col(column),
+                "// ",
+                0,
+                TAB
             ))
         );
         let bulk = edit.to_bulk(&text, &index).unwrap();
-        assert_eq!((bulk.lines.clone(), bulk.appended_lines), (0..LINES, 0));
+        assert_eq!((bulk.lines.get(), bulk.appended_lines), (0..LINES, 0));
         assert_eq!(apply(&text, vec![bulk.edit]).unwrap(), result);
         for line in result.split('\n') {
-            let at = locate(line, column, 4);
+            let at = locate(line, col(column), TAB);
             assert_eq!((at.inside_tab, at.virtual_space), (None, 0), "{line:?}");
             assert!(line[at.byte_offset..].starts_with("// "), "{line:?}");
         }
     }
     let tab_line = "abcdefgh\t= 3;";
     let index = LineIndex::new(tab_line);
-    let edit = insert(tab_line, &index, Rect::new((0, 10), (0, 10)), "// ", 4).unwrap();
+    let edit = insert(
+        tab_line,
+        &index,
+        Rect::new(pos(0, 10), pos(0, 10)),
+        "// ",
+        TAB,
+    )
+    .unwrap();
     assert_eq!(apply(tab_line, edit.edits).unwrap(), "abcdefgh  //   = 3;");
 }
 
@@ -572,21 +604,28 @@ fn s5_typing_and_backspace_replicate_on_every_line() {
     let (mut text, mut rect) = (lines.join("\n"), full_caret(10));
     for key in ["a", "b", "c", "d", "e", "f"] {
         let index = LineIndex::new(&text);
-        let edit = type_text(&text, &index, rect, key, 4).unwrap();
+        let edit = type_text(&text, &index, rect, key, TAB).unwrap();
         text = apply(&text, edit.edits).unwrap();
         rect = edit.rect;
     }
     assert_eq!(rect, full_caret(16));
     for _ in 0..2 {
         let index = LineIndex::new(&text);
-        let edit = backspace(&text, &index, rect, 4);
+        let edit = backspace(&text, &index, rect, TAB);
         text = apply(&text, edit.edits).unwrap();
         rect = edit.rect;
     }
     assert_eq!(rect, full_caret(14));
     assert_eq!(
         text,
-        every_line(&lines, |line| model_splice(line, 10, 10, "abcd", 0, 4))
+        every_line(&lines, |line| model_splice(
+            line,
+            col(10),
+            col(10),
+            "abcd",
+            0,
+            TAB
+        ))
     );
 }
 
@@ -597,28 +636,34 @@ fn s5_block_delete_and_clipboard_restore_every_line() {
     let index = LineIndex::new(&text);
     let inserted = apply(
         &text,
-        insert(&text, &index, full_caret(10), "abcde", 4)
+        insert(&text, &index, full_caret(10), "abcde", TAB)
             .unwrap()
             .edits,
     )
     .unwrap();
     let index = LineIndex::new(&inserted);
-    let block_rect = Rect::new((0, 10), (LINES - 1, 15));
-    let block = copy(&inserted, &index, block_rect, 4);
+    let block_rect = Rect::new(pos(0, 10), pos(LINES - 1, 15));
+    let block = copy(&inserted, &index, block_rect, TAB);
     assert!(block.rows.iter().all(|row| row == "abcde"));
     let deleted = apply(
         &inserted,
-        delete_block(&inserted, &index, block_rect, 4).edits,
+        delete_block(&inserted, &index, block_rect, TAB).edits,
     )
     .unwrap();
-    assert_eq!(trimmed_display(&deleted, 4), trimmed_display(&text, 4));
-    let pasted = paste(&inserted, &index, Rect::new((0, 40), (0, 40)), &block, 4);
+    assert_eq!(trimmed_display(&deleted, TAB), trimmed_display(&text, TAB));
+    let pasted = paste(
+        &inserted,
+        &index,
+        Rect::new(pos(0, 40), pos(0, 40)),
+        &block,
+        TAB,
+    );
     assert_eq!(pasted.edits.len(), LINES);
     assert_eq!(
         apply(&inserted, pasted.edits).unwrap(),
         every_line(
             &inserted.split('\n').map(str::to_owned).collect::<Vec<_>>(),
-            |line| model_splice(line, 40, 40, "abcde", 5, 4)
+            |line| model_splice(line, col(40), col(40), "abcde", 5, TAB)
         )
     );
 }
@@ -643,8 +688,13 @@ fn column_timings() {
 
     let text = s5_lines(LINES).join("\n");
     let index = LineIndex::new(&text);
-    let block = copy(&text, &index, Rect::new((0, 10), (LINES - 1, 15)), 4);
-    let insert_0 = insert(&text, &index, full_caret(0), "// ", 4).unwrap();
+    let block = copy(
+        &text,
+        &index,
+        Rect::new(pos(0, 10), pos(LINES - 1, 15)),
+        TAB,
+    );
+    let insert_0 = insert(&text, &index, full_caret(0), "// ", TAB).unwrap();
     let report = [
         (
             "LineIndex::new (10k lines)",
@@ -652,31 +702,59 @@ fn column_timings() {
         ),
         (
             "insert \"// \" at column 0",
-            median(|| time(|| insert(&text, &index, full_caret(0), "// ", 4))),
+            median(|| time(|| insert(&text, &index, full_caret(0), "// ", TAB))),
         ),
         (
             "insert \"// \" at column 10",
-            median(|| time(|| insert(&text, &index, full_caret(10), "// ", 4))),
+            median(|| time(|| insert(&text, &index, full_caret(10), "// ", TAB))),
         ),
         (
             "type one key at column 10",
-            median(|| time(|| type_text(&text, &index, full_caret(10), "x", 4))),
+            median(|| time(|| type_text(&text, &index, full_caret(10), "x", TAB))),
         ),
         (
             "backspace at column 10",
-            median(|| time(|| backspace(&text, &index, full_caret(10), 4))),
+            median(|| time(|| backspace(&text, &index, full_caret(10), TAB))),
         ),
         (
             "delete block 10..15",
-            median(|| time(|| delete_block(&text, &index, Rect::new((0, 10), (LINES - 1, 15)), 4))),
+            median(|| {
+                time(|| {
+                    delete_block(
+                        &text,
+                        &index,
+                        Rect::new(pos(0, 10), pos(LINES - 1, 15)),
+                        TAB,
+                    )
+                })
+            }),
         ),
         (
             "copy block 10..15",
-            median(|| time(|| copy(&text, &index, Rect::new((0, 10), (LINES - 1, 15)), 4))),
+            median(|| {
+                time(|| {
+                    copy(
+                        &text,
+                        &index,
+                        Rect::new(pos(0, 10), pos(LINES - 1, 15)),
+                        TAB,
+                    )
+                })
+            }),
         ),
         (
             "paste 10k rows at column 40",
-            median(|| time(|| paste(&text, &index, Rect::new((0, 40), (0, 40)), &block, 4))),
+            median(|| {
+                time(|| {
+                    paste(
+                        &text,
+                        &index,
+                        Rect::new(pos(0, 40), pos(0, 40)),
+                        &block,
+                        TAB,
+                    )
+                })
+            }),
         ),
         (
             "to_bulk of the column-0 insert",

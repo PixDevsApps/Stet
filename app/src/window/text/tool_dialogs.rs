@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::str::FromStr;
 use stet_domain::ops::numbers::{Base, NumberOverflow, NumberSequence, Padding};
 use stet_domain::ops::{Change, SyntaxError, Target, prefix};
-use stet_domain::text::{CharOffset, LineIndex};
+use stet_domain::text::{CharOffset, LineIndex, Position};
 
 /// The response that applies a tool dialog.
 pub const APPLY: &str = "apply";
@@ -94,16 +94,16 @@ where
 fn numbered_lines(buffer: &sourceview5::Buffer, selected: &Range<CharOffset>) -> usize {
     let first = buffer.iter_at_char(selected.start);
     let last = if selected.is_empty() {
-        buffer.total_lines() - 1
+        buffer.last_line()
     } else {
         let end = buffer.iter_at_char(selected.end);
-        if end.line_number() > first.line_number() && end.starts_line() {
-            end.line_number() - 1
+        if end.buffer_line() > first.buffer_line() && end.starts_line() {
+            end.buffer_line() - 1
         } else {
-            end.line_number()
+            end.buffer_line()
         }
     };
-    last - first.line_number() + 1
+    last - first.buffer_line() + 1
 }
 
 fn combo_row(title: &str, choices: &[&str], selected: usize) -> adw::ComboRow {
@@ -248,16 +248,11 @@ fn insert_numbers(
     let (offset, line) = (range.start, index.line_of_char(range.start));
     let column = offset - index.line_chars(line).start;
     let target = if range.is_empty() {
-        Target::Lines(line..index.line_count())
+        Target::Lines(line..index.end_line())
     } else {
         Target::Selection(range)
     };
     prefix::insert_numbers(text, &target, column, numbering).map_err(|overflow: NumberOverflow| {
-        SyntaxError {
-            message: overflow.to_string(),
-            line: line + 1,
-            column: column + 1,
-            offset,
-        }
+        SyntaxError::new(overflow.to_string(), Position::new(line, column), offset)
     })
 }

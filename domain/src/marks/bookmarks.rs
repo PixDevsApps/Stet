@@ -1,11 +1,11 @@
 use std::ops::Range;
 
-use crate::text::{CharOffset, LineIndex, TextEdit};
+use crate::text::{CharOffset, Line, LineIndex, OffsetRange, TextEdit};
 
 /// Bookmarked lines, sorted and unique.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Bookmarks {
-    lines: Vec<usize>,
+    lines: Vec<Line>,
 }
 
 impl Bookmarks {
@@ -13,7 +13,7 @@ impl Bookmarks {
         Self::default()
     }
 
-    pub fn lines(&self) -> &[usize] {
+    pub fn lines(&self) -> &[Line] {
         &self.lines
     }
 
@@ -25,12 +25,12 @@ impl Bookmarks {
         self.lines.is_empty()
     }
 
-    pub fn contains(&self, line: usize) -> bool {
+    pub fn contains(&self, line: Line) -> bool {
         self.lines.binary_search(&line).is_ok()
     }
 
     /// Returns whether the line was not bookmarked before.
-    pub fn insert(&mut self, line: usize) -> bool {
+    pub fn insert(&mut self, line: Line) -> bool {
         match self.lines.binary_search(&line) {
             Ok(_) => false,
             Err(at) => {
@@ -41,7 +41,7 @@ impl Bookmarks {
     }
 
     /// Returns whether the line was bookmarked.
-    pub fn remove(&mut self, line: usize) -> bool {
+    pub fn remove(&mut self, line: Line) -> bool {
         match self.lines.binary_search(&line) {
             Ok(at) => {
                 self.lines.remove(at);
@@ -52,7 +52,7 @@ impl Bookmarks {
     }
 
     /// Toggle Bookmark (Ctrl+F2). Returns whether the line is bookmarked now.
-    pub fn toggle(&mut self, line: usize) -> bool {
+    pub fn toggle(&mut self, line: Line) -> bool {
         if self.remove(line) {
             false
         } else {
@@ -66,7 +66,7 @@ impl Bookmarks {
     }
 
     /// Next Bookmark (F2): the first bookmark below `line`, wrapping to the first one.
-    pub fn next(&self, line: usize) -> Option<usize> {
+    pub fn next(&self, line: Line) -> Option<Line> {
         let index = self.lines.partition_point(|&bookmark| bookmark <= line);
         self.lines
             .get(index)
@@ -75,7 +75,7 @@ impl Bookmarks {
     }
 
     /// Previous Bookmark (Shift+F2): the last bookmark above `line`, wrapping to the last one.
-    pub fn prev(&self, line: usize) -> Option<usize> {
+    pub fn prev(&self, line: Line) -> Option<Line> {
         let index = self.lines.partition_point(|&bookmark| bookmark < line);
         index
             .checked_sub(1)
@@ -84,7 +84,7 @@ impl Bookmarks {
     }
 
     /// The bookmarks within `lines`, for painting the visible part of the gutter.
-    pub fn in_lines(&self, lines: Range<usize>) -> &[usize] {
+    pub fn in_lines(&self, lines: Range<Line>) -> &[Line] {
         let start = self.lines.partition_point(|&line| line < lines.start);
         let end = self.lines.partition_point(|&line| line < lines.end);
         &self.lines[start..end.max(start)]
@@ -94,7 +94,8 @@ impl Bookmarks {
     #[must_use]
     pub fn inverted(&self, line_count: usize) -> Self {
         let mut marked = self.lines.iter().peekable();
-        let lines = (0..line_count)
+        let lines = (Line::ZERO..Line::ZERO + line_count)
+            .iter()
             .filter(|line| {
                 while marked.next_if(|&&marked| marked < *line).is_some() {}
                 marked.peek() != Some(&line)
@@ -105,14 +106,16 @@ impl Bookmarks {
 
     /// Drops bookmarks at or past `line_count`.
     pub fn truncate(&mut self, line_count: usize) {
-        let keep = self.lines.partition_point(|&line| line < line_count);
+        let keep = self
+            .lines
+            .partition_point(|&line| line < Line::ZERO + line_count);
         self.lines.truncate(keep);
     }
 
     /// Moves bookmarks through a line mapping, for example a comparison of the text before and
     /// after a bulk edit. Lines mapped to `None` lose their bookmark.
-    pub fn remap_with(&mut self, mut map: impl FnMut(usize) -> Option<usize>) {
-        let mut lines: Vec<usize> = self.lines.iter().filter_map(|&line| map(line)).collect();
+    pub fn remap_with(&mut self, mut map: impl FnMut(Line) -> Option<Line>) {
+        let mut lines: Vec<Line> = self.lines.iter().filter_map(|&line| map(line)).collect();
         lines.sort_unstable();
         lines.dedup();
         self.lines = lines;
@@ -175,17 +178,17 @@ impl Bookmarks {
     }
 }
 
-impl FromIterator<usize> for Bookmarks {
-    fn from_iter<I: IntoIterator<Item = usize>>(lines: I) -> Self {
-        let mut lines: Vec<usize> = lines.into_iter().collect();
+impl FromIterator<Line> for Bookmarks {
+    fn from_iter<I: IntoIterator<Item = Line>>(lines: I) -> Self {
+        let mut lines: Vec<Line> = lines.into_iter().collect();
         lines.sort_unstable();
         lines.dedup();
         Self { lines }
     }
 }
 
-impl Extend<usize> for Bookmarks {
-    fn extend<I: IntoIterator<Item = usize>>(&mut self, lines: I) {
+impl Extend<Line> for Bookmarks {
+    fn extend<I: IntoIterator<Item = Line>>(&mut self, lines: I) {
         self.lines.extend(lines);
         self.lines.sort_unstable();
         self.lines.dedup();
@@ -196,8 +199,8 @@ impl Extend<usize> for Bookmarks {
 struct Group {
     start: CharOffset,
     end: CharOffset,
-    first_line: usize,
-    last_line: usize,
+    first_line: Line,
+    last_line: Line,
     newlines: usize,
     pure_insert: bool,
 }
@@ -241,45 +244,49 @@ impl Group {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::text::testing::{at, chars};
+    use crate::text::testing::{at, chars, indexes, line, lines};
     use crate::text::{Bias, apply, map_offset, normalize};
     use proptest::prelude::*;
+
+    fn marked(indexes: &[usize]) -> Bookmarks {
+        indexes.iter().copied().map(line).collect()
+    }
 
     fn remapped(text: &str, lines: &[usize], edits: Vec<TextEdit>) -> Vec<usize> {
         let index = LineIndex::new(text);
         let edits = normalize(edits, index.len_chars()).unwrap();
-        let mut bookmarks: Bookmarks = lines.iter().copied().collect();
+        let mut bookmarks = marked(lines);
         bookmarks.remap(&edits, &index);
-        bookmarks.lines().to_vec()
+        indexes(bookmarks.lines())
     }
 
     #[test]
     fn toggles_and_navigates_with_wrapping() {
         let mut bookmarks = Bookmarks::new();
-        assert_eq!(bookmarks.next(3), None);
-        assert!(bookmarks.toggle(5));
-        assert!(bookmarks.toggle(2));
-        assert!(bookmarks.toggle(9));
-        assert!(!bookmarks.toggle(9));
-        assert_eq!(bookmarks.lines(), &[2, 5]);
-        assert_eq!(bookmarks.next(2), Some(5));
-        assert_eq!(bookmarks.next(5), Some(2));
-        assert_eq!(bookmarks.prev(5), Some(2));
-        assert_eq!(bookmarks.prev(2), Some(5));
-        assert_eq!(bookmarks.prev(0), Some(5));
-        assert_eq!(bookmarks.in_lines(3..9), &[5]);
-        assert_eq!(bookmarks.in_lines(6..9), &[] as &[usize]);
+        assert_eq!(bookmarks.next(line(3)), None);
+        assert!(bookmarks.toggle(line(5)));
+        assert!(bookmarks.toggle(line(2)));
+        assert!(bookmarks.toggle(line(9)));
+        assert!(!bookmarks.toggle(line(9)));
+        assert_eq!(indexes(bookmarks.lines()), [2, 5]);
+        assert_eq!(bookmarks.next(line(2)), Some(line(5)));
+        assert_eq!(bookmarks.next(line(5)), Some(line(2)));
+        assert_eq!(bookmarks.prev(line(5)), Some(line(2)));
+        assert_eq!(bookmarks.prev(line(2)), Some(line(5)));
+        assert_eq!(bookmarks.prev(line(0)), Some(line(5)));
+        assert_eq!(indexes(bookmarks.in_lines(lines(3..9))), [5]);
+        assert!(bookmarks.in_lines(lines(6..9)).is_empty());
         bookmarks.clear();
         assert!(bookmarks.is_empty());
-        let single: Bookmarks = [4].into_iter().collect();
-        assert_eq!(single.next(4), Some(4));
+        let single = marked(&[4]);
+        assert_eq!(single.next(line(4)), Some(line(4)));
     }
 
     #[test]
     fn inverts_within_the_line_count() {
-        let bookmarks: Bookmarks = [0, 2, 3, 9].into_iter().collect();
-        assert_eq!(bookmarks.inverted(6).lines(), &[1, 4, 5]);
-        assert_eq!(Bookmarks::new().inverted(2).lines(), &[0, 1]);
+        let bookmarks = marked(&[0, 2, 3, 9]);
+        assert_eq!(indexes(bookmarks.inverted(6).lines()), [1, 4, 5]);
+        assert_eq!(indexes(Bookmarks::new().inverted(2).lines()), [0, 1]);
     }
 
     #[test]
@@ -378,13 +385,13 @@ mod tests {
 
     #[test]
     fn follows_a_mapping_and_drops_stale_lines() {
-        let mut bookmarks: Bookmarks = [1, 4, 7].into_iter().collect();
-        bookmarks.remap_with(|line| (line != 4).then_some(line * 2));
-        assert_eq!(bookmarks.lines(), &[2, 14]);
+        let mut bookmarks = marked(&[1, 4, 7]);
+        bookmarks.remap_with(|at| (at != line(4)).then_some(line(at.get() * 2)));
+        assert_eq!(indexes(bookmarks.lines()), [2, 14]);
         bookmarks.truncate(10);
-        assert_eq!(bookmarks.lines(), &[2]);
-        bookmarks.extend([0, 2]);
-        assert_eq!(bookmarks.lines(), &[0, 2]);
+        assert_eq!(indexes(bookmarks.lines()), [2]);
+        bookmarks.extend([line(0), line(2)]);
+        assert_eq!(indexes(bookmarks.lines()), [0, 2]);
     }
 
     fn edits_for(len: usize) -> impl Strategy<Value = Vec<TextEdit>> {
@@ -412,7 +419,7 @@ mod tests {
             (text, edits, marked) in "[a-c\n]{0,30}".prop_flat_map(|text| {
                 let len = text.chars().count();
                 let lines = text.matches('\n').count() + 1;
-                (Just(text), edits_for(len), prop::collection::vec(0..lines, 0..6))
+                (Just(text), edits_for(len), prop::collection::vec((0..lines).prop_map(line), 0..6))
             })
         ) {
             let before = LineIndex::new(&text);
@@ -422,12 +429,12 @@ mod tests {
             let mut bookmarks: Bookmarks = marked.iter().copied().collect();
             bookmarks.remap(&edits, &before);
             prop_assert!(bookmarks.lines().windows(2).all(|pair| pair[0] < pair[1]));
-            prop_assert!(bookmarks.lines().iter().all(|&line| line < after.line_count()));
+            prop_assert!(bookmarks.lines().iter().all(|&line| line < after.end_line()));
             for &line in &marked {
                 let span = before.line_chars(line);
                 if edits.iter().all(|edit| edit.end() < span.start || edit.start() > span.end) {
                     let moved = after.line_of_char(map_offset(span.start, &edits, Bias::Before));
-                    prop_assert!(bookmarks.contains(moved), "line {line} lost its bookmark");
+                    prop_assert!(bookmarks.contains(moved), "line {line:?} lost its bookmark");
                     prop_assert_eq!(
                         &after_text[after.line_bytes(moved)],
                         &text[before.line_bytes(line)]

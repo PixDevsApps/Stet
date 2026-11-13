@@ -16,6 +16,8 @@ use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::path::Path;
 use stet_domain::actions::{ActionId, KeyScope, OVERRIDDEN_BUILTINS};
+use stet_domain::text::LineNumber;
+use stet_domain::view::TabWidth;
 
 pub(super) const COMMANDS: &[Command] = commands![
     "sandbox-home" (0, 0) => sandbox_home,
@@ -265,9 +267,8 @@ impl Harness {
         let page = self.page()?;
         let line = number(&args[0])?;
         let buffer = page.buffer();
-        let start = line
-            .checked_sub(1)
-            .and_then(|line| buffer.iter_at_line_number(line))
+        let start = LineNumber::new(line)
+            .and_then(|number| buffer.iter_at_line_start(number.index()))
             .ok_or_else(|| format!("there is no line {line}"))?;
         let mut end = start;
         if !end.ends_line() {
@@ -489,7 +490,11 @@ fn indent_choice(word: &str) -> Result<IndentChoice, String> {
         "detect" => IndentChoice::Detect,
         "to-spaces" => IndentChoice::ConvertToSpaces,
         "to-tabs" => IndentChoice::ConvertToTabs,
-        other => match other.strip_prefix("width:").map(str::parse::<u32>) {
+        other => match other
+            .strip_prefix("width:")
+            .and_then(|width| width.parse::<u32>().ok())
+            .map(TabWidth::try_from)
+        {
             Some(Ok(width)) => IndentChoice::Width(width),
             _ => {
                 return Err(format!(

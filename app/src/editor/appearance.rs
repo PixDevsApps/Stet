@@ -101,8 +101,9 @@ impl EditorPage {
         document.indent_source.set(source);
         for page in document.live_pages() {
             let view = page.view();
-            if view.tab_width() != indentation.tab_width {
-                view.set_tab_width(indentation.tab_width);
+            let tab_width = u32::from(indentation.tab_width);
+            if view.tab_width() != tab_width {
+                view.set_tab_width(tab_width);
             }
             view.set_insert_spaces_instead_of_tabs(indentation.insert_spaces);
             view.set_indent_width(-1);

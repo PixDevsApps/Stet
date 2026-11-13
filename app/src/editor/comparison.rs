@@ -18,6 +18,7 @@ use gtk4 as gtk;
 use gtk4::prelude::*;
 use sourceview5::prelude::*;
 use stet_domain::diff::{Comparison, LineKind, Side};
+use stet_domain::text::{Line, OffsetRange};
 
 /// The line tags, by kind, and the scheme styles they take their colour from.
 const LINE_TAGS: [(LineKind, &str, &str); 4] = [
@@ -144,9 +145,9 @@ pub fn clear(page: &EditorPage) {
 pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presented {
     clear(page);
     let buffer = page.buffer();
-    let line_start = |line: usize| {
+    let line_start = |line: Line| {
         buffer
-            .iter_at_line_number(line)
+            .iter_at_line_start(line)
             .unwrap_or_else(|| buffer.end_iter())
     };
     let mut presented = Presented::default();
@@ -157,8 +158,8 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
         buffer.apply_tag(&tag, &start, &line_start(run.lines.end));
         presented.line_runs += 1;
         let mut iter = start;
-        for line in run.lines.clone() {
-            if iter.line_number() != line {
+        for line in run.lines.iter() {
+            if iter.buffer_line() != line {
                 break;
             }
             if iter.ends_line() {
@@ -184,15 +185,15 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
     }
     let height = line_height(page.view());
     presented.line_height = height;
-    let line_count = buffer.total_lines();
+    let end_line = buffer.end_line();
     let (mut top, mut bottom) = (0, 0);
     let mut paints = Vec::new();
     for pad in comparison.alignment.pads(side) {
         let pixels = to_i32(pad.rows).saturating_mul(height);
-        if pad.before == 0 {
+        if pad.before == Line::ZERO {
             top += pixels;
             paints.push(Pad::Above(pixels));
-        } else if pad.before >= line_count {
+        } else if pad.before >= end_line {
             bottom += pixels;
             paints.push(Pad::End(pixels));
         } else {
@@ -223,9 +224,9 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
 
 /// The kind of difference on `line` of `page`'s document, from its tags, for the self-test.
 #[cfg(feature = "selftest")]
-pub fn line_kind_at(page: &EditorPage, line: usize) -> Option<LineKind> {
+pub fn line_kind_at(page: &EditorPage, line: Line) -> Option<LineKind> {
     let buffer = page.buffer();
-    let iter = buffer.iter_at_line_number(line)?;
+    let iter = buffer.iter_at_line_start(line)?;
     LINE_TAGS.iter().find_map(|(kind, name, _)| {
         let tag = buffer.tag_table().lookup(name)?;
         iter.has_tag(&tag).then_some(*kind)
@@ -234,12 +235,12 @@ pub fn line_kind_at(page: &EditorPage, line: usize) -> Option<LineKind> {
 
 /// The character ranges of `line` that the changed-text tag covers, for the self-test.
 #[cfg(feature = "selftest")]
-pub fn inline_ranges_at(page: &EditorPage, line: usize) -> Vec<std::ops::Range<usize>> {
+pub fn inline_ranges_at(page: &EditorPage, line: Line) -> Vec<std::ops::Range<usize>> {
     let buffer = page.buffer();
     let Some(tag) = buffer.tag_table().lookup(INLINE_TAG) else {
         return Vec::new();
     };
-    let Some(mut iter) = buffer.iter_at_line_number(line) else {
+    let Some(mut iter) = buffer.iter_at_line_start(line) else {
         return Vec::new();
     };
     let mut ranges = Vec::new();

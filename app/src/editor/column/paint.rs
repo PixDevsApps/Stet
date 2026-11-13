@@ -12,6 +12,7 @@ use gtk4::prelude::*;
 use gtk4::{gdk, graphene};
 use sourceview5::prelude::*;
 use stet_domain::column::{LineSpan, Rect, VisualPos, locate};
+use stet_domain::text::{Line, OffsetRange};
 
 /// How opaque the block's fill is.
 const FILL_ALPHA: f32 = 0.85;
@@ -21,11 +22,11 @@ const CARET_WIDTH: f32 = 2.0;
 pub(super) fn paint(view: &StetView, rect: Rect, snapshot: &gtk::Snapshot) -> usize {
     let buffer = view.buffer();
     let visible = view.visible_rect();
-    let top = view.line_at_y(visible.y()).0.line_number();
+    let top = view.line_at_y(visible.y()).0.buffer_line();
     let bottom = view
         .line_at_y(visible.y() + visible.height())
         .0
-        .line_number();
+        .buffer_line();
     let (first, last) = (rect.top().max(top), rect.bottom().min(bottom));
     if first > last {
         return 0;
@@ -34,8 +35,8 @@ pub(super) fn paint(view: &StetView, rect: Rect, snapshot: &gtk::Snapshot) -> us
     let advance = to_f32(view.advance());
     let tab = view.tab();
     let mut rows = 0;
-    for line in first..=last {
-        let Some(start) = buffer.iter_at_line_number(line) else {
+    for line in (first..last + 1).iter() {
+        let Some(start) = buffer.iter_at_line_start(line) else {
             break;
         };
         let text = view.line_text(line);
@@ -76,7 +77,7 @@ pub(super) fn pads(view: &StetView, pads: &[Pad], snapshot: &gtk::Snapshot) {
         let (y, height) = match *pad {
             Pad::Above(pixels) => (-pixels, pixels),
             Pad::Below { line, pixels } => {
-                let Some(iter) = buffer.iter_at_line_number(line) else {
+                let Some(iter) = buffer.iter_at_line_start(line) else {
                     continue;
                 };
                 let (y, height) = view.line_yrange(&iter);
@@ -102,16 +103,16 @@ pub(super) fn pads(view: &StetView, pads: &[Pad], snapshot: &gtk::Snapshot) {
 /// line without characters.
 pub(super) fn empty_lines(
     view: &StetView,
-    lines: &[(usize, &'static str)],
+    lines: &[(Line, &'static str)],
     snapshot: &gtk::Snapshot,
 ) {
     let buffer = view.buffer();
     let visible = view.visible_rect();
-    let top = view.line_at_y(visible.y()).0.line_number();
+    let top = view.line_at_y(visible.y()).0.buffer_line();
     let bottom = view
         .line_at_y(visible.y() + visible.height())
         .0
-        .line_number();
+        .buffer_line();
     let mut colors: Vec<(&str, Option<gdk::RGBA>)> = Vec::new();
     let first = lines.partition_point(|(line, _)| *line < top);
     for &(line, style) in lines[first..]
@@ -126,7 +127,7 @@ pub(super) fn empty_lines(
                 color
             }
         };
-        let (Some(color), Some(iter)) = (color, buffer.iter_at_line_number(line)) else {
+        let (Some(color), Some(iter)) = (color, buffer.iter_at_line_start(line)) else {
             continue;
         };
         let (y, height) = view.line_yrange(&iter);
@@ -156,7 +157,7 @@ fn scheme_color(view: &StetView, name: &str) -> Option<gdk::RGBA> {
 /// The x of `pos` in buffer coordinates.
 pub(super) fn x_of(view: &StetView, pos: VisualPos) -> f64 {
     let iter = view.iter_at_pos(pos);
-    let at = locate(&view.line_text(iter.line_number()), pos.column, view.tab());
+    let at = locate(&view.line_text(iter.buffer_line()), pos.column, view.tab());
     f64::from(view.iter_location(&iter).x()) + at.offset_cells() as f64 * view.advance()
 }
 

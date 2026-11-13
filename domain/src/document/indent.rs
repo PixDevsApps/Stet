@@ -3,19 +3,21 @@
 
 /// How much of a text [`detect`] reads: enough lines to see the indentation of most files,
 /// cheap to take from the start of a large one.
+use crate::view::TabWidth;
+
 pub const DETECT_MAX_LINES: usize = 10_000;
 pub const DETECT_MAX_BYTES: usize = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Indentation {
-    pub tab_width: u32,
+    pub tab_width: TabWidth,
     pub insert_spaces: bool,
 }
 
 impl Indentation {
     /// The default: tabs, four columns wide.
     pub const DEFAULT: Self = Self {
-        tab_width: crate::view::DEFAULT_TAB_WIDTH,
+        tab_width: TabWidth::DEFAULT,
         insert_spaces: false,
     };
 
@@ -49,11 +51,11 @@ impl Default for Indentation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Detected {
     pub insert_spaces: bool,
-    pub width: Option<u32>,
+    pub width: Option<TabWidth>,
 }
 
 /// Steps that can be an indentation width, in the order ties are broken.
-const WIDTHS: [usize; 7] = [4, 2, 8, 3, 6, 5, 7];
+const WIDTHS: [u8; 7] = [4, 2, 8, 3, 6, 5, 7];
 
 /// Reads the indentation of the first [`DETECT_MAX_LINES`] lines of `text`: whether more
 /// lines start with a tab or with two or more spaces (a single space is alignment, as in the
@@ -96,16 +98,17 @@ pub fn detect(text: &str) -> Option<Detected> {
             width: None,
         });
     }
-    let best = WIDTHS.into_iter().filter(|&width| steps[width] > 0).fold(
-        None,
-        |best: Option<usize>, width| match best {
-            Some(best) if steps[best] >= steps[width] => Some(best),
+    let best = WIDTHS
+        .into_iter()
+        .filter_map(TabWidth::new)
+        .filter(|width| steps[width.get()] > 0)
+        .fold(None, |best: Option<TabWidth>, width| match best {
+            Some(best) if steps[best.get()] >= steps[width.get()] => Some(best),
             _ => Some(width),
-        },
-    );
+        });
     Some(Detected {
         insert_spaces: true,
-        width: best.and_then(|width| u32::try_from(width).ok()),
+        width: best,
     })
 }
 
@@ -123,10 +126,14 @@ pub fn sample(text: &str) -> &str {
 mod tests {
     use super::*;
 
-    fn spaces(width: u32) -> Detected {
+    fn width(cells: u8) -> TabWidth {
+        TabWidth::new(cells).unwrap()
+    }
+
+    fn spaces(cells: u8) -> Detected {
         Detected {
             insert_spaces: true,
-            width: Some(width),
+            width: Some(width(cells)),
         }
     }
 
@@ -184,7 +191,7 @@ mod tests {
     #[test]
     fn labels_and_merging() {
         let spaces4 = Indentation {
-            tab_width: 4,
+            tab_width: width(4),
             insert_spaces: true,
         };
         assert_eq!(spaces4.label(), "Spaces: 4");
@@ -192,14 +199,14 @@ mod tests {
         assert_eq!(
             Indentation::DEFAULT.with_detected(spaces(2)),
             Indentation {
-                tab_width: 2,
+                tab_width: width(2),
                 insert_spaces: true
             }
         );
         assert_eq!(
             spaces4.with_detected(TABS.unwrap()),
             Indentation {
-                tab_width: 4,
+                tab_width: width(4),
                 insert_spaces: false
             }
         );

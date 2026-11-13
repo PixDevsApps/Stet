@@ -198,7 +198,7 @@ fn byte_order_marks_are_decoded() {
     let (_, files) = search(root, request(root, Query::normal("needle")));
     assert_eq!(paths(&files), ["utf16.txt", "utf8-bom.txt"]);
     let utf16_hit = &files[0].1[0];
-    assert_eq!(utf16_hit.line_number, 2);
+    assert_eq!(utf16_hit.line_number.get(), 2);
     assert_eq!(utf16_hit.line_text, "the needle here");
     assert_eq!(
         &utf16_hit.line_text[utf16_hit.match_ranges[0].clone()],
@@ -242,10 +242,14 @@ fn line_breaks_in_queries_match_any_line_ending() {
         let (_, files) = search(root, request(root, query.clone()));
         assert_eq!(paths(&files), ["cr.txt", "crlf.txt", "lf.txt"], "{query:?}");
         for (path, hits) in &files[1..] {
-            assert_eq!(hits[0].line_number, 2, "{query:?} in {path}");
+            assert_eq!(hits[0].line_number.get(), 2, "{query:?} in {path}");
             assert_eq!(hits[0].line_text, "one", "{query:?} in {path}");
         }
-        assert_eq!(files[0].1[0].line_number, 1, "lines are counted by LF");
+        assert_eq!(
+            files[0].1[0].line_number.get(),
+            1,
+            "lines are counted by LF"
+        );
     }
 }
 
@@ -260,11 +264,11 @@ fn hits_carry_lines_and_ranges() {
     assert_eq!(summary.files_matched, 1);
     let hits = &files[0].1;
     assert_eq!(
-        (hits[0].line_number, hits[0].match_ranges.clone()),
+        (hits[0].line_number.get(), hits[0].match_ranges.clone()),
         (1, std::slice::from_ref(&(4..8)).to_vec())
     );
     assert_eq!(
-        (hits[1].line_number, hits[1].match_ranges.clone()),
+        (hits[1].line_number.get(), hits[1].match_ranges.clone()),
         (2, vec![4..8, 9..13])
     );
     let whole = SearchOptions::new(SearchMode::Normal).with_whole_word(true);
@@ -319,10 +323,16 @@ fn open_documents_are_searched_from_memory() {
     ];
     let (summary, files) = search(root, filtered.clone());
     assert_eq!(paths(&files), ["a.txt", "b.txt"]);
-    let lines: Vec<(u64, &str, usize)> = files[0]
+    let lines: Vec<(usize, &str, usize)> = files[0]
         .1
         .iter()
-        .map(|hit| (hit.line_number, hit.line_text.as_str(), hit.column().get()))
+        .map(|hit| {
+            (
+                hit.line_number.get(),
+                hit.line_text.as_str(),
+                hit.column().get(),
+            )
+        })
         .collect();
     assert_eq!(lines, [(2, "needle in memory", 0), (3, "needle again", 0)]);
     assert_eq!(summary.hits, 3);

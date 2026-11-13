@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use crate::text::{CharOffset, LineIndex, TextEdit};
+use crate::text::{CharOffset, Line, LineIndex, OffsetRange, TextEdit};
 
 use super::Bookmarks;
 
@@ -26,7 +26,7 @@ pub struct Cut {
 
 /// Copy Bookmarked Lines: each bookmarked line with its line break, in order.
 pub fn copy_bookmarked_lines(text: &str, index: &LineIndex, bookmarks: &Bookmarks) -> String {
-    let last = index.line_count() - 1;
+    let last = index.last_line();
     let mut clipboard = String::new();
     for &line in bookmarks.lines().iter().take_while(|&&line| line <= last) {
         clipboard.push_str(&text[index.line_bytes(line)]);
@@ -54,17 +54,17 @@ pub fn delete_bookmarked_lines(index: &LineIndex, bookmarks: &Bookmarks) -> Line
 
 /// Remove Unbookmarked Lines: keeps only the bookmarked lines, which stay bookmarked.
 pub fn delete_unbookmarked_lines(index: &LineIndex, bookmarks: &Bookmarks) -> LineEdit {
-    let line_count = index.line_count();
+    let end = index.end_line();
     let mut marked = bookmarks.lines().iter().copied().peekable();
-    let unmarked = (0..line_count).filter(|&line| {
+    let unmarked = (Line::ZERO..end).iter().filter(|&line| {
         while marked.next_if(|&marked| marked < line).is_some() {}
         marked.peek() != Some(&line)
     });
     let edits = delete_lines(index, unmarked);
-    let kept = bookmarks.lines().partition_point(|&line| line < line_count);
+    let kept = bookmarks.lines().partition_point(|&line| line < end);
     LineEdit {
         edits,
-        bookmarks: (0..kept).collect(),
+        bookmarks: (Line::ZERO..Line::ZERO + kept).iter().collect(),
     }
 }
 
@@ -78,11 +78,8 @@ pub fn paste_to_bookmarked_lines(
 ) -> LineEdit {
     let pasted = clipboard.strip_suffix('\n').unwrap_or(clipboard);
     let added_lines = memchr::memchr_iter(b'\n', pasted.as_bytes()).count();
-    let line_count = index.line_count();
-    let marked = bookmarks
-        .lines()
-        .iter()
-        .take_while(|&&line| line < line_count);
+    let end = index.end_line();
+    let marked = bookmarks.lines().iter().take_while(|&&line| line < end);
     let edits = marked
         .clone()
         .map(|&line| TextEdit::new(index.line_chars(line), pasted))
@@ -97,7 +94,7 @@ pub fn paste_to_bookmarked_lines(
 
 /// Deletions for `lines` (sorted), merged where they touch. A non-empty last line takes the
 /// line break before the run of deleted lines that ends with it.
-fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = usize>) -> Vec<TextEdit> {
+fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = Line>) -> Vec<TextEdit> {
     fn push(ranges: &mut Vec<Range<CharOffset>>, range: Range<CharOffset>) {
         match ranges.last_mut() {
             Some(previous) if previous.end >= range.start => {
@@ -107,7 +104,7 @@ fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = usize>) -> Ve
         }
     }
 
-    let last = index.line_count() - 1;
+    let last = index.last_line();
     let mut ranges: Vec<Range<CharOffset>> = Vec::new();
     for line in lines {
         if line > last {
@@ -130,12 +127,12 @@ fn delete_lines(index: &LineIndex, lines: impl IntoIterator<Item = usize>) -> Ve
 mod tests {
     use super::*;
     use crate::marks::bookmark_lines_of;
-    use crate::text::testing::chars;
+    use crate::text::testing::{chars, indexes, line};
     use crate::text::{ByteOffset, apply};
     use proptest::prelude::*;
 
     fn bookmarks(lines: &[usize]) -> Bookmarks {
-        lines.iter().copied().collect()
+        lines.iter().copied().map(line).collect()
     }
 
     fn after(text: &str, edit: &LineEdit) -> String {
@@ -201,13 +198,13 @@ mod tests {
             })
             .collect();
         let marked: Bookmarks = bookmark_lines_of(&matches, &index).into_iter().collect();
-        assert_eq!(marked.lines(), &[1, 3]);
+        assert_eq!(indexes(marked.lines()), [1, 3]);
         let edit = delete_unbookmarked_lines(&index, &marked);
         assert_eq!(
             after(log, &edit),
             "ERROR disk full\nERROR disk full again\n"
         );
-        assert_eq!(edit.bookmarks.lines(), &[0, 1]);
+        assert_eq!(indexes(edit.bookmarks.lines()), [0, 1]);
     }
 
     #[test]
@@ -227,10 +224,10 @@ mod tests {
         let index = LineIndex::new(text);
         let edit = paste_to_bookmarked_lines(&index, &bookmarks(&[0, 2]), "x\ny\n");
         assert_eq!(after(text, &edit), "x\ny\nb\nx\ny\n");
-        assert_eq!(edit.bookmarks.lines(), &[0, 3]);
+        assert_eq!(indexes(edit.bookmarks.lines()), [0, 3]);
         let edit = paste_to_bookmarked_lines(&index, &bookmarks(&[1]), "new");
         assert_eq!(after(text, &edit), "a\nnew\nc\n");
-        assert_eq!(edit.bookmarks.lines(), &[1]);
+        assert_eq!(indexes(edit.bookmarks.lines()), [1]);
     }
 
     fn expected_without(text: &str, deleted: &[bool]) -> String {
@@ -256,12 +253,12 @@ mod tests {
         fn removals_keep_exactly_the_other_lines(
             (text, marked) in "[a-cé\n]{0,24}".prop_flat_map(|text| {
                 let lines = text.matches('\n').count() + 1;
-                (Just(text), prop::collection::vec(0..lines, 0..8))
+                (Just(text), prop::collection::vec((0..lines).prop_map(line), 0..8))
             })
         ) {
             let index = LineIndex::new(&text);
             let marked: Bookmarks = marked.into_iter().collect();
-            let is_marked: Vec<bool> = (0..index.line_count()).map(|line| marked.contains(line)).collect();
+            let is_marked: Vec<bool> = (0..index.line_count()).map(|at| marked.contains(line(at))).collect();
             let is_unmarked: Vec<bool> = is_marked.iter().map(|marked| !marked).collect();
 
             let removed = delete_bookmarked_lines(&index, &marked);

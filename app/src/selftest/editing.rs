@@ -4,11 +4,12 @@
 use super::registry::{Command, commands};
 use super::script::boolean;
 use super::{Harness, StepResult, equal, number};
-use crate::convert::{BufferPositions, to_u32};
+use crate::convert::{BufferPositions, to_tab_width, to_u32};
 use crate::editor::tabstops;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use sourceview5::prelude::*;
+use stet_domain::text::{Line, LineNumber, OffsetRange, Position};
 
 pub(super) const COMMANDS: &[Command] = commands![
     "type" (1, 1) => type_text,
@@ -36,11 +37,14 @@ impl Harness {
         Ok(())
     }
 
-    /// `cursor <line> <column>`: moves the caret (1-based).
+    /// `cursor <line> <column>`: moves the caret, counting lines and columns from 1.
     fn cursor(&self, args: &[String]) -> StepResult {
         let page = self.page()?;
         let (line, column) = (number(&args[0])?, number(&args[1])?);
-        page.go_to(stet_domain::text::Position::new(line - 1, column - 1));
+        let (Some(line), Some(column)) = (LineNumber::new(line), column.checked_sub(1)) else {
+            return Err("lines and columns count from 1".to_owned());
+        };
+        page.go_to(Position::new(line.index(), column));
         Ok(())
     }
 
@@ -81,12 +85,13 @@ impl Harness {
         equal("selection", selected, args[0].clone())
     }
 
-    /// `assert-cursor <line> <column>`: the caret of the current tab (1-based).
+    /// `assert-cursor <line> <column>`: the caret of the current tab, counting lines and
+    /// columns from 1.
     fn assert_cursor(&self, args: &[String]) -> StepResult {
         let cursor = self.page()?.cursor();
         equal(
             "cursor (line, column)",
-            (cursor.line + 1, cursor.column + 1),
+            (cursor.line.number().get(), cursor.column_number().get()),
             (number(&args[0])?, number(&args[1])?),
         )
     }
@@ -117,7 +122,7 @@ impl Harness {
         let view = page.view();
         let buffer = page.buffer();
         let advance = f64::from(tabstops::space_advance(view)) / f64::from(gtk::pango::SCALE);
-        let tab_width = view.tab_width() as usize;
+        let tab_width = to_tab_width(view.tab_width()).get();
         let expected_stop = tabstops::stop_for(view);
         let stop = tabstops::current_stop(view);
         if stop != Some(expected_stop) {
@@ -127,8 +132,8 @@ impl Harness {
         }
         let mut worst = 0.0f64;
         let mut checked = 0;
-        for line in 0..buffer.total_lines() {
-            let Some(mut iter) = buffer.iter_at_line_number(line) else {
+        for line in (Line::ZERO..buffer.end_line()).iter() {
+            let Some(mut iter) = buffer.iter_at_line_start(line) else {
                 continue;
             };
             let origin = f64::from(view.iter_location(&iter).x());

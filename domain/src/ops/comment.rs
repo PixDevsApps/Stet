@@ -15,7 +15,7 @@ use std::ops::Range;
 use super::{
     Change, Doc, Target, char_len, is_blank, is_blank_char, leading_blanks, trailing_blanks,
 };
-use crate::text::{ByteOffset, CharOffset, TextEdit};
+use crate::text::{ByteOffset, CharOffset, Line, OffsetRange, TextEdit};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CommentTokens {
@@ -80,8 +80,8 @@ pub fn toggle_block(text: &str, target: &Target, tokens: &CommentTokens) -> Chan
         }
         Target::Lines(_) => {
             let lines = doc.lines(target);
-            let first = lines.clone().find_map(|line| line_content(&doc, line));
-            let last = lines.rev().find_map(|line| line_content(&doc, line));
+            let first = lines.iter().find_map(|line| line_content(&doc, line));
+            let last = lines.iter().rev().find_map(|line| line_content(&doc, line));
             match first.zip(last) {
                 Some((first, last)) => (first.start..last.end, None),
                 None => return Change::default(),
@@ -159,12 +159,12 @@ fn line_comments(text: &str, target: &Target, tokens: &CommentTokens, mode: Mode
     };
     let doc = Doc::new(text);
     let lines = doc.lines(target);
-    let mut chosen: Vec<usize> = lines
-        .clone()
+    let mut chosen: Vec<Line> = lines
+        .iter()
         .filter(|&line| !is_blank(doc.line(line)))
         .collect();
     if chosen.is_empty() {
-        chosen = lines.collect();
+        chosen = lines.iter().collect();
     }
     let uncomment = match mode {
         Mode::Comment => false,
@@ -207,7 +207,7 @@ impl Style<'_> {
         }
     }
 
-    fn comment(self, doc: &Doc<'_>, line: usize, indent: usize, edits: &mut Vec<TextEdit>) {
+    fn comment(self, doc: &Doc<'_>, line: Line, indent: usize, edits: &mut Vec<TextEdit>) {
         let at = doc.start(line) + indent;
         match self {
             Self::Line(token) => edits.push(TextEdit::insert(at, format!("{token} "))),
@@ -227,7 +227,7 @@ impl Style<'_> {
         }
     }
 
-    fn uncomment(self, doc: &Doc<'_>, line: usize, edits: &mut Vec<TextEdit>) {
+    fn uncomment(self, doc: &Doc<'_>, line: Line, edits: &mut Vec<TextEdit>) {
         let content = doc.line(line);
         let lead = leading_blanks(content);
         let start = doc.start(line) + lead;
@@ -262,7 +262,7 @@ fn inner_spaces(inner: &str) -> (usize, usize) {
 }
 
 /// The characters of `line` without indentation and trailing blanks; `None` if it is blank.
-fn line_content(doc: &Doc<'_>, line: usize) -> Option<Range<CharOffset>> {
+fn line_content(doc: &Doc<'_>, line: Line) -> Option<Range<CharOffset>> {
     let content = doc.line(line);
     if is_blank(content) {
         return None;
@@ -347,11 +347,14 @@ mod tests {
     #[test]
     fn toggle_comments_at_the_smallest_indentation_and_back() {
         let text = "fn a() {\n    x();\n\n      y();\n}";
-        let commented = applied(text, &toggle_line(text, &Target::Lines(1..4), &rust()));
+        let commented = applied(
+            text,
+            &toggle_line(text, &Target::Lines(lines(1..4)), &rust()),
+        );
         assert_eq!(commented, "fn a() {\n    // x();\n\n    //   y();\n}");
         let restored = applied(
             &commented,
-            &toggle_line(&commented, &Target::Lines(1..4), &rust()),
+            &toggle_line(&commented, &Target::Lines(lines(1..4)), &rust()),
         );
         assert_eq!(restored, text);
     }
@@ -484,7 +487,10 @@ mod tests {
             text
         );
         assert_eq!(
-            applied(text, &toggle_block(text, &Target::Lines(0..3), &rust())),
+            applied(
+                text,
+                &toggle_block(text, &Target::Lines(lines(0..3)), &rust())
+            ),
             "\n  /* a\n  b */  \n\n"
         );
         assert!(toggle_block("  \n", &Target::Document, &rust()).is_empty());
@@ -517,8 +523,8 @@ mod tests {
         fn toggling_twice_restores_uncommented_lines((text, target) in plain_text()) {
             for tokens in [rust(), html()] {
                 let once = applied(&text, &toggle_line(&text, &target.clone(), &tokens));
-                let lines = naive_lines(&text, &target);
-                let twice = applied(&once, &toggle_line(&once, &Target::Lines(lines), &tokens));
+                let range = naive_lines(&text, &target);
+                let twice = applied(&once, &toggle_line(&once, &Target::Lines(lines(range)), &tokens));
                 prop_assert_eq!(twice, text.clone());
             }
         }

@@ -33,7 +33,7 @@ use std::time::Duration;
 use stet_domain::document::tilde;
 use stet_domain::document::{extension_from_globs, save_file_name};
 use stet_domain::nav::{History, Location, Mru};
-use stet_domain::text::{CharOffset, TextEdit};
+use stet_domain::text::{CharOffset, Line, TextEdit};
 
 /// How long Ctrl+Tab has to be held before the switcher shows, so a quick tap never flashes it.
 pub const SWITCHER_DELAY: Duration = Duration::from_millis(120);
@@ -183,8 +183,8 @@ fn caret(page: &EditorPage) -> CharOffset {
     buffer.iter_at_mark(&buffer.get_insert()).char_offset()
 }
 
-fn line_of(page: &EditorPage, offset: CharOffset) -> usize {
-    page.buffer().iter_at_char(offset).line_number()
+fn line_of(page: &EditorPage, offset: CharOffset) -> Line {
+    page.buffer().iter_at_char(offset).buffer_line()
 }
 
 /// The navigation commands: the Ctrl+Tab switcher's steps, and back and forward.
@@ -414,12 +414,12 @@ impl Window {
     /// The history's places as (tab name, line), and the index of the current one, for the
     /// self-test.
     #[cfg(feature = "selftest")]
-    pub fn history_places(&self) -> (Vec<(String, usize)>, Option<usize>) {
+    pub fn history_places(&self) -> (Vec<(String, stet_domain::text::LineNumber)>, Option<usize>) {
         let history = self.inner.nav.history.borrow();
         let places = history
             .entries()
             .iter()
-            .map(|entry| (entry.doc.name(), line_of(&entry.doc, entry.offset) + 1))
+            .map(|entry| (entry.doc.name(), line_of(&entry.doc, entry.offset).number()))
             .collect::<Vec<_>>();
         let current = history.current().and_then(|current| {
             history

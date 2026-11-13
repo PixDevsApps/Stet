@@ -42,6 +42,7 @@ use std::process::Command;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime};
 use stet_domain::actions::{ActionId, ActionKind, ActionScope};
+use stet_domain::text::{Line, LineNumber};
 use stet_domain::theme::Rgb;
 use stet_infrastructure::xdg::StetDirs;
 
@@ -536,6 +537,11 @@ fn build() -> &'static str {
 fn number(word: &str) -> Result<usize, String> {
     word.parse()
         .map_err(|_| format!("expected a number, got {word}"))
+}
+
+/// The line a script names as `number`, counting lines from 1; 0 names the first line too.
+fn script_line(number: usize) -> Line {
+    LineNumber::new(number).map_or(Line::ZERO, LineNumber::index)
 }
 
 fn color(word: &str) -> Result<Rgb, String> {

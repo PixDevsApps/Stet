@@ -10,6 +10,7 @@ use gtk4::{gdk, glib};
 use stet_domain::column::{
     Block, MIME_TYPE, Rect, copy as copy_block, delete_block, paste as paste_block, type_text,
 };
+use stet_domain::text::Line;
 
 /// Copy (or cut) the rectangle; false outside column mode, where GTK copies its selection.
 pub(super) fn copy(view: &StetView, cut: bool) -> bool {
@@ -25,7 +26,7 @@ pub(super) fn copy(view: &StetView, cut: bool) -> bool {
     let block = copy_block(
         &text,
         &index,
-        rect.shift_lines(-first.cast_signed()),
+        rect.shift_lines(-(first - Line::ZERO).cast_signed()),
         view.tab(),
     );
     set_block(&view.clipboard(), &block);

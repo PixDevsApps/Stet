@@ -17,8 +17,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use stet_domain::actions::ActionId;
-use stet_domain::document::location::LineCol;
-use stet_domain::text::counted;
+use stet_domain::text::{CharOffset, Position, counted};
 use stet_infrastructure::search::Hit;
 
 /// Searches kept in the panel; older ones are dropped.
@@ -38,12 +37,11 @@ pub enum FileTarget {
     },
 }
 
-/// A place to jump to: 1-based line, character column and length of the match.
+/// A place to jump to: the match's position and its length in characters.
 #[derive(Clone)]
 pub struct Jump {
     pub target: FileTarget,
-    pub line: u64,
-    pub column: usize,
+    pub position: Position,
     pub length: usize,
 }
 
@@ -89,8 +87,7 @@ impl FileNode {
         });
         Some(Jump {
             target: self.target.clone(),
-            line: hit.line_number,
-            column: column.get(),
+            position: Position::new(hit.line_number.index(), column - CharOffset::ZERO),
             length,
         })
     }
@@ -873,10 +870,7 @@ impl Window {
         };
         let opened = self.open_locations(vec![Location {
             path,
-            position: Some(LineCol::new(
-                u32::try_from(jump.line).unwrap_or(u32::MAX),
-                Some(to_u32(jump.column + 1)),
-            )),
+            position: Some(jump.position.into()),
             create: false,
         }]);
         let Some(page) = opened.into_iter().next() else {
@@ -899,10 +893,8 @@ impl Window {
     fn select_result(&self, page: &EditorPage, jump: &Jump) {
         self.select(page);
         let buffer = page.buffer();
-        let mut start = buffer.iter_at_line_or_last(
-            usize::try_from(jump.line.saturating_sub(1)).unwrap_or(usize::MAX),
-        );
-        for _ in 0..jump.column {
+        let mut start = buffer.iter_at_line_or_last(jump.position.line);
+        for _ in 0..jump.position.column {
             if start.ends_line() {
                 break;
             }

@@ -12,7 +12,7 @@ use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 
 use super::{Breaks, Change, Indent, SyntaxError, Target, reformat_target};
-use crate::text::{LineIndex, Position};
+use crate::text::{Line, LineIndex, LineNumber, Position};
 
 pub type XmlError = SyntaxError;
 
@@ -49,17 +49,11 @@ fn validation_error(text: &str, error: &roxmltree::Error) -> XmlError {
         | roxmltree::Error::UnclosedRootNode
         | roxmltree::Error::UnexpectedEndOfStream => index.end_char(),
         _ => index.offset(Position::new(
-            (position.row as usize).saturating_sub(1),
+            LineNumber::new(position.row as usize).map_or(Line::ZERO, LineNumber::index),
             (position.col as usize).saturating_sub(1),
         )),
     };
-    let Position { line, column } = index.position(offset);
-    SyntaxError {
-        message,
-        line: line + 1,
-        column: column + 1,
-        offset,
-    }
+    SyntaxError::new(message, index.position(offset), offset)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -342,7 +336,7 @@ mod tests {
     #[test]
     fn format_reports_broken_structure() {
         let error = format("<a><b></a>", Indent::default()).unwrap_err();
-        assert_eq!((error.line, error.column), (1, 7));
+        assert_eq!((error.line.get(), error.column.get()), (1, 7));
         assert!(
             error.message.contains("expected `</b>`"),
             "{}",
@@ -350,9 +344,12 @@ mod tests {
         );
         let error = format("<a>\n  <b></b>", Indent::default()).unwrap_err();
         assert_eq!(error.message, "`<a>` is not closed");
-        assert_eq!((error.line, error.column, error.offset.get()), (1, 1, 0));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (1, 1, 0)
+        );
         let error = format("<a><!-- x</a>", Indent::default()).unwrap_err();
-        assert_eq!((error.line, error.column), (1, 4));
+        assert_eq!((error.line.get(), error.column.get()), (1, 4));
         assert!(format("</a>", Indent::default()).is_err());
         assert!(format("<a x=\"1></a>", Indent::default()).is_err());
     }
@@ -369,7 +366,10 @@ mod tests {
         );
         let error = validate("<a>\n  <b></a>").unwrap_err();
         assert_eq!(error.message, "expected 'b' tag, not 'a'");
-        assert_eq!((error.line, error.column, error.offset.get()), (2, 6, 9));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (2, 6, 9)
+        );
         let error = validate("<a x='1' x='2'/>").unwrap_err();
         assert_eq!(error.message, "attribute 'x' is already defined");
         let error = validate("<a>&nope;</a>").unwrap_err();
@@ -378,7 +378,10 @@ mod tests {
         assert_eq!(error.message, "an unknown namespace prefix 'p'");
         let error = validate("<a>\n<b>").unwrap_err();
         assert_eq!(error.message, "the root node was opened but never closed");
-        assert_eq!((error.line, error.column, error.offset.get()), (2, 4, 7));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (2, 4, 7)
+        );
         assert!(validate("<a/><b/>").is_err());
         assert!(validate("").is_err());
         assert!(validate("<a>--<!-- x -- y --></a>").is_err());
@@ -395,7 +398,10 @@ mod tests {
         let text = "x\n<a><b></a>";
         let error =
             format_target(text, &Target::Selection(chars(2..12)), Indent::default()).unwrap_err();
-        assert_eq!((error.line, error.column, error.offset.get()), (2, 7, 8));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (2, 7, 8)
+        );
     }
 
     fn attributes() -> impl Strategy<Value = String> {

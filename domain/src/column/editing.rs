@@ -3,7 +3,8 @@
 use super::rect::{Rect, clamp_lines};
 use super::visual::{locate, next_column, text_width};
 use crate::ops::numbers::NumberOverflow;
-use crate::text::{LineIndex, TextEdit};
+use crate::text::{Line, LineIndex, OffsetRange, TextEdit, VisualColumn};
+use crate::view::TabWidth;
 use std::fmt;
 use std::ops::Range;
 
@@ -50,7 +51,7 @@ pub(super) fn insert(
     index: &LineIndex,
     rect: Rect,
     inserted: &str,
-    tab_width: usize,
+    tab_width: TabWidth,
 ) -> Result<ColumnEdit, ColumnError> {
     single_line(inserted)?;
     let column = rect.left();
@@ -58,10 +59,8 @@ pub(super) fn insert(
         splice(line, column, column, inserted, 0, tab_width)
     });
     let width = text_width(inserted, column, tab_width);
-    let rect = Rect::new(
-        (rect.anchor.line, rect.anchor.column + width),
-        (rect.cursor.line, rect.cursor.column + width),
-    );
+    let shift = |at: super::VisualPos| super::VisualPos::new(at.line, at.column + width);
+    let rect = Rect::new(shift(rect.anchor), shift(rect.cursor));
     Ok(ColumnEdit { edits, rect })
 }
 
@@ -72,7 +71,7 @@ pub fn type_text(
     index: &LineIndex,
     rect: Rect,
     typed: &str,
-    tab_width: usize,
+    tab_width: TabWidth,
 ) -> Result<ColumnEdit, ColumnError> {
     single_line(typed)?;
     let (left, right) = (rect.left(), rect.right());
@@ -84,16 +83,16 @@ pub fn type_text(
 }
 
 /// Deletes the block's cells on every line; the caret ends up at its left column.
-pub fn delete_block(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) -> ColumnEdit {
+pub fn delete_block(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth) -> ColumnEdit {
     delete_cells(text, index, rect, rect.left(), rect.right(), tab_width)
 }
 
 /// Backspace in column mode. A block is deleted. With a caret, the character before the caret
 /// goes on every line when those characters are equally wide, and otherwise one cell; lines
 /// that end before the deleted cells keep their text. Nothing happens at column 0.
-pub fn backspace(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) -> ColumnEdit {
+pub fn backspace(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth) -> ColumnEdit {
     let column = rect.left();
-    if !rect.is_empty() || column == 0 {
+    if !rect.is_empty() || column == VisualColumn::ZERO {
         return delete_block(text, index, rect, tab_width);
     }
     let cells = backspace_cells(line_texts(text, index, rect), column, tab_width);
@@ -103,7 +102,12 @@ pub fn backspace(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) ->
 /// Delete in column mode. A block is deleted. With a caret, the character after the caret goes
 /// on every line when those characters are equally wide, and otherwise one cell. Line ends are
 /// never deleted.
-pub fn delete_forward(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) -> ColumnEdit {
+pub fn delete_forward(
+    text: &str,
+    index: &LineIndex,
+    rect: Rect,
+    tab_width: TabWidth,
+) -> ColumnEdit {
     let column = rect.left();
     if !rect.is_empty() {
         return delete_block(text, index, rect, tab_width);
@@ -116,9 +120,9 @@ fn delete_cells(
     text: &str,
     index: &LineIndex,
     rect: Rect,
-    left: usize,
-    right: usize,
-    tab_width: usize,
+    left: VisualColumn,
+    right: VisualColumn,
+    tab_width: TabWidth,
 ) -> ColumnEdit {
     let edits = edit_lines(text, index, rect.lines(), |_, line| {
         splice(line, left, right, "", 0, tab_width)
@@ -132,12 +136,12 @@ fn delete_cells(
 /// How many cells Backspace deletes before `column` (> 0).
 fn backspace_cells<'a>(
     lines: impl Iterator<Item = &'a str>,
-    column: usize,
-    tab_width: usize,
+    column: VisualColumn,
+    tab_width: TabWidth,
 ) -> usize {
-    let (mut width, mut widest_short) = (None, 0);
+    let (mut width, mut widest_short) = (None, VisualColumn::ZERO);
     for line in lines {
-        let mut reached = 0;
+        let mut reached = VisualColumn::ZERO;
         let mut before = None;
         for ch in line.chars() {
             let next = next_column(reached, ch, tab_width);
@@ -162,8 +166,8 @@ fn backspace_cells<'a>(
 /// How many cells Delete deletes from `column`.
 fn delete_cells_after<'a>(
     lines: impl Iterator<Item = &'a str>,
-    column: usize,
-    tab_width: usize,
+    column: VisualColumn,
+    tab_width: TabWidth,
 ) -> usize {
     let mut width = None;
     for line in lines {
@@ -199,10 +203,11 @@ pub(super) type Splice = (Range<usize>, String);
 pub(super) fn edit_lines(
     text: &str,
     index: &LineIndex,
-    lines: Range<usize>,
-    mut splice: impl FnMut(usize, &str) -> Option<Splice>,
+    lines: Range<Line>,
+    mut splice: impl FnMut(Line, &str) -> Option<Splice>,
 ) -> Vec<TextEdit> {
     clamp_lines(index, lines)
+        .iter()
         .filter_map(|line| {
             let start = index.line_chars(line).start;
             splice(line, &text[index.line_bytes(line)]).map(|(chars, insert)| {
@@ -217,7 +222,9 @@ fn line_texts<'a>(
     index: &'a LineIndex,
     rect: Rect,
 ) -> impl Iterator<Item = &'a str> {
-    clamp_lines(index, rect.lines()).map(|line| &text[index.line_bytes(line)])
+    clamp_lines(index, rect.lines())
+        .iter()
+        .map(|line| &text[index.line_bytes(line)])
 }
 
 /// Replaces cells `left..right` of `line` with `insert`, which then starts exactly at `left`,
@@ -226,11 +233,11 @@ fn line_texts<'a>(
 /// `left` is padded to it. Returns `None` when nothing would change.
 pub(super) fn splice(
     line: &str,
-    left: usize,
-    right: usize,
+    left: VisualColumn,
+    right: VisualColumn,
     insert: &str,
     fill: usize,
-    tab_width: usize,
+    tab_width: TabWidth,
 ) -> Option<Splice> {
     let start = locate(line, left, tab_width);
     let end = if right > left {
@@ -266,6 +273,10 @@ pub(super) fn push_spaces(text: &mut String, count: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::column::testing::pos;
+    use crate::view::TabWidth;
+
+    const TAB: TabWidth = TabWidth::DEFAULT;
     use crate::text::apply;
 
     fn run(text: &str, edit: impl Fn(&str, &LineIndex) -> ColumnEdit) -> (String, Rect) {
@@ -275,14 +286,14 @@ mod tests {
     }
 
     fn caret(top: usize, bottom: usize, column: usize) -> Rect {
-        Rect::new((bottom, column), (top, column))
+        Rect::new(pos(bottom, column), pos(top, column))
     }
 
     #[test]
     fn inserts_at_the_column_padding_short_lines_and_splitting_a_cut_tab() {
         let text = "abcdefgh\t= 3;\nshort\n\n\tx";
         let (result, rect) = run(text, |text, index| {
-            insert(text, index, caret(0, 3, 10), "// ", 4).unwrap()
+            insert(text, index, caret(0, 3, 10), "// ", TAB).unwrap()
         });
         assert_eq!(
             result,
@@ -296,7 +307,7 @@ mod tests {
         let text = "ab\tcd";
         for (column, expected) in [(2, "abX\tcd"), (4, "ab\tXcd"), (3, "ab X cd")] {
             let (result, _) = run(text, |text, index| {
-                insert(text, index, caret(0, 0, column), "X", 4).unwrap()
+                insert(text, index, caret(0, 0, column), "X", TAB).unwrap()
             });
             assert_eq!(result, expected, "column {column}");
         }
@@ -305,10 +316,10 @@ mod tests {
     #[test]
     fn insert_keeps_the_block_and_moves_it_right() {
         let (result, rect) = run("abcdef\nabcdef", |text, index| {
-            insert(text, index, Rect::new((0, 4), (1, 2)), "__", 4).unwrap()
+            insert(text, index, Rect::new(pos(0, 4), pos(1, 2)), "__", TAB).unwrap()
         });
         assert_eq!(result, "ab__cdef\nab__cdef");
-        assert_eq!(rect, Rect::new((0, 6), (1, 4)));
+        assert_eq!(rect, Rect::new(pos(0, 6), pos(1, 4)));
     }
 
     #[test]
@@ -317,7 +328,7 @@ mod tests {
         let mut rect = caret(0, 1, 10);
         for key in ["a", "b", "c", "d", "e"] {
             let index = LineIndex::new(&text);
-            let edit = type_text(&text, &index, rect, key, 4).unwrap();
+            let edit = type_text(&text, &index, rect, key, TAB).unwrap();
             text = apply(&text, edit.edits).unwrap();
             rect = edit.rect;
         }
@@ -328,10 +339,10 @@ mod tests {
     #[test]
     fn typing_over_a_block_replaces_it() {
         let (result, rect) = run("0123456789\n0123\n", |text, index| {
-            type_text(text, index, Rect::new((0, 2), (2, 6)), "xy", 4).unwrap()
+            type_text(text, index, Rect::new(pos(0, 2), pos(2, 6)), "xy", TAB).unwrap()
         });
         assert_eq!(result, "01xy6789\n01xy\n  xy");
-        assert_eq!(rect, Rect::new((0, 4), (2, 4)));
+        assert_eq!(rect, Rect::new(pos(0, 4), pos(2, 4)));
     }
 
     #[test]
@@ -339,11 +350,11 @@ mod tests {
         let index = LineIndex::new("ab");
         for bad in ["a\nb", "\r"] {
             assert_eq!(
-                type_text("ab", &index, caret(0, 0, 1), bad, 4),
+                type_text("ab", &index, caret(0, 0, 1), bad, TAB),
                 Err(ColumnError::LineBreak)
             );
             assert_eq!(
-                insert("ab", &index, caret(0, 0, 1), bad, 4),
+                insert("ab", &index, caret(0, 0, 1), bad, TAB),
                 Err(ColumnError::LineBreak)
             );
         }
@@ -353,12 +364,12 @@ mod tests {
     fn deletes_exactly_the_block_cells() {
         let text = "abcdefgh\t= 3;\n0123456789ABCDEF\nabc\n\t\t\t\tx";
         let (result, rect) = run(text, |text, index| {
-            delete_block(text, index, Rect::new((3, 14), (0, 10)), 4)
+            delete_block(text, index, Rect::new(pos(3, 14), pos(0, 10)), TAB)
         });
         assert_eq!(result, "abcdefgh  3;\n0123456789EF\nabc\n\t\t    x");
         assert_eq!(rect, caret(0, 3, 10));
         let (inside, _) = run("a\tb", |text, index| {
-            delete_block(text, index, Rect::new((0, 2), (0, 3)), 4)
+            delete_block(text, index, Rect::new(pos(0, 2), pos(0, 3)), TAB)
         });
         assert_eq!(inside, "a  b");
     }
@@ -366,15 +377,15 @@ mod tests {
     #[test]
     fn backspace_does_nothing_at_column_zero_and_only_moves_in_virtual_space() {
         let (result, rect) = run("ab\ncd", |text, index| {
-            backspace(text, index, caret(0, 1, 0), 4)
+            backspace(text, index, caret(0, 1, 0), TAB)
         });
         assert_eq!((result.as_str(), rect), ("ab\ncd", caret(0, 1, 0)));
         let (result, rect) = run("ab\ncd", |text, index| {
-            backspace(text, index, caret(0, 1, 5), 4)
+            backspace(text, index, caret(0, 1, 5), TAB)
         });
         assert_eq!((result.as_str(), rect), ("ab\ncd", caret(0, 1, 4)));
         let (result, rect) = run("ab\nabcdef", |text, index| {
-            backspace(text, index, caret(0, 1, 5), 4)
+            backspace(text, index, caret(0, 1, 5), TAB)
         });
         assert_eq!((result.as_str(), rect), ("ab\nabcdf", caret(0, 1, 4)));
     }
@@ -382,11 +393,11 @@ mod tests {
     #[test]
     fn backspace_deletes_equally_wide_characters_whole() {
         let (result, rect) = run("\tfoo\n\tbar\n", |text, index| {
-            backspace(text, index, caret(0, 2, 4), 4)
+            backspace(text, index, caret(0, 2, 4), TAB)
         });
         assert_eq!((result.as_str(), rect), ("foo\nbar\n", caret(0, 2, 0)));
         let (result, rect) = run("ab\tc\nxy\tz", |text, index| {
-            backspace(text, index, caret(0, 1, 4), 4)
+            backspace(text, index, caret(0, 1, 4), TAB)
         });
         assert_eq!((result.as_str(), rect), ("abc\nxyz", caret(0, 1, 2)));
     }
@@ -394,21 +405,21 @@ mod tests {
     #[test]
     fn backspace_deletes_one_cell_when_the_widths_differ() {
         let (result, rect) = run("\tfoo\n    bar\nab", |text, index| {
-            backspace(text, index, caret(0, 2, 4), 4)
+            backspace(text, index, caret(0, 2, 4), TAB)
         });
         assert_eq!(
             (result.as_str(), rect),
             ("   foo\n   bar\nab", caret(0, 2, 3))
         );
         let (result, _) = run("\tfoo\nabc", |text, index| {
-            backspace(text, index, caret(0, 1, 4), 4)
+            backspace(text, index, caret(0, 1, 4), TAB)
         });
         assert_eq!(
             result, "   foo\nabc",
             "a line ending inside the tab's cells"
         );
         let (result, _) = run("a\tb\nabcd", |text, index| {
-            backspace(text, index, caret(0, 1, 3), 4)
+            backspace(text, index, caret(0, 1, 3), TAB)
         });
         assert_eq!(result, "a  b\nabd", "a caret inside a tab");
     }
@@ -416,15 +427,15 @@ mod tests {
     #[test]
     fn delete_forward_deletes_equally_wide_characters_and_never_joins_lines() {
         let (result, rect) = run("\tfoo\n\tbar\n", |text, index| {
-            delete_forward(text, index, caret(0, 2, 0), 4)
+            delete_forward(text, index, caret(0, 2, 0), TAB)
         });
         assert_eq!((result.as_str(), rect), ("foo\nbar\n", caret(0, 2, 0)));
         let (result, rect) = run("ab\ncd", |text, index| {
-            delete_forward(text, index, caret(0, 1, 2), 4)
+            delete_forward(text, index, caret(0, 1, 2), TAB)
         });
         assert_eq!((result.as_str(), rect), ("ab\ncd", caret(0, 1, 2)));
         let (result, _) = run("\tfoo\nabcde", |text, index| {
-            delete_forward(text, index, caret(0, 1, 0), 4)
+            delete_forward(text, index, caret(0, 1, 0), TAB)
         });
         assert_eq!(result, "   foo\nbcde");
     }

@@ -4,6 +4,8 @@ use proptest::prelude::*;
 
 use super::align::Pad;
 use super::*;
+use crate::text::OffsetRange;
+use crate::text::testing as t;
 
 fn lines(text: &str) -> Vec<&str> {
     text.split('\n').collect()
@@ -15,9 +17,9 @@ fn apply_hunks(left: &str, right: &str, comparison: &Comparison) -> String {
     let mut out: Vec<&str> = Vec::new();
     let mut next = 0;
     for hunk in &comparison.hunks {
-        out.extend(&left[next..hunk.left.start]);
-        out.extend(&right[hunk.right.clone()]);
-        next = hunk.left.end;
+        out.extend(&left[next..hunk.left.start.get()]);
+        out.extend(&right[hunk.right.get()]);
+        next = hunk.left.end.get();
     }
     out.extend(&left[next..]);
     out.join("\n")
@@ -25,7 +27,7 @@ fn apply_hunks(left: &str, right: &str, comparison: &Comparison) -> String {
 
 fn rows(alignment: &Alignment) -> Vec<(Option<usize>, Option<usize>)> {
     let line = |slot| match slot {
-        RowSlot::Line(line) => Some(line),
+        RowSlot::Line(line) => Some(line.get()),
         RowSlot::Pad { .. } => None,
     };
     (0..alignment.rows())
@@ -51,7 +53,7 @@ fn identical_texts_have_no_hunks_and_align_line_for_line() {
     assert_eq!(comparison.alignment.rows(), 4);
     assert_eq!(comparison.alignment.chunks().len(), 1);
     assert!(comparison.alignment.pads(Side::Left).is_empty());
-    for line in 0..4 {
+    for line in (Line::ZERO..t::line(4)).iter() {
         assert_eq!(
             comparison.alignment.counterpart(Side::Left, line),
             Some(line)
@@ -67,8 +69,8 @@ fn an_added_line_pads_the_left_view() {
         comparison.hunks,
         vec![Hunk {
             kind: HunkKind::Added,
-            left: 1..1,
-            right: 1..2,
+            left: t::lines(1..1),
+            right: t::lines(1..2),
         }]
     );
     assert_eq!(
@@ -82,11 +84,20 @@ fn an_added_line_pads_the_left_view() {
     );
     assert_eq!(
         comparison.alignment.pads(Side::Left),
-        vec![Pad { before: 1, rows: 1 }]
+        vec![Pad {
+            before: t::line(1),
+            rows: 1
+        }]
     );
-    assert_eq!(comparison.line_kind(Side::Right, 1), Some(LineKind::Added));
-    assert_eq!(comparison.line_kind(Side::Right, 2), None);
-    assert_eq!(comparison.alignment.counterpart(Side::Left, 1), Some(2));
+    assert_eq!(
+        comparison.line_kind(Side::Right, t::line(1)),
+        Some(LineKind::Added)
+    );
+    assert_eq!(comparison.line_kind(Side::Right, t::line(2)), None);
+    assert_eq!(
+        comparison.alignment.counterpart(Side::Left, t::line(1)),
+        Some(t::line(2))
+    );
     assert_eq!(comparison.stats.added, 1);
 }
 
@@ -97,15 +108,21 @@ fn a_removed_line_pads_the_right_view() {
         comparison.hunks,
         vec![Hunk {
             kind: HunkKind::Removed,
-            left: 1..2,
-            right: 1..1,
+            left: t::lines(1..2),
+            right: t::lines(1..1),
         }]
     );
     assert_eq!(
         comparison.alignment.pads(Side::Right),
-        vec![Pad { before: 1, rows: 1 }]
+        vec![Pad {
+            before: t::line(1),
+            rows: 1
+        }]
     );
-    assert_eq!(comparison.line_kind(Side::Left, 1), Some(LineKind::Removed));
+    assert_eq!(
+        comparison.line_kind(Side::Left, t::line(1)),
+        Some(LineKind::Removed)
+    );
     assert_eq!(comparison.stats.removed, 1);
 }
 
@@ -120,26 +137,26 @@ fn a_changed_line_carries_the_columns_that_differ() {
         comparison.hunks,
         vec![Hunk {
             kind: HunkKind::Changed,
-            left: 1..2,
-            right: 1..2,
+            left: t::lines(1..2),
+            right: t::lines(1..2),
         }]
     );
     assert_eq!(
         comparison.inline,
         vec![InlineDiff {
-            left_line: 1,
-            right_line: 1,
+            left_line: t::line(1),
+            right_line: t::line(1),
             left: vec![12..13],
             right: vec![12..13],
         }]
     );
     assert_eq!(
         comparison
-            .inline_at(Side::Right, 1)
+            .inline_at(Side::Right, t::line(1))
             .map(|d| d.columns(Side::Left)),
         Some(&[12..13][..])
     );
-    assert_eq!(comparison.inline_at(Side::Right, 0), None);
+    assert_eq!(comparison.inline_at(Side::Right, t::line(0)), None);
     assert_eq!(comparison.stats.changed, 1);
 }
 
@@ -152,8 +169,8 @@ fn a_block_pairs_similar_lines_and_shows_the_rest_beside_padding() {
         comparison.hunks,
         vec![Hunk {
             kind: HunkKind::Changed,
-            left: 1..3,
-            right: 1..5,
+            left: t::lines(1..3),
+            right: t::lines(1..5),
         }]
     );
     assert_eq!(
@@ -171,22 +188,31 @@ fn a_block_pairs_similar_lines_and_shows_the_rest_beside_padding() {
         comparison.line_runs(Side::Right),
         &[
             LineRun {
-                lines: 1..2,
+                lines: t::lines(1..2),
                 kind: LineKind::Added,
             },
             LineRun {
-                lines: 2..4,
+                lines: t::lines(2..4),
                 kind: LineKind::Changed,
             },
             LineRun {
-                lines: 4..5,
+                lines: t::lines(4..5),
                 kind: LineKind::Added,
             },
         ]
     );
     assert_eq!(
         comparison.alignment.pads(Side::Left),
-        vec![Pad { before: 1, rows: 1 }, Pad { before: 3, rows: 1 }]
+        vec![
+            Pad {
+                before: t::line(1),
+                rows: 1
+            },
+            Pad {
+                before: t::line(3),
+                rows: 1
+            }
+        ]
     );
     assert_eq!(comparison.hunk_rows(0), 1..5);
 }
@@ -205,8 +231,14 @@ fn unpaired_lines_of_a_block_share_rows() {
             (Some(3), Some(2)),
         ]
     );
-    assert_eq!(comparison.line_kind(Side::Left, 2), Some(LineKind::Removed));
-    assert_eq!(comparison.line_kind(Side::Right, 1), Some(LineKind::Added));
+    assert_eq!(
+        comparison.line_kind(Side::Left, t::line(2)),
+        Some(LineKind::Removed)
+    );
+    assert_eq!(
+        comparison.line_kind(Side::Right, t::line(1)),
+        Some(LineKind::Added)
+    );
 }
 
 #[test]
@@ -216,8 +248,8 @@ fn a_missing_final_newline_is_an_empty_last_line() {
         comparison.hunks,
         vec![Hunk {
             kind: HunkKind::Removed,
-            left: 1..2,
-            right: 1..1,
+            left: t::lines(1..2),
+            right: t::lines(1..1),
         }]
     );
     assert_eq!(comparison.alignment.line_count(Side::Left), 2);
@@ -279,7 +311,10 @@ fn ignored_empty_lines_are_aligned_against_padding() {
         rows(&comparison.alignment),
         vec![(Some(0), Some(0)), (Some(1), None), (Some(2), Some(1))]
     );
-    assert_eq!(comparison.alignment.counterpart(Side::Left, 2), Some(1));
+    assert_eq!(
+        comparison.alignment.counterpart(Side::Left, t::line(2)),
+        Some(t::line(1))
+    );
 
     let whitespace_only = CompareOptions {
         ignore_whitespace: IgnoreWhitespace::Changes,
@@ -292,12 +327,12 @@ fn ignored_empty_lines_are_aligned_against_padding() {
         comparison.hunks,
         vec![Hunk {
             kind: HunkKind::Removed,
-            left: 2..3,
-            right: 1..1,
+            left: t::lines(2..3),
+            right: t::lines(1..1),
         }]
     );
-    assert_eq!(comparison.line_kind(Side::Left, 1), None);
-    assert_eq!(comparison.line_kind(Side::Left, 3), None);
+    assert_eq!(comparison.line_kind(Side::Left, t::line(1)), None);
+    assert_eq!(comparison.line_kind(Side::Left, t::line(3)), None);
 }
 
 #[test]
@@ -307,11 +342,11 @@ fn a_moved_block_is_reported_on_both_sides() {
     let comparison = compare(left, right, &exact());
     assert_eq!(comparison.moves.len(), 1);
     let moved = &comparison.moves[0];
-    assert_eq!(moved.left.len(), 3);
-    assert_eq!(moved.right.len(), 3);
+    assert_eq!(moved.left.iter().len(), 3);
+    assert_eq!(moved.right.iter().len(), 3);
     assert_eq!(
-        lines(left)[moved.left.clone()],
-        lines(right)[moved.right.clone()]
+        lines(left)[moved.left.get()],
+        lines(right)[moved.right.get()]
     );
     assert!(
         comparison
@@ -354,20 +389,20 @@ fn navigation_steps_between_hunks_by_row() {
     let starts: Vec<usize> = comparison
         .hunks
         .iter()
-        .map(|hunk| hunk.left.start)
+        .map(|hunk| hunk.left.start.get())
         .collect();
     assert_eq!(starts, vec![1, 4, 7]);
-    assert_eq!(comparison.next_hunk(Side::Left, 0), Some(0));
-    assert_eq!(comparison.next_hunk(Side::Left, 1), Some(1));
-    assert_eq!(comparison.next_hunk(Side::Left, 4), Some(2));
-    assert_eq!(comparison.next_hunk(Side::Left, 7), None);
-    assert_eq!(comparison.prev_hunk(Side::Left, 7), Some(1));
-    assert_eq!(comparison.prev_hunk(Side::Left, 1), Some(0));
-    assert_eq!(comparison.prev_hunk(Side::Left, 0), None);
-    assert_eq!(comparison.next_hunk(Side::Right, 1), Some(1));
-    assert_eq!(comparison.hunk_at(Side::Left, 4), Some(1));
-    assert_eq!(comparison.hunk_at(Side::Left, 5), None);
-    assert_eq!(comparison.hunk_at(Side::Right, 1), Some(0));
+    assert_eq!(comparison.next_hunk(Side::Left, t::line(0)), Some(0));
+    assert_eq!(comparison.next_hunk(Side::Left, t::line(1)), Some(1));
+    assert_eq!(comparison.next_hunk(Side::Left, t::line(4)), Some(2));
+    assert_eq!(comparison.next_hunk(Side::Left, t::line(7)), None);
+    assert_eq!(comparison.prev_hunk(Side::Left, t::line(7)), Some(1));
+    assert_eq!(comparison.prev_hunk(Side::Left, t::line(1)), Some(0));
+    assert_eq!(comparison.prev_hunk(Side::Left, t::line(0)), None);
+    assert_eq!(comparison.next_hunk(Side::Right, t::line(1)), Some(1));
+    assert_eq!(comparison.hunk_at(Side::Left, t::line(4)), Some(1));
+    assert_eq!(comparison.hunk_at(Side::Left, t::line(5)), None);
+    assert_eq!(comparison.hunk_at(Side::Right, t::line(1)), Some(0));
 }
 
 #[test]
@@ -461,6 +496,7 @@ fn check_structure(comparison: &Comparison, left: &str, right: &str) -> Result<(
     prop_assert_eq!(listed(Side::Right), (0..counts[1]).collect::<Vec<_>>());
     for side in [Side::Left, Side::Right] {
         for line in 0..counts[side.index()] {
+            let line = t::line(line);
             let row = alignment.row_of(side, line);
             prop_assert_eq!(alignment.slot(side, row), RowSlot::Line(line));
             if let Some(other) = alignment.counterpart(side, line) {
@@ -484,9 +520,12 @@ fn check_structure(comparison: &Comparison, left: &str, right: &str) -> Result<(
     }
     for side in [Side::Left, Side::Right] {
         for run in comparison.line_runs(side) {
-            for line in run.lines.clone() {
+            for line in run.lines.iter() {
                 let hunk = comparison.hunk_at(side, line);
-                prop_assert!(hunk.is_some(), "{side:?} line {line} is outside every hunk");
+                prop_assert!(
+                    hunk.is_some(),
+                    "{side:?} line {line:?} is outside every hunk"
+                );
             }
         }
     }
@@ -501,7 +540,7 @@ fn check_structure(comparison: &Comparison, left: &str, right: &str) -> Result<(
             Some(LineKind::Changed)
         );
         for side in [Side::Left, Side::Right] {
-            let width = texts[side.index()][diff.line(side)].chars().count();
+            let width = texts[side.index()][diff.line(side).get()].chars().count();
             let columns = diff.columns(side);
             prop_assert!(columns.iter().all(|c| c.start < c.end && c.end <= width));
             prop_assert!(columns.windows(2).all(|pair| pair[0].end <= pair[1].start));

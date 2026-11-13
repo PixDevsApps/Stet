@@ -210,7 +210,7 @@ impl Window {
         let found = Match {
             start: start.char_offset(),
             end: end.char_offset(),
-            line: start.line_number(),
+            line: start.buffer_line(),
         };
         let matcher = Arc::clone(&compiled.matcher);
         let window = self.clone();

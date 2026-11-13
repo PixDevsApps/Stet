@@ -16,7 +16,7 @@ use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use stet_domain::search::{Query, Translated};
-use stet_domain::text::CharOffset;
+use stet_domain::text::{CharOffset, Line};
 use stet_infrastructure::search::{Match, Matcher};
 
 /// The tag that shows our own matcher's matches, styled like GtkSourceView's `search-match`.
@@ -251,17 +251,17 @@ impl PageSearch {
         let rect = view.visible_rect();
         let top = view
             .iter_at_location(rect.x(), rect.y())
-            .map_or(0, |iter| iter.line_number());
+            .map_or(Line::ZERO, |iter| iter.buffer_line());
         let bottom = view
             .iter_at_location(rect.x(), rect.y() + rect.height())
-            .map_or_else(|| buffer.total_lines(), |iter| iter.line_number());
+            .map_or_else(|| buffer.end_line(), |iter| iter.buffer_line());
         let first_line = top.saturating_sub(TAG_MARGIN_LINES);
         let last_line = bottom.saturating_add(TAG_MARGIN_LINES);
         let start = buffer
-            .iter_at_line_number(first_line)
+            .iter_at_line_start(first_line)
             .map_or(CharOffset::ZERO, |iter| iter.char_offset());
         let end = buffer
-            .iter_at_line_number(last_line)
+            .iter_at_line_start(last_line)
             .map_or_else(|| buffer.end_char(), |iter| iter.char_offset());
         let matches = &own.matches;
         let from = matches.partition_point(|found| found.end < start);

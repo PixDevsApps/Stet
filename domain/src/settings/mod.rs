@@ -7,6 +7,7 @@ mod keymap;
 
 use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
+use std::num::NonZeroUsize;
 use std::ops::{Range, RangeInclusive};
 use std::time::Duration;
 
@@ -14,18 +15,20 @@ use toml::Spanned;
 use toml::de::{DeTable, DeValue};
 
 use crate::document::indent::Indentation;
-use crate::view::{DEFAULT_FONT_SIZE_PT, HIGHLIGHT_MAX_BYTES, HIGHLIGHT_MAX_LINES};
+use crate::text::{Line, LineNumber, Position};
+use crate::view::{DEFAULT_FONT_SIZE_PT, HIGHLIGHT_MAX_BYTES, HIGHLIGHT_MAX_LINES, TabWidth};
 
 pub use keymap::{Canonical, Keymap, default_keys_file};
 
 pub const CONFIG_FILE: &str = "config.toml";
 pub const KEYS_FILE: &str = "keys.toml";
 
-/// A mistake in a settings file, at a 1-based line and column (counted in characters).
+/// A mistake in a settings file, at a line and column (counted in characters) as people count
+/// them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileError {
-    pub line: usize,
-    pub column: usize,
+    pub line: LineNumber,
+    pub column: NonZeroUsize,
     pub message: String,
 }
 
@@ -37,9 +40,13 @@ impl FileError {
             byte -= 1;
         }
         let line_start = text[..byte].rfind('\n').map_or(0, |at| at + 1);
+        let position = Position::new(
+            Line::new(text[..line_start].matches('\n').count()),
+            text[line_start..byte].chars().count(),
+        );
         Self {
-            line: text[..line_start].matches('\n').count() + 1,
-            column: text[line_start..byte].chars().count() + 1,
+            line: position.line.number(),
+            column: position.column_number(),
             message: message.into(),
         }
     }
@@ -113,7 +120,7 @@ fn edit_distance(a: &str, b: &str) -> usize {
 /// defaults for the language, then from the global settings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct LanguageIndent {
-    pub tab_width: Option<u32>,
+    pub tab_width: Option<TabWidth>,
     pub insert_spaces: Option<bool>,
 }
 
@@ -139,9 +146,9 @@ const fn tabs() -> LanguageIndent {
     }
 }
 
-const fn spaces(width: u32) -> LanguageIndent {
+const fn spaces(width: u8) -> LanguageIndent {
     LanguageIndent {
-        tab_width: Some(width),
+        tab_width: TabWidth::new(width),
         insert_spaces: Some(true),
     }
 }
@@ -256,7 +263,7 @@ settings! {
     font_size: u32 = DEFAULT_FONT_SIZE_PT as u32, Number(4..=72) {
         note: "points; zoom (Ctrl++ and Ctrl+-) adds to it",
     }
-    tab_width: u32 = Indentation::DEFAULT.tab_width, Number(TAB_WIDTHS) {
+    tab_width: TabWidth = Indentation::DEFAULT.tab_width, Number(TAB_WIDTHS) {
         heading: ["Indentation of new documents, and of files whose own can't be detected."],
     }
     insert_spaces: bool = Indentation::DEFAULT.insert_spaces, Flag {
@@ -535,6 +542,10 @@ fn default_entry(out: &mut String, name: &str, shown: &str, note: &str) {
 mod tests {
     use super::*;
 
+    fn width(cells: u8) -> TabWidth {
+        TabWidth::new(cells).unwrap()
+    }
+
     fn errors(text: &str) -> Vec<String> {
         Settings::parse(text)
             .unwrap_err()
@@ -568,7 +579,7 @@ mod tests {
                 settings.tab_width,
                 settings.insert_spaces
             ),
-            (13, 2, true)
+            (13, width(2), true)
         );
         assert!(!settings.detect_indentation && settings.word_wrap && settings.show_whitespace);
         assert!(settings.document_map && !settings.smart_highlight && settings.word_count);
@@ -581,7 +592,7 @@ mod tests {
         assert_eq!(
             settings.languages["python"],
             LanguageIndent {
-                tab_width: Some(2),
+                tab_width: Some(width(2)),
                 insert_spaces: None
             }
         );
@@ -648,9 +659,9 @@ mod tests {
     #[test]
     fn positions_count_characters() {
         let error = FileError::at("ø = 1\nab", 8, "x");
-        assert_eq!((error.line, error.column), (2, 2));
+        assert_eq!((error.line.get(), error.column.get()), (2, 2));
         let error = FileError::at("ø", 1, "inside a character");
-        assert_eq!((error.line, error.column), (1, 1));
+        assert_eq!((error.line.get(), error.column.get()), (1, 1));
     }
 
     #[test]
@@ -659,7 +670,7 @@ mod tests {
         assert_eq!(
             settings.indentation_for(None),
             Indentation {
-                tab_width: 3,
+                tab_width: width(3),
                 insert_spaces: true
             }
         );
@@ -667,28 +678,28 @@ mod tests {
         assert_eq!(
             settings.indentation_for(Some("makefile")),
             Indentation {
-                tab_width: 3,
+                tab_width: width(3),
                 insert_spaces: false
             }
         );
         assert_eq!(
             settings.indentation_for(Some("yaml")),
             Indentation {
-                tab_width: 2,
+                tab_width: width(2),
                 insert_spaces: true
             }
         );
         settings.languages.insert(
             "yaml".to_owned(),
             LanguageIndent {
-                tab_width: Some(4),
+                tab_width: Some(width(4)),
                 insert_spaces: None,
             },
         );
         assert_eq!(
             settings.indentation_for(Some("yaml")),
             Indentation {
-                tab_width: 4,
+                tab_width: width(4),
                 insert_spaces: true
             }
         );

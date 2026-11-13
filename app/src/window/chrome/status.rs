@@ -16,7 +16,7 @@ use gtk4::{gio, glib};
 use sourceview5::prelude::*;
 use std::cell::RefCell;
 use std::time::Duration;
-use stet_domain::text::plural;
+use stet_domain::text::{LineNumber, OffsetRange, VisualColumn, plural};
 use stet_domain::text::{count_words, grouped};
 
 /// How long the text must rest before its words are counted again.
@@ -134,9 +134,16 @@ impl StatusBar {
         }
     }
 
-    /// 1-based line and column; `selected` counts characters, `lines` the lines the
-    /// selection touches (`Sel 12 | 2`).
-    pub fn set_position(&self, line: usize, column: usize, selected: usize, lines: usize) {
+    /// The caret's line and visual column, shown counted from 1; `selected` counts
+    /// characters, `lines` the lines the selection touches (`Sel 12 | 2`).
+    pub fn set_position(
+        &self,
+        line: LineNumber,
+        column: VisualColumn,
+        selected: usize,
+        lines: usize,
+    ) {
+        let column = column.get() + 1;
         let label = if selected == 0 {
             format!("Ln {line}, Col {column}, Sel 0")
         } else {
@@ -190,7 +197,14 @@ impl StatusBar {
 
     /// Column mode: the cursor corner, virtual columns included, and the rectangle's
     /// rows × columns (`Sel 3×4`).
-    pub fn set_column_position(&self, line: usize, column: usize, rows: usize, columns: usize) {
+    pub fn set_column_position(
+        &self,
+        line: LineNumber,
+        column: VisualColumn,
+        rows: usize,
+        columns: usize,
+    ) {
+        let column = column.get() + 1;
         self.position
             .set_label(&format!("Ln {line}, Col {column}, Sel {rows}×{columns}"));
     }
@@ -255,27 +269,27 @@ impl Window {
         let view = page.view();
         let cursor = buffer.iter_at_mark(&buffer.get_insert());
         let (selected, lines) = buffer.selection_bounds().map_or((0, 0), |(start, end)| {
-            let last = if end.line_number() > start.line_number() && end.starts_line() {
-                end.line_number() - 1
+            let last = if end.buffer_line() > start.buffer_line() && end.starts_line() {
+                end.buffer_line() - 1
             } else {
-                end.line_number()
+                end.buffer_line()
             };
             (
                 end.char_offset() - start.char_offset(),
-                last - start.line_number() + 1,
+                last - start.buffer_line() + 1,
             )
         });
         let status = &self.inner.status;
         match page.column_view().rect() {
             Some(rect) => status.set_column_position(
-                rect.cursor.line + 1,
-                rect.cursor.column + 1,
-                rect.lines().len(),
+                rect.cursor.line.number(),
+                rect.cursor.column,
+                rect.lines().iter().len(),
                 rect.width(),
             ),
             None => status.set_position(
-                cursor.line_number() + 1,
-                view.visual_column(&cursor) as usize + 1,
+                cursor.display_line(),
+                VisualColumn::new(view.visual_column(&cursor) as usize),
                 selected,
                 lines,
             ),

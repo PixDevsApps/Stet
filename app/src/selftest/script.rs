@@ -6,10 +6,12 @@
 
 use std::fmt;
 
+use stet_domain::text::{Line, LineNumber};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
-    /// 1-based line in the script.
-    pub line: usize,
+    /// The step's line in the script.
+    pub line: LineNumber,
     /// The line as written, for the report.
     pub source: String,
     pub command: String,
@@ -18,7 +20,7 @@ pub struct Step {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
-    pub line: usize,
+    pub line: LineNumber,
     pub message: String,
 }
 
@@ -38,7 +40,7 @@ fn arity(command: &str) -> Option<(usize, usize)> {
 pub fn parse(text: &str, vars: &[(&str, &str)]) -> Result<Vec<Step>, ParseError> {
     let mut steps = Vec::new();
     for (index, raw) in text.lines().enumerate() {
-        let line = index + 1;
+        let line = Line::new(index).number();
         let source = raw.trim();
         if source.is_empty() || source.starts_with('#') {
             continue;
@@ -216,7 +218,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(steps.len(), 2);
-        assert_eq!(steps[0].line, 3);
+        assert_eq!(steps[0].line.get(), 3);
         assert_eq!(steps[0].command, "open");
         assert_eq!(steps[0].args, ["/tmp/run/a.rs", "b.txt:40"]);
         assert_eq!(steps[1].args, ["fn main() {\n\t\"x\"\n}"]);
@@ -250,7 +252,7 @@ mod tests {
         ] {
             let error = parse(script, VARS).unwrap_err();
             assert_eq!(error.message, message, "{script}");
-            assert_eq!(error.line, 1);
+            assert_eq!(error.line.get(), 1);
         }
     }
 
@@ -259,7 +261,7 @@ mod tests {
         let steps = parse("launch-file $TMP/a x\nassert-focus editor", VARS).unwrap();
         assert_eq!(steps[0].args, ["/tmp/run/a", "x"]);
         let error = parse("assert-focus editor\nlaunch-file $TMP/a x", VARS).unwrap_err();
-        assert_eq!(error.line, 2);
+        assert_eq!(error.line.get(), 2);
         assert_eq!(
             error.message,
             "launch-file must come before every other step"
@@ -271,7 +273,7 @@ mod tests {
         let steps = parse("session-commit\nquit signal TERM", VARS).unwrap();
         assert_eq!(steps[1].args, ["signal", "TERM"]);
         let error = parse("quit\nsession-commit", VARS).unwrap_err();
-        assert_eq!(error.line, 2);
+        assert_eq!(error.line.get(), 2);
         assert_eq!(error.message, "quit must be the last step");
     }
 

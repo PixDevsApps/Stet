@@ -29,7 +29,7 @@ The domain keeps formats that are its models' own contracts: `session.json` *is*
 
 | Context | Module | Holds |
 | --- | --- | --- |
-| Text | `text` | Character and byte offsets as types of their own (`CharOffset`, `ByteOffset`, `units`) and conversions between characters, bytes and lines (`offset`), `TextEdit` and offset mapping, line endings, `Selection`, character rules (the NUL placeholder, word characters), count wording. |
+| Text | `text` | Character and byte offsets, lines and visual columns as types of their own (`CharOffset`, `ByteOffset`, `Line` counted from 0 for storage and logic, `LineNumber` counted from 1 for display and parsing, `VisualColumn`; `units`) and conversions between characters, bytes and lines (`offset`), `TextEdit` and offset mapping, line endings, `Selection`, character rules (the NUL placeholder, word characters), count wording. |
 | Document | `document` | Names and titles, untitled tabs, indentation, language hints, `file:line:col`, the document's read-only and loss state, and **which banners a tab shows** (`banners_for`). |
 | Search | `search` | The query, the regex dialect translated to PCRE2, replacement templates, history, smart highlighting, report sentences, Replace in Files' rules. |
 | Editing operations | `ops`, `column` | The text tools (case, lines, comments, numbers, JSON, XML) as pure functions returning edits; column mode's rectangles and edits (ADR-016). |
@@ -40,7 +40,7 @@ The domain keeps formats that are its models' own contracts: `session.json` *is*
 | Session | `session` | The record `session.json` keeps, its ids (`RecordId`, `ViewSlot`) and the backup policy. |
 | Settings | `settings` | `config.toml` (declared once per setting) and the keymap. |
 | Commands | `actions` | The action registry (`ActionId`, one table), accelerators, and the menus as a `MenuTree`. |
-| Appearance | `theme`, `view` | Colours, the Omarchy palette mapped to editor roles; zoom, font size, tab width, undo cap. |
+| Appearance | `theme`, `view` | Colours, the Omarchy palette mapped to editor roles; zoom, font size, tab width (`TabWidth`, never 0), undo cap. |
 | Updates | `updates` | Versions and the answer to Check for Updates. |
 
 ## Infrastructure
@@ -64,7 +64,7 @@ app/src/
   actions.rs                                     the registry turned into GActions, accelerators and gio::Menus
   preferences.rs monitor.rs config.rs logging.rs settings files, file monitors, environment, diagnostics
   theme/                                         the Omarchy theme as GtkSourceView schemes and CSS
-  convert.rs                                     GTK's i32 offsets and sizes ↔ usize, once
+  convert.rs                                     GTK's i32 offsets, lines, sizes and tab width ↔ the domain's types, once
   runtime/                                       worker jobs, Latest and SharedLatest tickets, Notify, Listeners,
                                                  Debounce, Flag, connect_once
   sys/                                           safe wrappers over the C calls the bindings lack (the only unsafe)
@@ -110,7 +110,7 @@ The self-test harness reaches the window only through `window/probe.rs`. Its com
 ## Rules the tools enforce
 
 - `[workspace.lints]` in `Cargo.toml`: `unsafe_code` denied (allowed on `mod sys;` only), the lossy-cast lints, `too_many_lines`, `unwrap_used` (outside tests), `undocumented_unsafe_blocks`, and a chosen part of Clippy's pedantic group. `#[expect(…, reason = "…")]` marks the few exceptions; `allow_attributes` and `allow_attributes_without_reason` keep it that way. The two libraries also warn on `unreachable_pub`.
-- `clippy.toml` disallows GTK's raw text positions (`TextBufferExt::iter_at_offset`, `iter_at_line`, `iter_at_line_offset`, and `TextIter::offset`, `line`, `line_offset` and their setters): offsets, lines and columns cross from GTK's integers only in `app/src/convert.rs`, character offsets as `CharOffset` (`iter_at_char`, `char_offset`).
+- `clippy.toml` disallows GTK's raw text positions (`TextBufferExt::iter_at_offset`, `iter_at_line`, `iter_at_line_offset`, and `TextIter::offset`, `line`, `line_offset` and their setters): offsets, lines and columns cross from GTK's integers only in `app/src/convert.rs`, character offsets as `CharOffset` (`iter_at_char`, `char_offset`) and lines as `Line` (`iter_at_line_start`, `buffer_line`, `display_line` as a `LineNumber`).
 - `tools/ci.sh`: rustfmt, Clippy with `-D warnings` (with and without `selftest`), the tests, rustdoc with `-D warnings`, the build, and the check that the Flatpak's crate list matches `Cargo.lock`.
 
 ## Where new code goes

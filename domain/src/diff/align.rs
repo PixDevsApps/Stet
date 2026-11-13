@@ -3,30 +3,36 @@
 use std::ops::Range;
 
 use super::Side;
+use crate::text::{Line, OffsetRange};
+
+/// How many lines `lines` holds.
+fn len(lines: &Range<Line>) -> usize {
+    lines.iter().len()
+}
 
 /// A run of rows: left and right lines share rows in order, and the shorter side is padded
 /// after its lines.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct AlignedChunk {
-    pub left: Range<usize>,
-    pub right: Range<usize>,
+    pub left: Range<Line>,
+    pub right: Range<Line>,
     /// The chunk's first row.
     pub row: usize,
 }
 
 impl AlignedChunk {
     pub(super) fn rows(&self) -> usize {
-        self.left.len().max(self.right.len())
+        len(&self.left).max(len(&self.right))
     }
 
-    pub(super) fn lines(&self, side: Side) -> &Range<usize> {
+    pub(super) fn lines(&self, side: Side) -> &Range<Line> {
         match side {
             Side::Left => &self.left,
             Side::Right => &self.right,
         }
     }
 
-    fn lines_mut(&mut self, side: Side) -> &mut Range<usize> {
+    fn lines_mut(&mut self, side: Side) -> &mut Range<Line> {
         match side {
             Side::Left => &mut self.left,
             Side::Right => &mut self.right,
@@ -37,19 +43,19 @@ impl AlignedChunk {
 /// What one side shows in a row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RowSlot {
-    Line(usize),
-    /// Padding placed before line `before`; `before` is the line count for padding after the
-    /// last line.
+    Line(Line),
+    /// Padding placed before line `before`; `before` is one past the last line for padding
+    /// after it.
     Pad {
-        before: usize,
+        before: Line,
     },
 }
 
-/// Blank rows a view inserts before line `before` (the line count means after the last line)
-/// so that both views have the same rows.
+/// Blank rows a view inserts before line `before` (one past the last line means after it) so
+/// that both views have the same rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pad {
-    pub before: usize,
+    pub before: Line,
     pub rows: usize,
 }
 
@@ -58,7 +64,8 @@ pub struct Pad {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Alignment {
     chunks: Vec<AlignedChunk>,
-    lines: [usize; 2],
+    /// One past the last line of each side.
+    ends: [Line; 2],
 }
 
 impl Alignment {
@@ -69,7 +76,12 @@ impl Alignment {
     }
 
     pub fn line_count(&self, side: Side) -> usize {
-        self.lines[side.index()]
+        self.end(side) - Line::ZERO
+    }
+
+    /// One past the last line of `side`.
+    pub fn end(&self, side: Side) -> Line {
+        self.ends[side.index()]
     }
 
     #[cfg(test)]
@@ -78,14 +90,14 @@ impl Alignment {
     }
 
     /// The row that shows `line` of `side`; lines past the end count as the last line.
-    pub fn row_of(&self, side: Side, line: usize) -> usize {
-        let line = line.min(self.line_count(side).saturating_sub(1));
+    pub fn row_of(&self, side: Side, line: Line) -> usize {
+        let line = line.min(self.end(side).saturating_sub(1));
         let index = self
             .chunks
             .partition_point(|chunk| chunk.lines(side).end <= line);
         self.chunks.get(index).map_or_else(
             || self.rows(),
-            |chunk| chunk.row + line - chunk.lines(side).start,
+            |chunk| chunk.row + (line - chunk.lines(side).start),
         )
     }
 
@@ -97,21 +109,21 @@ impl Alignment {
             Some(chunk) => {
                 let lines = chunk.lines(side);
                 let offset = row - chunk.row;
-                if offset < lines.len() {
+                if offset < len(lines) {
                     RowSlot::Line(lines.start + offset)
                 } else {
                     RowSlot::Pad { before: lines.end }
                 }
             }
             None => RowSlot::Pad {
-                before: self.line_count(side),
+                before: self.end(side),
             },
         }
     }
 
     /// The line of the other side in the same row as `line`, if that row is not padding.
     #[cfg(test)]
-    pub fn counterpart(&self, side: Side, line: usize) -> Option<usize> {
+    pub fn counterpart(&self, side: Side, line: Line) -> Option<Line> {
         match self.slot(side.other(), self.row_of(side, line)) {
             RowSlot::Line(other) => Some(other),
             RowSlot::Pad { .. } => None,
@@ -123,10 +135,10 @@ impl Alignment {
         let mut pads: Vec<Pad> = Vec::new();
         for chunk in &self.chunks {
             let (mine, theirs) = (chunk.lines(side), chunk.lines(side.other()));
-            if mine.len() >= theirs.len() {
+            if len(mine) >= len(theirs) {
                 continue;
             }
-            let rows = theirs.len() - mine.len();
+            let rows = len(theirs) - len(mine);
             match pads.last_mut() {
                 Some(pad) if pad.before == mine.end => pad.rows += rows,
                 _ => pads.push(Pad {
@@ -139,7 +151,7 @@ impl Alignment {
     }
 
     /// The rows covered by the non-empty ranges among `left` and `right`.
-    pub(super) fn span_rows(&self, left: &Range<usize>, right: &Range<usize>) -> Range<usize> {
+    pub(super) fn span_rows(&self, left: &Range<Line>, right: &Range<Line>) -> Range<usize> {
         let (mut start, mut end) = (usize::MAX, 0);
         for (side, lines) in [(Side::Left, left), (Side::Right, right)] {
             if !lines.is_empty() {
@@ -155,7 +167,7 @@ impl Alignment {
 /// open chunk, so unpaired lines of the two sides end up side by side.
 pub(super) struct AlignBuilder {
     chunks: Vec<AlignedChunk>,
-    next: [usize; 2],
+    next: [Line; 2],
     open: bool,
 }
 
@@ -163,16 +175,16 @@ impl AlignBuilder {
     pub(super) fn new() -> Self {
         Self {
             chunks: Vec::new(),
-            next: [0, 0],
+            next: [Line::ZERO; 2],
             open: false,
         }
     }
 
-    pub(super) fn next(&self, side: Side) -> usize {
+    pub(super) fn next(&self, side: Side) -> Line {
         self.next[side.index()]
     }
 
-    pub(super) fn next_lines(&self) -> [usize; 2] {
+    pub(super) fn next_lines(&self) -> [Line; 2] {
         self.next
     }
 
@@ -180,7 +192,7 @@ impl AlignBuilder {
     pub(super) fn both(&mut self) {
         let [left, right] = self.next;
         match self.chunks.last_mut() {
-            Some(chunk) if self.open && chunk.left.len() == chunk.right.len() => {
+            Some(chunk) if self.open && len(&chunk.left) == len(&chunk.right) => {
                 chunk.left.end += 1;
                 chunk.right.end += 1;
             }
@@ -211,7 +223,7 @@ impl AlignBuilder {
         self.open = false;
     }
 
-    fn push(&mut self, left: Range<usize>, right: Range<usize>) {
+    fn push(&mut self, left: Range<Line>, right: Range<Line>) {
         let row = self
             .chunks
             .last()
@@ -223,7 +235,7 @@ impl AlignBuilder {
     pub(super) fn finish(self) -> Alignment {
         Alignment {
             chunks: self.chunks,
-            lines: self.next,
+            ends: self.next,
         }
     }
 }
@@ -231,6 +243,7 @@ impl AlignBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::testing as t;
 
     #[test]
     fn one_sided_rows_fill_padding_of_the_open_chunk() {
@@ -242,14 +255,23 @@ mod tests {
         builder.both();
         let alignment = builder.finish();
         assert_eq!(alignment.rows(), 4);
-        assert_eq!(alignment.slot(Side::Left, 1), RowSlot::Line(1));
-        assert_eq!(alignment.slot(Side::Right, 1), RowSlot::Line(1));
-        assert_eq!(alignment.slot(Side::Left, 2), RowSlot::Pad { before: 2 });
-        assert_eq!(alignment.slot(Side::Left, 3), RowSlot::Line(2));
-        assert_eq!(alignment.slot(Side::Right, 3), RowSlot::Line(3));
-        assert_eq!(alignment.pads(Side::Left), vec![Pad { before: 2, rows: 1 }]);
+        assert_eq!(alignment.slot(Side::Left, 1), RowSlot::Line(t::line(1)));
+        assert_eq!(alignment.slot(Side::Right, 1), RowSlot::Line(t::line(1)));
+        assert_eq!(
+            alignment.slot(Side::Left, 2),
+            RowSlot::Pad { before: t::line(2) }
+        );
+        assert_eq!(alignment.slot(Side::Left, 3), RowSlot::Line(t::line(2)));
+        assert_eq!(alignment.slot(Side::Right, 3), RowSlot::Line(t::line(3)));
+        assert_eq!(
+            alignment.pads(Side::Left),
+            vec![Pad {
+                before: t::line(2),
+                rows: 1
+            }]
+        );
         assert!(alignment.pads(Side::Right).is_empty());
-        assert_eq!(alignment.counterpart(Side::Right, 2), None);
+        assert_eq!(alignment.counterpart(Side::Right, t::line(2)), None);
     }
 
     #[test]
@@ -262,10 +284,22 @@ mod tests {
         assert_eq!(alignment.rows(), 2);
         assert_eq!(
             alignment.pads(Side::Right),
-            vec![Pad { before: 0, rows: 1 }]
+            vec![Pad {
+                before: t::line(0),
+                rows: 1
+            }]
         );
-        assert_eq!(alignment.pads(Side::Left), vec![Pad { before: 1, rows: 1 }]);
-        assert_eq!(alignment.row_of(Side::Right, 0), 1);
-        assert_eq!(alignment.slot(Side::Right, 9), RowSlot::Pad { before: 1 });
+        assert_eq!(
+            alignment.pads(Side::Left),
+            vec![Pad {
+                before: t::line(1),
+                rows: 1
+            }]
+        );
+        assert_eq!(alignment.row_of(Side::Right, t::line(0)), 1);
+        assert_eq!(
+            alignment.slot(Side::Right, 9),
+            RowSlot::Pad { before: t::line(1) }
+        );
     }
 }

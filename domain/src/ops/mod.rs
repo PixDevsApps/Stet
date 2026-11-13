@@ -12,16 +12,17 @@ pub mod pretty;
 pub mod xml;
 
 use std::fmt;
+use std::num::NonZeroUsize;
 use std::ops::Range;
 
 use crate::text::{BULK_EDIT_THRESHOLD, Bias, LineIndex, Position, TextEdit, map_offset};
-use crate::text::{ByteCursor, CharOffset, OffsetRange};
+use crate::text::{ByteCursor, CharOffset, Line, LineNumber, OffsetRange};
 
 /// The part of the text an operation works on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
-    /// Whole lines, zero-based and end-exclusive.
-    Lines(Range<usize>),
+    /// Whole lines.
+    Lines(Range<Line>),
     /// A selection in character offsets; an empty range is the caret. Line operations cover
     /// every line the selection touches, except a last line that it reaches only at column 0.
     Selection(Range<CharOffset>),
@@ -151,13 +152,13 @@ impl Breaks {
     }
 }
 
-/// A JSON or XML syntax error. `line` and `column` are 1-based for display; `column` and
+/// A JSON or XML syntax error, at a line and column as people count them; `column` and
 /// `offset` count characters, and `offset` is where the caret should go.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxError {
     pub message: String,
-    pub line: usize,
-    pub column: usize,
+    pub line: LineNumber,
+    pub column: NonZeroUsize,
     pub offset: CharOffset,
 }
 
@@ -169,24 +170,31 @@ impl SyntaxError {
             byte -= 1;
         }
         let line_start = memchr::memrchr(b'\n', &text.as_bytes()[..byte]).map_or(0, |at| at + 1);
+        let position = Position::new(
+            Line::new(memchr::memchr_iter(b'\n', &text.as_bytes()[..line_start]).count()),
+            text[line_start..byte].chars().count(),
+        );
+        Self::new(
+            message,
+            position,
+            CharOffset::ZERO + text[..byte].chars().count(),
+        )
+    }
+
+    /// An error at `position`, which is character `offset`.
+    pub fn new(message: impl Into<String>, position: Position, offset: CharOffset) -> Self {
         Self {
             message: message.into(),
-            line: memchr::memchr_iter(b'\n', &text.as_bytes()[..line_start]).count() + 1,
-            column: text[line_start..byte].chars().count() + 1,
-            offset: CharOffset::ZERO + text[..byte].chars().count(),
+            line: position.line.number(),
+            column: position.column_number(),
+            offset,
         }
     }
 
     /// The same error in a text of which the parsed input starts at character `base`.
     fn shifted(self, index: &LineIndex, base: CharOffset) -> Self {
         let offset = base + (self.offset - CharOffset::ZERO);
-        let Position { line, column } = index.position(offset);
-        Self {
-            offset,
-            line: line + 1,
-            column: column + 1,
-            ..self
-        }
+        Self::new(self.message, index.position(offset), offset)
     }
 }
 
@@ -216,20 +224,21 @@ impl<'a> Doc<'a> {
         }
     }
 
-    fn line_count(&self) -> usize {
-        self.index.line_count()
+    /// One past the last line.
+    fn end_line(&self) -> Line {
+        self.index.end_line()
     }
 
     /// The text of `line`, without its newline.
-    fn line(&self, line: usize) -> &'a str {
+    fn line(&self, line: Line) -> &'a str {
         &self.text[self.index.line_bytes(line)]
     }
 
-    fn start(&self, line: usize) -> CharOffset {
+    fn start(&self, line: Line) -> CharOffset {
         self.index.line_chars(line).start
     }
 
-    fn end(&self, line: usize) -> CharOffset {
+    fn end(&self, line: Line) -> CharOffset {
         self.index.line_chars(line).end
     }
 
@@ -239,12 +248,12 @@ impl<'a> Doc<'a> {
     }
 
     /// The character offset of byte `byte` of `line`.
-    fn offset_in(&self, line: usize, byte: usize) -> CharOffset {
+    fn offset_in(&self, line: Line, byte: usize) -> CharOffset {
         self.start(line) + self.line(line)[..byte].chars().count()
     }
 
     /// `lines` with the newlines between them, without the last one's newline.
-    fn block(&self, lines: Range<usize>) -> &'a str {
+    fn block(&self, lines: Range<Line>) -> &'a str {
         let start = self.index.line_bytes(lines.start).start;
         let end = self.index.line_bytes(lines.end - 1).end;
         &self.text[start..end]
@@ -262,11 +271,11 @@ impl<'a> Doc<'a> {
         a.min(b)..a.max(b)
     }
 
-    fn lines(&self, target: &Target) -> Range<usize> {
-        let count = self.line_count();
+    fn lines(&self, target: &Target) -> Range<Line> {
+        let end_line = self.end_line();
         match target {
             Target::Lines(range) => {
-                let end = range.end.min(count);
+                let end = range.end.min(end_line);
                 range.start.min(end)..end
             }
             Target::Selection(range) => {
@@ -279,8 +288,8 @@ impl<'a> Doc<'a> {
                 first..last + 1
             }
             Target::Document => {
-                let trailing = count > 1 && self.text.ends_with('\n');
-                0..count - usize::from(trailing)
+                let trailing = self.index.line_count() > 1 && self.text.ends_with('\n');
+                Line::ZERO..end_line - usize::from(trailing)
             }
         }
     }
@@ -310,13 +319,13 @@ fn char_len(text: &str) -> usize {
 }
 
 /// Deletes `lines` (ascending) with the newlines that separate them from the rest of the text.
-fn delete_lines(doc: &Doc<'_>, lines: impl IntoIterator<Item = usize>) -> Vec<TextEdit> {
+fn delete_lines(doc: &Doc<'_>, lines: impl IntoIterator<Item = Line>) -> Vec<TextEdit> {
     let mut edits = Vec::new();
-    let mut run: Option<Range<usize>> = None;
-    let flush = |run: Range<usize>, edits: &mut Vec<TextEdit>| {
-        let range = if run.end < doc.line_count() {
+    let mut run: Option<Range<Line>> = None;
+    let flush = |run: Range<Line>, edits: &mut Vec<TextEdit>| {
+        let range = if run.end < doc.end_line() {
             doc.start(run.start)..doc.start(run.end)
-        } else if run.start > 0 {
+        } else if run.start > Line::ZERO {
             doc.end(run.start - 1)..doc.end_of_text()
         } else {
             CharOffset::ZERO..doc.end_of_text()
@@ -340,7 +349,7 @@ fn delete_lines(doc: &Doc<'_>, lines: impl IntoIterator<Item = usize>) -> Vec<Te
 }
 
 /// Replaces the lines of `range` with `new`, touching only the lines that differ.
-fn replace_lines(doc: &Doc<'_>, range: Range<usize>, old: &[&str], new: &[&str]) -> Vec<TextEdit> {
+fn replace_lines(doc: &Doc<'_>, range: Range<Line>, old: &[&str], new: &[&str]) -> Vec<TextEdit> {
     debug_assert_eq!(old.len(), new.len());
     let Some(first) = old.iter().zip(new).position(|(a, b)| a != b) else {
         return Vec::new();
@@ -400,7 +409,7 @@ fn reformat_target(
 pub(crate) mod testing {
     use super::*;
     pub(crate) use crate::text::OffsetRange;
-    pub(crate) use crate::text::testing::{at, chars};
+    pub(crate) use crate::text::testing::{at, chars, line, lines};
     use crate::text::{apply, normalize};
     use proptest::prelude::*;
 
@@ -431,7 +440,7 @@ pub(crate) mod testing {
     pub(crate) fn text_and_target() -> impl Strategy<Value = (String, Target)> {
         text().prop_flat_map(|text| {
             let len = char_len(&text);
-            let lines = text.split('\n').count();
+            let count = text.split('\n').count();
             let starts: Vec<usize> = std::iter::once(0)
                 .chain(
                     text.chars()
@@ -442,7 +451,7 @@ pub(crate) mod testing {
                 .collect();
             let offset = prop_oneof![0..=len, prop::sample::select(starts)];
             let target = prop_oneof![
-                (0..=lines, 0..=lines).prop_map(|(a, b)| Target::Lines(a.min(b)..a.max(b))),
+                (0..=count, 0..=count).prop_map(|(a, b)| Target::Lines(lines(a.min(b)..a.max(b)))),
                 (offset.clone(), offset).prop_map(|(a, b)| Target::Selection(chars(a..b))),
                 Just(Target::Document),
             ];
@@ -456,6 +465,7 @@ pub(crate) mod testing {
         let line_of = |offset: usize| text.chars().take(offset).filter(|&c| c == '\n').count();
         match target {
             Target::Lines(range) => {
+                let range = range.get();
                 range.start.min(range.end).min(lines.len())..range.end.min(lines.len())
             }
             Target::Selection(range) => {
@@ -517,32 +527,34 @@ mod tests {
     #[test]
     fn a_selection_ending_at_column_zero_leaves_out_that_line() {
         let doc = Doc::new("one\ntwo\nthree\n");
-        assert_eq!(doc.lines(&Target::Selection(chars(0..4))), 0..1);
-        assert_eq!(doc.lines(&Target::Selection(chars(0..5))), 0..2);
-        assert_eq!(doc.lines(&Target::Selection(chars(2..8))), 0..2);
-        assert_eq!(doc.lines(&Target::caret(at(4))), 1..2);
+        assert_eq!(doc.lines(&Target::Selection(chars(0..4))).get(), 0..1);
+        assert_eq!(doc.lines(&Target::Selection(chars(0..5))).get(), 0..2);
+        assert_eq!(doc.lines(&Target::Selection(chars(2..8))).get(), 0..2);
+        assert_eq!(doc.lines(&Target::caret(at(4))).get(), 1..2);
         let reversed = Range { start: 8, end: 4 };
-        assert_eq!(doc.lines(&Target::Selection(chars(reversed))), 1..2);
+        assert_eq!(doc.lines(&Target::Selection(chars(reversed))).get(), 1..2);
     }
 
     #[test]
     fn the_document_leaves_out_the_line_after_a_final_newline() {
-        assert_eq!(Doc::new("a\nb\n").lines(&Target::Document), 0..2);
-        assert_eq!(Doc::new("a\nb").lines(&Target::Document), 0..2);
-        assert_eq!(Doc::new("").lines(&Target::Document), 0..1);
-        assert_eq!(Doc::new("\n").lines(&Target::Document), 0..1);
+        assert_eq!(Doc::new("a\nb\n").lines(&Target::Document).get(), 0..2);
+        assert_eq!(Doc::new("a\nb").lines(&Target::Document).get(), 0..2);
+        assert_eq!(Doc::new("").lines(&Target::Document).get(), 0..1);
+        assert_eq!(Doc::new("\n").lines(&Target::Document).get(), 0..1);
         assert_eq!(
-            Doc::new("a\nb\n").lines(&Target::Selection(chars(0..4))),
+            Doc::new("a\nb\n")
+                .lines(&Target::Selection(chars(0..4)))
+                .get(),
             0..2
         );
-        assert_eq!(Doc::new("a\nb\n").lines(&Target::caret(at(4))), 2..3);
+        assert_eq!(Doc::new("a\nb\n").lines(&Target::caret(at(4))).get(), 2..3);
     }
 
     #[test]
     fn line_targets_are_clamped() {
         let doc = Doc::new("a\nb");
-        assert_eq!(doc.lines(&Target::Lines(1..9)), 1..2);
-        assert_eq!(doc.lines(&Target::Lines(5..9)), 2..2);
+        assert_eq!(doc.lines(&Target::Lines(lines(1..9))).get(), 1..2);
+        assert_eq!(doc.lines(&Target::Lines(lines(5..9))).get(), 2..2);
     }
 
     #[test]
@@ -588,16 +600,22 @@ mod tests {
     #[test]
     fn syntax_errors_count_characters() {
         let error = SyntaxError::at_byte("ab\nøx!", 6, "bad");
-        assert_eq!((error.line, error.column, error.offset.get()), (2, 3, 5));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (2, 3, 5)
+        );
         let error = SyntaxError::at_byte("ø", 1, "inside a character");
-        assert_eq!((error.line, error.column, error.offset.get()), (1, 1, 0));
+        assert_eq!(
+            (error.line.get(), error.column.get(), error.offset.get()),
+            (1, 1, 0)
+        );
         assert_eq!(error.to_string(), "inside a character at line 1, column 1");
     }
 
     proptest! {
         #[test]
         fn line_targets_match_a_naive_model((text, target) in text_and_target()) {
-            prop_assert_eq!(Doc::new(&text).lines(&target), naive_lines(&text, &target));
+            prop_assert_eq!(Doc::new(&text).lines(&target).get(), naive_lines(&text, &target));
         }
     }
 }

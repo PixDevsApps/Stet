@@ -26,6 +26,8 @@ use std::ops::Range;
 
 use imara_diff::{Algorithm, Diff, IndentHeuristic, IndentLevel, Interner, Token};
 
+use crate::text::Line;
+
 pub use align::{Alignment, RowSlot};
 
 use align::AlignBuilder;
@@ -111,12 +113,12 @@ pub enum HunkKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Hunk {
     pub kind: HunkKind,
-    pub left: Range<usize>,
-    pub right: Range<usize>,
+    pub left: Range<Line>,
+    pub right: Range<Line>,
 }
 
 impl Hunk {
-    pub fn lines(&self, side: Side) -> &Range<usize> {
+    pub fn lines(&self, side: Side) -> &Range<Line> {
         match side {
             Side::Left => &self.left,
             Side::Right => &self.right,
@@ -139,7 +141,7 @@ pub enum LineKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LineRun {
-    pub lines: Range<usize>,
+    pub lines: Range<Line>,
     pub kind: LineKind,
 }
 
@@ -147,14 +149,14 @@ pub struct LineRun {
 /// offsets within each line) that differ.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InlineDiff {
-    pub left_line: usize,
-    pub right_line: usize,
+    pub left_line: Line,
+    pub right_line: Line,
     pub left: Vec<Range<usize>>,
     pub right: Vec<Range<usize>>,
 }
 
 impl InlineDiff {
-    pub fn line(&self, side: Side) -> usize {
+    pub fn line(&self, side: Side) -> Line {
         match side {
             Side::Left => self.left_line,
             Side::Right => self.right_line,
@@ -173,8 +175,8 @@ impl InlineDiff {
 /// ignored empty lines sit inside the block.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Move {
-    pub left: Range<usize>,
-    pub right: Range<usize>,
+    pub left: Range<Line>,
+    pub right: Range<Line>,
 }
 
 /// Line counts for the comparison summary.
@@ -244,7 +246,7 @@ impl Comparison {
     }
 
     #[cfg(test)]
-    pub fn line_kind(&self, side: Side, line: usize) -> Option<LineKind> {
+    pub fn line_kind(&self, side: Side, line: Line) -> Option<LineKind> {
         let runs = self.line_runs(side);
         let index = runs.partition_point(|run| run.lines.end <= line);
         runs.get(index)
@@ -253,7 +255,7 @@ impl Comparison {
     }
 
     #[cfg(test)]
-    pub fn inline_at(&self, side: Side, line: usize) -> Option<&InlineDiff> {
+    pub fn inline_at(&self, side: Side, line: Line) -> Option<&InlineDiff> {
         let index = self.inline.partition_point(|diff| diff.line(side) < line);
         self.inline
             .get(index)
@@ -268,7 +270,7 @@ impl Comparison {
 
     /// The hunk whose lines on `side` include `line`.
     #[cfg(test)]
-    pub fn hunk_at(&self, side: Side, line: usize) -> Option<usize> {
+    pub fn hunk_at(&self, side: Side, line: Line) -> Option<usize> {
         let index = self
             .hunks
             .partition_point(|hunk| hunk.lines(side).end <= line);
@@ -280,14 +282,14 @@ impl Comparison {
 
     /// The first hunk that starts below the row of `line` on `side`, for Next Difference.
     /// Wrapping around is left to the caller.
-    pub fn next_hunk(&self, side: Side, line: usize) -> Option<usize> {
+    pub fn next_hunk(&self, side: Side, line: Line) -> Option<usize> {
         let row = self.alignment.row_of(side, line);
         let index = self.hunk_rows.partition_point(|rows| rows.start <= row);
         (index < self.hunks.len()).then_some(index)
     }
 
     /// The last hunk that starts above the row of `line` on `side`, for Previous Difference.
-    pub fn prev_hunk(&self, side: Side, line: usize) -> Option<usize> {
+    pub fn prev_hunk(&self, side: Side, line: Line) -> Option<usize> {
         let row = self.alignment.row_of(side, line);
         self.hunk_rows
             .partition_point(|rows| rows.start < row)
@@ -369,7 +371,7 @@ pub fn compare(left: &str, right: &str, options: &CompareOptions) -> Comparison 
 /// empty lines are ignored), as interned keys.
 struct Sequence<'a> {
     lines: Vec<&'a str>,
-    kept: Vec<usize>,
+    kept: Vec<Line>,
     tokens: Vec<Token>,
 }
 
@@ -391,7 +393,7 @@ impl<'a> Sequence<'a> {
             if token.0 as usize == samples.len() {
                 samples.push(line);
             }
-            kept.push(index);
+            kept.push(Line::new(index));
             tokens.push(token);
         }
         Self {
@@ -401,12 +403,22 @@ impl<'a> Sequence<'a> {
         }
     }
 
-    /// The line of the kept line `kept`, or the line count past the last one.
-    fn line_at(&self, kept: usize) -> usize {
-        self.kept.get(kept).copied().unwrap_or(self.lines.len())
+    /// The text of `line`.
+    fn text(&self, line: Line) -> &'a str {
+        self.lines[line.get()]
     }
 
-    fn lines_of(&self, kept: &Range<usize>) -> Range<usize> {
+    /// One past the last line.
+    fn end(&self) -> Line {
+        Line::ZERO + self.lines.len()
+    }
+
+    /// The line of the kept line `kept`, or the end past the last one.
+    fn line_at(&self, kept: usize) -> Line {
+        self.kept.get(kept).copied().unwrap_or_else(|| self.end())
+    }
+
+    fn lines_of(&self, kept: &Range<usize>) -> Range<Line> {
         self.kept[kept.start]..self.kept[kept.end - 1] + 1
     }
 }
@@ -421,7 +433,7 @@ struct Walk<'w, 'a> {
     align: AlignBuilder,
     hunks: Vec<Hunk>,
     inline: Vec<InlineDiff>,
-    kinds: [Vec<(usize, LineKind)>; 2],
+    kinds: [Vec<(Line, LineKind)>; 2],
 }
 
 impl<'w, 'a> Walk<'w, 'a> {
@@ -431,7 +443,7 @@ impl<'w, 'a> Walk<'w, 'a> {
     }
 
     /// Emits the ignored lines of `side` before `line`.
-    fn flush(&mut self, side: Side, line: usize) {
+    fn flush(&mut self, side: Side, line: Line) {
         while self.align.next(side) < line {
             self.align.one(side);
         }
@@ -464,8 +476,8 @@ impl<'w, 'a> Walk<'w, 'a> {
         self.kinds[0].push((left_line, LineKind::Changed));
         self.kinds[1].push((right_line, LineKind::Changed));
         let (left_columns, right_columns) = self.differ.changed_columns(
-            self.sides[0].lines[left_line],
-            self.sides[1].lines[right_line],
+            self.sides[0].text(left_line),
+            self.sides[1].text(right_line),
         );
         self.inline.push(InlineDiff {
             left_line,
@@ -536,8 +548,8 @@ impl<'w, 'a> Walk<'w, 'a> {
     }
 
     fn finish(mut self, moves: &Moves) -> Comparison {
-        self.flush(Side::Left, self.sides[0].lines.len());
-        self.flush(Side::Right, self.sides[1].lines.len());
+        self.flush(Side::Left, self.sides[0].end());
+        self.flush(Side::Right, self.sides[1].end());
         let alignment = self.align.finish();
         let hunk_rows = self
             .hunks
@@ -553,7 +565,7 @@ impl<'w, 'a> Walk<'w, 'a> {
             })
             .collect();
         let [left_kinds, right_kinds] = self.kinds;
-        let count = |kinds: &[(usize, LineKind)], kind: LineKind| {
+        let count = |kinds: &[(Line, LineKind)], kind: LineKind| {
             kinds.iter().filter(|(_, k)| *k == kind).count()
         };
         let stats = CompareStats {
@@ -575,7 +587,7 @@ impl<'w, 'a> Walk<'w, 'a> {
     }
 }
 
-fn runs(kinds: Vec<(usize, LineKind)>) -> Vec<LineRun> {
+fn runs(kinds: Vec<(Line, LineKind)>) -> Vec<LineRun> {
     let mut runs: Vec<LineRun> = Vec::new();
     for (line, kind) in kinds {
         match runs.last_mut() {

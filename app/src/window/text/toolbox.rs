@@ -27,7 +27,7 @@ use stet_domain::ops::lines::{
 use stet_domain::ops::numbers::NumberSequence;
 use stet_domain::ops::{Change, Indent, SyntaxError, Target, json, xml};
 use stet_domain::search::SearchMode;
-use stet_domain::text::{CharOffset, LineIndex, OffsetRange, Selection, TextEdit};
+use stet_domain::text::{CharOffset, Line, LineIndex, OffsetRange, Selection, TextEdit};
 
 /// A result larger than this is inserted in pieces of about this size, 16 ms apart, inside
 /// the one user action, so a 20 MB JSON file formats without blocking the window.
@@ -169,7 +169,7 @@ impl Window {
                   let a new tool compile unhandled"
     )]
     fn text_edit(&self, page: &EditorPage, tool: TextTool) -> Option<(Reach, Operation)> {
-        let tab_width = page.indentation().tab_width as usize;
+        let tab_width = page.indentation().tab_width;
         let simple = |op: fn(&str, &Target) -> Change| -> Operation {
             Box::new(move |text, target| Ok(op(text, &target)))
         };
@@ -647,11 +647,11 @@ impl Window {
         let selected = edits::selection(&buffer).range();
         let first = buffer.iter_at_char(selected.start);
         let mut last = buffer.iter_at_char(selected.end);
-        if last.line_number() > first.line_number() && last.starts_line() {
+        if last.buffer_line() > first.buffer_line() && last.starts_line() {
             last.backward_line();
         }
         let start = buffer
-            .iter_at_line_number(first.line_number())
+            .iter_at_line_start(first.buffer_line())
             .unwrap_or(first);
         let mut end = last;
         if !end.ends_line() {
@@ -672,7 +672,7 @@ impl Window {
         let end = buffer.iter_at_char(selected.end);
         let query = if selected.is_empty() {
             let line_start = buffer
-                .iter_at_line_number(start.line_number())
+                .iter_at_line_start(start.buffer_line())
                 .unwrap_or(start);
             let mut line_end = line_start;
             if !line_end.ends_line() {
@@ -782,7 +782,7 @@ fn transpose(text: &str, target: &Target) -> Change {
     };
     let index = LineIndex::new(text);
     let line = index.line_of_char(range.start.min(range.end));
-    if line == 0 {
+    if line == Line::ZERO {
         return Change::default();
     }
     let mut change = lines::move_down(text, &Target::Lines(line - 1..line));
@@ -796,7 +796,7 @@ fn transpose(text: &str, target: &Target) -> Change {
 /// The formatters' indentation: the document's.
 fn indent_unit(indentation: Indentation) -> Indent {
     if indentation.insert_spaces {
-        Indent::Spaces(indentation.tab_width as usize)
+        Indent::Spaces(indentation.tab_width.get())
     } else {
         Indent::Tab
     }

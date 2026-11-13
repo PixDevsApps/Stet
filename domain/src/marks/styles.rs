@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::text::{Bias, CharOffset, LineIndex, TextEdit};
+use crate::text::{Bias, CharOffset, Line, LineIndex, OffsetRange, TextEdit};
 
 /// The Mark dialog's style and the five style tokens (Search > Style All Occurrences of Token).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -161,19 +161,19 @@ impl Marks {
         }
     }
 
-    pub fn bookmark_lines(&self, style: MarkStyle, index: &LineIndex) -> Vec<usize> {
+    pub fn bookmark_lines(&self, style: MarkStyle, index: &LineIndex) -> Vec<Line> {
         bookmark_lines_of(self.ranges(style), index)
     }
 }
 
 /// The lines to bookmark for matches in `ranges` (character offsets): every line a match spans,
 /// and the line of an empty match. Sorted and unique.
-pub fn bookmark_lines_of(ranges: &[Range<CharOffset>], index: &LineIndex) -> Vec<usize> {
+pub fn bookmark_lines_of(ranges: &[Range<CharOffset>], index: &LineIndex) -> Vec<Line> {
     let mut lines = Vec::new();
     for range in ranges {
         let first = index.line_of_char(range.start);
         let last = index.line_of_char(range.end.saturating_sub(1).max(range.start));
-        lines.extend(first..=last);
+        lines.extend((first..last + 1).iter());
     }
     lines.sort_unstable();
     lines.dedup();
@@ -227,8 +227,7 @@ impl<'a> OffsetMap<'a> {
 )]
 mod tests {
     use super::*;
-    use crate::text::OffsetRange;
-    use crate::text::testing::{at, chars};
+    use crate::text::testing::{at, chars, indexes};
     use crate::text::{apply, map_offset, normalize};
     use proptest::prelude::*;
 
@@ -310,15 +309,18 @@ mod tests {
     fn bookmarks_every_line_a_match_spans() {
         let text = "one\ntwo\nthree\nfour";
         let index = LineIndex::new(text);
-        assert_eq!(bookmark_lines_of(&spans([1..6]), &index), [0, 1]);
-        assert_eq!(bookmark_lines_of(&spans([4..8]), &index), [1]);
+        assert_eq!(indexes(&bookmark_lines_of(&spans([1..6]), &index)), [0, 1]);
+        assert_eq!(indexes(&bookmark_lines_of(&spans([4..8]), &index)), [1]);
         assert_eq!(
-            bookmark_lines_of(&spans([8..8, 18..18, 0..1]), &index),
+            indexes(&bookmark_lines_of(&spans([8..8, 18..18, 0..1]), &index)),
             [0, 2, 3]
         );
         let mut marks = Marks::new();
         marks.set(MarkStyle::Mark, spans([9..10, 15..16]));
-        assert_eq!(marks.bookmark_lines(MarkStyle::Mark, &index), [2, 3]);
+        assert_eq!(
+            indexes(&marks.bookmark_lines(MarkStyle::Mark, &index)),
+            [2, 3]
+        );
     }
 
     fn edits_for(len: usize) -> impl Strategy<Value = Vec<TextEdit>> {

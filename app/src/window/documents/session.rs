@@ -44,7 +44,7 @@ use stet_domain::search::{HISTORY_LIMIT, History, SearchHistory};
 use stet_domain::session::{
     BackupAction, BackupState, RecordId, SCHEMA_VERSION, Session, TabRecord, ViewSlot, WindowState,
 };
-use stet_domain::text::{CharOffset, line_count};
+use stet_domain::text::{CharOffset, Line, line_count};
 use stet_domain::view::Zoom;
 use stet_infrastructure::encoding::{DocumentFormat, encoding_for_name, entry_for, entry_for_id};
 use stet_infrastructure::fs::{
@@ -1468,14 +1468,14 @@ impl Window {
 }
 
 /// The first visible line, or the restored one while the view was never shown.
-fn first_visible_line(page: &EditorPage) -> usize {
+fn first_visible_line(page: &EditorPage) -> Line {
     if let Some(line) = page.top_line() {
         return line;
     }
     let view = page.view();
     let rect = view.visible_rect();
     let (iter, _) = view.line_at_y(rect.y());
-    iter.line_number()
+    iter.buffer_line()
 }
 
 /// Why the session is off in this window, for a toast.

@@ -60,11 +60,35 @@ mod editor;
 mod rect;
 mod visual;
 
-#[cfg(test)]
-mod tests;
-
 pub use block::{Block, MIME_TYPE, copy, paste};
 pub use editing::{ColumnEdit, ColumnError, backspace, delete_block, delete_forward, type_text};
 pub use editor::ColumnEditor;
 pub use rect::{LineSpan, Rect, VisualPos};
 pub use visual::{home_column, locate, text_width, visual_column};
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+pub(crate) mod testing {
+    //! Columns, positions and tab widths from plain numbers, for writing test data.
+
+    use super::VisualPos;
+    use crate::text::{Line, VisualColumn};
+    use crate::view::TabWidth;
+
+    /// Visual column `column`.
+    pub(crate) const fn col(column: usize) -> VisualColumn {
+        VisualColumn::new(column)
+    }
+
+    /// A tab width of `cells` cells.
+    pub(crate) fn tab(cells: u8) -> TabWidth {
+        TabWidth::new(cells).unwrap()
+    }
+
+    /// Line `line`, visual column `column`.
+    pub(crate) const fn pos(line: usize, column: usize) -> VisualPos {
+        VisualPos::new(Line::new(line), VisualColumn::new(column))
+    }
+}

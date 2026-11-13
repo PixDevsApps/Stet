@@ -1,9 +1,10 @@
 //! The rectangular clipboard: copying a block and pasting it at a column.
 
 use super::editing::{ColumnEdit, edit_lines, push_spaces, splice};
-use super::rect::{Rect, clamp_lines};
+use super::rect::{Rect, VisualPos, clamp_lines};
 use super::visual::{locate, text_width};
-use crate::text::{LineIndex, TextEdit};
+use crate::text::{LineIndex, OffsetRange, TextEdit, VisualColumn};
+use crate::view::TabWidth;
 
 /// The clipboard MIME type of a copied block (ADR-016); `text/plain` carries the same text.
 pub const MIME_TYPE: &str = "application/x-stet-column-block";
@@ -39,7 +40,7 @@ impl Block {
 
     /// The cells of the widest row when the rows start at visual column `column`.
     #[cfg(test)]
-    pub fn width(&self, column: usize, tab_width: usize) -> usize {
+    pub fn width(&self, column: VisualColumn, tab_width: TabWidth) -> usize {
         self.rows
             .iter()
             .map(|row| text_width(row, column, tab_width))
@@ -51,15 +52,16 @@ impl Block {
 /// The rectangle's cells on each of its lines. A tab that an edge cuts contributes the spaces
 /// it is drawn as inside the rectangle; virtual space contributes nothing, so a row from a line
 /// that ends inside the rectangle is shorter.
-pub fn copy(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) -> Block {
+pub fn copy(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth) -> Block {
     let (left, right) = (rect.left(), rect.right());
     let rows = clamp_lines(index, rect.lines())
+        .iter()
         .map(|line| row(&text[index.line_bytes(line)], left, right, tab_width))
         .collect();
     Block { rows }
 }
 
-fn row(line: &str, left: usize, right: usize, tab_width: usize) -> String {
+fn row(line: &str, left: VisualColumn, right: VisualColumn, tab_width: TabWidth) -> String {
     let start = locate(line, left, tab_width);
     if right <= left || start.at_end(line) {
         return String::new();
@@ -96,7 +98,7 @@ pub fn paste(
     index: &LineIndex,
     rect: Rect,
     block: &Block,
-    tab_width: usize,
+    tab_width: TabWidth,
 ) -> ColumnEdit {
     let split;
     let rows = if block.rows.iter().any(|row| row.contains('\n')) {
@@ -119,21 +121,21 @@ pub fn paste(
             None => splice(line_text, left, right, "", 0, tab_width),
         }
     });
-    let lines = index.line_count();
+    let lines = index.end_line();
     if !rows.is_empty() && top + rows.len() > lines {
         let mut appended = String::new();
-        for line in lines..top + rows.len() {
+        for line in (lines..top + rows.len()).iter() {
             appended.push('\n');
-            if let Some(row) = line.checked_sub(top).map(|i| &rows[i])
+            if let Some(row) = (line >= top).then(|| &rows[line - top])
                 && !row.is_empty()
             {
-                push_spaces(&mut appended, left);
+                push_spaces(&mut appended, left - VisualColumn::ZERO);
                 appended.push_str(row);
             }
         }
         let text_end = index.end_char();
         match edits.last_mut() {
-            Some(last) if index.line_of_char(last.start()) + 1 == lines => {
+            Some(last) if index.line_of_char(last.start()) == index.last_line() => {
                 let rest = index.char_to_byte(text, last.end());
                 let mut insert = std::mem::take(&mut last.insert);
                 insert.push_str(&text[rest.get()..]);
@@ -147,13 +149,17 @@ pub fn paste(
     let last_row = top + rows.len().saturating_sub(1);
     ColumnEdit {
         edits,
-        rect: Rect::new((last_row, caret), (top, caret)),
+        rect: Rect::new(VisualPos::new(last_row, caret), VisualPos::new(top, caret)),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::column::testing::pos;
+    use crate::view::TabWidth;
+
+    const TAB: TabWidth = TabWidth::DEFAULT;
     use crate::text::apply;
     use proptest::prelude::*;
 
@@ -162,7 +168,7 @@ mod tests {
         let block = Block {
             rows: rows.iter().map(|row| (*row).to_owned()).collect(),
         };
-        let edit = paste(text, &index, rect, &block, 4);
+        let edit = paste(text, &index, rect, &block, TAB);
         (apply(text, edit.edits).unwrap(), edit.rect)
     }
 
@@ -170,7 +176,7 @@ mod tests {
     fn copies_cells_with_cut_tabs_as_spaces_and_no_virtual_space() {
         let text = "abcdefgh\t= 3;\n0123456789ABCDEF\nabc\n\tx\t\ty\n日本語のテキストです";
         let index = LineIndex::new(text);
-        let block = copy(text, &index, Rect::new((0, 2), (4, 10)), 4);
+        let block = copy(text, &index, Rect::new(pos(0, 2), pos(4, 10)), TAB);
         assert_eq!(
             block.rows,
             ["cdefgh  ", "23456789", "c", "  x\t  ", "語のテキストです"]
@@ -180,8 +186,8 @@ mod tests {
             copy(
                 "a\tb",
                 &LineIndex::new("a\tb"),
-                Rect::new((0, 2), (0, 3)),
-                4
+                Rect::new(pos(0, 2), pos(0, 3)),
+                TAB
             )
             .rows,
             [" "]
@@ -192,19 +198,19 @@ mod tests {
     fn pastes_rows_at_the_column_padding_rows_that_have_text_after_them() {
         let (result, rect) = paste_into(
             "0123456789\nab\n0123456789",
-            Rect::new((0, 4), (0, 4)),
+            Rect::new(pos(0, 4), pos(0, 4)),
             &["xy", "", "z"],
         );
         assert_eq!(result, "0123xy456789\nab\n0123z 456789");
-        assert_eq!(rect, Rect::new((2, 6), (0, 6)));
+        assert_eq!(rect, Rect::new(pos(2, 6), pos(0, 6)));
     }
 
     #[test]
     fn pasting_past_the_end_appends_lines() {
-        let (result, rect) = paste_into("ab\ncd", Rect::new((1, 3), (1, 3)), &["1", "", "3"]);
+        let (result, rect) = paste_into("ab\ncd", Rect::new(pos(1, 3), pos(1, 3)), &["1", "", "3"]);
         assert_eq!(result, "ab\ncd 1\n\n   3");
-        assert_eq!(rect, Rect::new((3, 4), (1, 4)));
-        let (result, _) = paste_into("", Rect::new((2, 1), (2, 1)), &["x"]);
+        assert_eq!(rect, Rect::new(pos(3, 4), pos(1, 4)));
+        let (result, _) = paste_into("", Rect::new(pos(2, 1), pos(2, 1)), &["x"]);
         assert_eq!(result, "\n\n x");
     }
 
@@ -212,16 +218,16 @@ mod tests {
     fn pasting_over_a_block_replaces_it() {
         let (result, rect) = paste_into(
             "0123456789\n0123456789\n0123456789",
-            Rect::new((0, 2), (2, 5)),
+            Rect::new(pos(0, 2), pos(2, 5)),
             &["ab", "c"],
         );
         assert_eq!(result, "01ab56789\n01c 56789\n0156789");
-        assert_eq!(rect, Rect::new((1, 4), (0, 4)));
+        assert_eq!(rect, Rect::new(pos(1, 4), pos(0, 4)));
     }
 
     #[test]
     fn a_row_with_a_line_break_counts_as_several_rows() {
-        let (result, _) = paste_into("ab\ncd", Rect::new((0, 1), (0, 1)), &["x\ny"]);
+        let (result, _) = paste_into("ab\ncd", Rect::new(pos(0, 1), pos(0, 1)), &["x\ny"]);
         assert_eq!(result, "axb\ncyd");
     }
 

@@ -27,7 +27,7 @@ use stet_domain::document::{
     tilde, untitled_name,
 };
 use stet_domain::session::{Fingerprint, RecordId, TabRecord};
-use stet_domain::text::Eol;
+use stet_domain::text::{Eol, Line};
 use stet_infrastructure::encoding::{DocumentFormat, Encoding};
 use stet_infrastructure::fs::{DocInfo, EncodingChoice, SaveOutcome};
 
@@ -51,7 +51,7 @@ mod imp {
         pub(in crate::editor) clone_id: RefCell<Option<RecordId>>,
         /// The restored first visible line, kept until the view is first shown and has a
         /// scroll position of its own.
-        pub(in crate::editor) top_line: Cell<Option<usize>>,
+        pub(in crate::editor) top_line: Cell<Option<Line>>,
         /// A restored tab's caret and scroll position, applied once its text is in.
         pub(in crate::editor) pending: RefCell<Option<Box<TabRecord>>>,
         /// Shown in a comparison: no word wrap, so the two views' lines line up.
@@ -119,7 +119,7 @@ impl EditorPage {
             .show_line_numbers(true)
             .highlight_current_line(true)
             .auto_indent(true)
-            .tab_width(indentation.tab_width)
+            .tab_width(indentation.tab_width.into())
             .insert_spaces_instead_of_tabs(indentation.insert_spaces)
             .smart_home_end(sourceview5::SmartHomeEndType::Before)
             .left_margin(4)
@@ -168,7 +168,7 @@ impl EditorPage {
             page,
             move |_, iter, button, _, _| {
                 if button == gtk::gdk::BUTTON_PRIMARY {
-                    page.toggle_bookmark(iter.line_number());
+                    page.toggle_bookmark(iter.buffer_line());
                 }
             }
         ));
@@ -534,11 +534,11 @@ impl EditorPage {
     }
 
     /// The restored first visible line of this view, until it is first shown.
-    pub fn top_line(&self) -> Option<usize> {
+    pub fn top_line(&self) -> Option<Line> {
         self.imp().top_line.get()
     }
 
-    pub fn set_top_line(&self, line: Option<usize>) {
+    pub fn set_top_line(&self, line: Option<Line>) {
         self.imp().top_line.set(line);
     }
 

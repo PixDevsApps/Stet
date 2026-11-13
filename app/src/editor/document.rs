@@ -18,7 +18,7 @@ use std::rc::Rc;
 use std::time::Instant;
 use stet_domain::document::indent::Indentation;
 use stet_domain::text::CharOffset;
-use stet_domain::view::{DEFAULT_TAB_WIDTH, MAX_UNDO_LEVELS};
+use stet_domain::view::{MAX_UNDO_LEVELS, TabWidth};
 
 /// The tag that shows the current search match.
 pub(super) const CURRENT_MATCH_TAG: &str = "stet-search-current";
@@ -91,7 +91,7 @@ impl Document {
             revision: Cell::new(0),
             search: PageSearch::default(),
             indentation: Cell::new(Indentation {
-                tab_width: DEFAULT_TAB_WIDTH,
+                tab_width: TabWidth::DEFAULT,
                 insert_spaces: false,
             }),
             indent_source: Cell::new(IndentSource::Default),

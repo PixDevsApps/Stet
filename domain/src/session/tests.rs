@@ -1,5 +1,5 @@
 use super::*;
-use crate::text::CharOffset;
+use crate::text::{CharOffset, Line};
 use proptest::collection::vec;
 use proptest::prelude::*;
 use serde_json::{Value, json};
@@ -25,7 +25,7 @@ fn sample() -> Session {
                 language: Some("markdown".into()),
                 caret: CharOffset::new(120),
                 selection: Some((CharOffset::new(100), CharOffset::new(120))),
-                first_visible_line: 3,
+                first_visible_line: Line::new(3),
                 disk_fingerprint: Some(Fingerprint {
                     dev: 57,
                     ino: 10339,
@@ -34,7 +34,7 @@ fn sample() -> Session {
                 }),
                 chosen_encoding: Some("windows-1252".into()),
                 lossy: true,
-                bookmarks: vec![3, 10],
+                bookmarks: vec![Line::new(3), Line::new(10)],
                 ..TabRecord::default()
             },
             TabRecord {
@@ -596,7 +596,7 @@ fn tab() -> impl Strategy<Value = TabRecord> {
         any::<usize>().prop_map(CharOffset::new),
         any::<Option<(usize, usize)>>()
             .prop_map(|ends| ends.map(|(a, b)| (CharOffset::new(a), CharOffset::new(b)))),
-        any::<usize>(),
+        any::<usize>().prop_map(Line::new),
         any::<bool>(),
         proptest::option::of(fingerprint()),
     );
@@ -608,7 +608,7 @@ fn tab() -> impl Strategy<Value = TabRecord> {
     let views = (
         any::<u8>().prop_map(ViewSlot::from),
         proptest::option::of(any_id()),
-        vec(any::<usize>(), 0..4),
+        vec(any::<usize>().prop_map(Line::new), 0..4),
     );
     (identity, view, reading, views).prop_map(
         |(

@@ -3,14 +3,14 @@
 
 use super::numbers::{NumberOverflow, NumberSequence};
 use super::{Change, Doc, Target};
-use crate::text::TextEdit;
+use crate::text::{OffsetRange, TextEdit};
 
 /// Adds `prefix` at the start and `suffix` at the end of every line of the target, empty
 /// lines included.
 pub fn add(text: &str, target: &Target, prefix: &str, suffix: &str) -> Change {
     let doc = Doc::new(text);
     let mut edits = Vec::new();
-    for line in doc.lines(target) {
+    for line in doc.lines(target).iter() {
         let (start, end) = (doc.start(line), doc.end(line));
         if start == end {
             edits.push(TextEdit::insert(start, format!("{prefix}{suffix}")));
@@ -32,9 +32,9 @@ pub fn insert_numbers(
 ) -> Result<Change, NumberOverflow> {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
-    let numbers = sequence.rows(lines.len())?;
+    let numbers = sequence.rows(lines.end - lines.start)?;
     let mut edits = Vec::with_capacity(numbers.len());
-    for (line, number) in lines.zip(numbers) {
+    for (line, number) in lines.iter().zip(numbers) {
         let (start, end) = (doc.start(line), doc.end(line));
         let edit = if start + column <= end {
             TextEdit::insert(start + column, number)
@@ -142,8 +142,13 @@ mod tests {
         let change =
             insert_numbers(text, &Target::Document, 2, &numbering(8, 1, Padding::Zeros)).unwrap();
         assert_eq!(applied(text, &change), "ab08c\nx 09\n  10\nlo11nger");
-        let change =
-            insert_numbers(text, &Target::Lines(0..2), 0, &NumberSequence::default()).unwrap();
+        let change = insert_numbers(
+            text,
+            &Target::Lines(lines(0..2)),
+            0,
+            &NumberSequence::default(),
+        )
+        .unwrap();
         assert_eq!(applied(text, &change), "1abc\n2x\n\nlonger");
     }
 
@@ -156,12 +161,12 @@ mod tests {
             Err(NumberOverflow)
         );
         assert_eq!(
-            insert_numbers(text, &Target::Lines(0..1), 0, &extreme)
+            insert_numbers(text, &Target::Lines(lines(0..1)), 0, &extreme)
                 .map(|change| applied(text, &change)),
             Ok(format!("{}a\nb\nc", i64::MAX))
         );
         let falling = numbering(i64::MIN + 1, -1, Padding::None);
-        assert!(insert_numbers(text, &Target::Lines(1..3), 0, &falling).is_ok());
+        assert!(insert_numbers(text, &Target::Lines(lines(1..3)), 0, &falling).is_ok());
         assert_eq!(
             insert_numbers(text, &Target::Document, 0, &falling),
             Err(NumberOverflow)

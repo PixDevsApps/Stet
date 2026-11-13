@@ -16,15 +16,16 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use stet_domain::document::indent::{self, Indentation};
 use stet_domain::ops::lines::{self, Scope};
+use stet_domain::view::TabWidth;
 
-/// The widths the popover offers.
-const WIDTHS: [u32; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+/// The widths the popover offers, in cells.
+const WIDTHS: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /// What the popover asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndentChoice {
     Spaces(bool),
-    Width(u32),
+    Width(TabWidth),
     Detect,
     ConvertToSpaces,
     ConvertToTabs,
@@ -37,7 +38,7 @@ pub struct IndentPicker {
     pub popover: gtk::Popover,
     spaces: gtk::ToggleButton,
     tabs: gtk::ToggleButton,
-    widths: Vec<(u32, gtk::ToggleButton)>,
+    widths: Vec<(TabWidth, gtk::ToggleButton)>,
     showing: Flag,
     on_chosen: RefCell<Option<OnChosen>>,
 }
@@ -64,7 +65,7 @@ impl IndentPicker {
         kind.append(&tabs);
         let width_row = linked();
         let mut widths = Vec::new();
-        for width in WIDTHS {
+        for width in WIDTHS.into_iter().filter_map(TabWidth::new) {
             let button = gtk::ToggleButton::with_label(&width.to_string());
             if let Some((_, first)) = widths.first() {
                 button.set_group(Some(first));
@@ -273,7 +274,7 @@ impl Window {
             }
             IndentChoice::ConvertToSpaces | IndentChoice::ConvertToTabs => {
                 let spaces = choice == IndentChoice::ConvertToSpaces;
-                let width = indentation.tab_width as usize;
+                let width = indentation.tab_width;
                 indentation.insert_spaces = spaces;
                 page.set_indentation(indentation, IndentSource::User);
                 self.update_status();

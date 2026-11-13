@@ -1,10 +1,11 @@
 //! The Column Editor (Alt+C): text or a number sequence on every line of the rectangle.
 
 use super::editing::{ColumnEdit, ColumnError, edit_lines, single_line, splice};
-use super::rect::{Rect, clamp_lines};
+use super::rect::{Rect, VisualPos, clamp_lines};
 use super::visual::text_width;
 use crate::ops::numbers::{NumberSequence, Padding};
 use crate::text::LineIndex;
+use crate::view::TabWidth;
 
 /// What the Column Editor writes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +25,7 @@ impl ColumnEditor {
         text: &str,
         index: &LineIndex,
         rect: Rect,
-        tab_width: usize,
+        tab_width: TabWidth,
     ) -> Result<ColumnEdit, ColumnError> {
         let (left, right) = (rect.left(), rect.right());
         let (edits, width) = match self {
@@ -37,7 +38,7 @@ impl ColumnEditor {
             }
             Self::Numbers(sequence) => {
                 let lines = clamp_lines(index, rect.lines());
-                let rows = sequence.rows(lines.len())?;
+                let rows = sequence.rows(lines.end - lines.start)?;
                 let width = rows.first().map_or(0, String::len);
                 let edits = edit_lines(text, index, lines.clone(), |line, line_text| {
                     let row = rows[line - lines.start].as_str();
@@ -58,7 +59,10 @@ impl ColumnEditor {
                 (edits, width)
             }
         };
-        let rect = Rect::new((rect.anchor.line, left), (rect.cursor.line, left + width));
+        let rect = Rect::new(
+            VisualPos::new(rect.anchor.line, left),
+            VisualPos::new(rect.cursor.line, left + width),
+        );
         Ok(ColumnEdit { edits, rect })
     }
 }
@@ -66,6 +70,10 @@ impl ColumnEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::column::testing::pos;
+    use crate::view::TabWidth;
+
+    const TAB: TabWidth = TabWidth::DEFAULT;
     use crate::ops::numbers::{Base, NumberOverflow};
     use crate::text::apply;
     use proptest::prelude::*;
@@ -157,7 +165,7 @@ mod tests {
 
     fn run(text: &str, rect: Rect, editor: &ColumnEditor) -> (String, Rect) {
         let index = LineIndex::new(text);
-        let edit = editor.apply(text, &index, rect, 4).unwrap();
+        let edit = editor.apply(text, &index, rect, TAB).unwrap();
         (apply(text, edit.edits).unwrap(), edit.rect)
     }
 
@@ -165,20 +173,20 @@ mod tests {
     fn a_sequence_past_64_bits_writes_nothing() {
         let text = "a\nb\nc";
         let index = LineIndex::new(text);
-        let apply = |sequence, rect| ColumnEditor::Numbers(sequence).apply(text, &index, rect, 4);
+        let apply = |sequence, rect| ColumnEditor::Numbers(sequence).apply(text, &index, rect, TAB);
         let rising = sequence(i64::MAX - 1, 1);
-        assert!(apply(rising, Rect::new((0, 1), (1, 1))).is_ok());
+        assert!(apply(rising, Rect::new(pos(0, 1), pos(1, 1))).is_ok());
         assert_eq!(
-            apply(rising, Rect::new((0, 1), (2, 1))),
+            apply(rising, Rect::new(pos(0, 1), pos(2, 1))),
             Err(ColumnError::Overflow)
         );
         let falling = NumberSequence {
             repeat: 2,
             ..sequence(i64::MIN, -1)
         };
-        assert!(apply(falling, Rect::new((0, 0), (1, 0))).is_ok());
+        assert!(apply(falling, Rect::new(pos(0, 0), pos(1, 0))).is_ok());
         assert_eq!(
-            apply(falling, Rect::new((2, 0), (0, 0))),
+            apply(falling, Rect::new(pos(2, 0), pos(0, 0))),
             Err(ColumnError::Overflow)
         );
     }
@@ -186,21 +194,25 @@ mod tests {
     #[test]
     fn writes_numbers_down_a_column_caret() {
         let editor = ColumnEditor::Numbers(sequence(9, 1));
-        let (result, rect) = run("a = x;\nbb = y;\n\nc", Rect::new((3, 1), (0, 1)), &editor);
+        let (result, rect) = run(
+            "a = x;\nbb = y;\n\nc",
+            Rect::new(pos(3, 1), pos(0, 1)),
+            &editor,
+        );
         assert_eq!(result, "a9  = x;\nb10b = y;\n 11\nc12");
-        assert_eq!(rect, Rect::new((3, 1), (0, 3)));
+        assert_eq!(rect, Rect::new(pos(3, 1), pos(0, 3)));
     }
 
     #[test]
     fn text_replaces_the_block() {
         let editor = ColumnEditor::Text("<>".to_owned());
-        let (result, rect) = run("0123456\n0123456", Rect::new((0, 1), (1, 4)), &editor);
+        let (result, rect) = run("0123456\n0123456", Rect::new(pos(0, 1), pos(1, 4)), &editor);
         assert_eq!(result, "0<>456\n0<>456");
-        assert_eq!(rect, Rect::new((0, 1), (1, 3)));
+        assert_eq!(rect, Rect::new(pos(0, 1), pos(1, 3)));
         let multiline = ColumnEditor::Text("a\nb".to_owned());
         let index = LineIndex::new("x");
         assert_eq!(
-            multiline.apply("x", &index, Rect::new((0, 0), (0, 0)), 4),
+            multiline.apply("x", &index, Rect::new(pos(0, 0), pos(0, 0)), TAB),
             Err(ColumnError::LineBreak)
         );
     }

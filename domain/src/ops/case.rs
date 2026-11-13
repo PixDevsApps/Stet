@@ -540,7 +540,7 @@ mod tests {
                     let lines = naive_lines(&text, &target);
                     (!lines.is_empty()).then(|| {
                         let doc = Doc::new(&text);
-                        (doc.start(lines.start)..doc.end(lines.end - 1)).get()
+                        (doc.start(line(lines.start))..doc.end(line(lines.end - 1))).get()
                     })
                 }
                 Target::Document => Some(0..chars.len()),

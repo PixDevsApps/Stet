@@ -18,7 +18,7 @@ mod id;
 #[cfg(test)]
 mod tests;
 
-use crate::text::{CharOffset, Eol};
+use crate::text::{CharOffset, Eol, Line};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -202,9 +202,9 @@ pub struct TabRecord {
     /// Start and end of the selection, in characters; the caret is at one end.
     #[serde(deserialize_with = "codec::lenient")]
     pub selection: Option<(CharOffset, CharOffset)>,
-    /// The topmost visible line, zero-based, to restore the scroll position.
+    /// The topmost visible line, to restore the scroll position.
     #[serde(deserialize_with = "codec::lenient")]
-    pub first_visible_line: usize,
+    pub first_visible_line: Line,
     /// A pinned tab.
     #[serde(deserialize_with = "codec::lenient")]
     pub pinned: bool,
@@ -216,9 +216,9 @@ pub struct TabRecord {
     /// state is the other record's.
     #[serde(deserialize_with = "codec::lenient")]
     pub clone_of: Option<RecordId>,
-    /// Bookmarked lines, zero-based.
+    /// Bookmarked lines.
     #[serde(deserialize_with = "codec::lenient_seq")]
-    pub bookmarks: Vec<usize>,
+    pub bookmarks: Vec<Line>,
     /// The file as it was when the buffer was last loaded from or saved to it. Restore compares
     /// it with the file now to notice changes made while Stet was closed.
     #[serde(deserialize_with = "codec::lenient")]

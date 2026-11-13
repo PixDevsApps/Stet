@@ -9,7 +9,7 @@ use stet_domain::search::{
 };
 
 use stet_domain::text::{
-    Anchor, ByteOffset, CharCursor, CharOffset, LineCursor, char_to_byte, next_boundary,
+    Anchor, ByteOffset, CharCursor, CharOffset, Line, LineCursor, char_to_byte, next_boundary,
 };
 
 /// GtkSourceView compiles with newline convention ANY and Unicode `\R` (`implregex.c`); the
@@ -101,8 +101,8 @@ fn match_error(error: pcre2::Error) -> SearchError {
 pub struct Match {
     pub start: CharOffset,
     pub end: CharOffset,
-    /// Zero-based line of `start`.
-    pub line: usize,
+    /// The line of `start`.
+    pub line: Line,
 }
 
 impl Match {

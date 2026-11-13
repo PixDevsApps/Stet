@@ -1,10 +1,79 @@
 //! Editor view settings: font size and zoom, tab width, and the undo cap.
 
+use std::fmt;
+use std::num::NonZeroU8;
+
+use crate::text::VisualColumn;
+
 /// ADR-004: 11 pt by default.
 pub const DEFAULT_FONT_SIZE_PT: i32 = 11;
 
-/// The default tab size.
-pub const DEFAULT_TAB_WIDTH: u32 = 4;
+/// How many cells a tab advances to: the next multiple of the width. Never 0; `config.toml`
+/// allows 1 to 16, GtkSourceView up to 32.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TabWidth(NonZeroU8);
+
+impl TabWidth {
+    /// The default: four cells.
+    pub const DEFAULT: Self = Self(NonZeroU8::new(4).unwrap());
+
+    /// A width of `cells` cells, or `None` for 0.
+    #[must_use]
+    pub const fn new(cells: u8) -> Option<Self> {
+        match NonZeroU8::new(cells) {
+            Some(cells) => Some(Self(cells)),
+            None => None,
+        }
+    }
+
+    /// The width in cells.
+    #[must_use]
+    pub fn get(self) -> usize {
+        usize::from(self.0.get())
+    }
+
+    /// The column a tab that starts at `column` advances to.
+    #[must_use]
+    pub fn next_stop(self, column: VisualColumn) -> VisualColumn {
+        column + (self.get() - column.get() % self.get())
+    }
+}
+
+impl Default for TabWidth {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// GtkSourceView's `tab-width` and the number `config.toml` writes.
+impl From<TabWidth> for u32 {
+    fn from(width: TabWidth) -> Self {
+        Self::from(width.0.get())
+    }
+}
+
+/// A width read from `config.toml`, or from GtkSourceView's `tab-width`: 1 to 255.
+impl TryFrom<u32> for TabWidth {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(cells: u32) -> Result<Self, Self::Error> {
+        NonZeroU8::try_from(u8::try_from(cells)?).map(Self)
+    }
+}
+
+impl TryFrom<i64> for TabWidth {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(cells: i64) -> Result<Self, Self::Error> {
+        NonZeroU8::try_from(u8::try_from(cells)?).map(Self)
+    }
+}
+
+impl fmt::Display for TabWidth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// The undo cap set on every buffer (ADR-003 amendment, 2026-10-01). It limits undo
 /// steps, not edits: typing merges into word-sized steps, and bulk operations are one step.
@@ -62,6 +131,21 @@ impl Zoom {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tabs_advance_to_the_next_multiple_of_the_width() {
+        let width = TabWidth::DEFAULT;
+        assert_eq!(width.get(), 4);
+        assert_eq!(width.next_stop(VisualColumn::ZERO), VisualColumn::new(4));
+        assert_eq!(width.next_stop(VisualColumn::new(3)), VisualColumn::new(4));
+        assert_eq!(width.next_stop(VisualColumn::new(4)), VisualColumn::new(8));
+        assert_eq!(TabWidth::new(0), None);
+        assert_eq!(TabWidth::try_from(0_u32).ok(), None);
+        assert_eq!(TabWidth::try_from(256_i64).ok(), None);
+        assert_eq!(TabWidth::try_from(16_i64).ok(), TabWidth::new(16));
+        assert_eq!(u32::from(TabWidth::new(9).unwrap()), 9);
+        assert_eq!(TabWidth::DEFAULT.to_string(), "4");
+    }
 
     #[test]
     fn zoom_steps_and_clamps() {

@@ -153,11 +153,11 @@ impl EditorPage {
         self.view().grab_focus();
     }
 
-    /// The cursor as a zero-based line and character column.
+    /// The cursor's line and column in characters.
     pub fn cursor(&self) -> Position {
         let buffer = self.buffer();
         let iter = buffer.iter_at_mark(&buffer.get_insert());
-        Position::new(iter.line_number(), iter.column())
+        Position::new(iter.buffer_line(), iter.column())
     }
 
     /// The vertical scroll position, to keep it across a reload.

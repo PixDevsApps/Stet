@@ -132,14 +132,14 @@ mod tests {
             Request::parse("src/main.rs:40"),
             Request::File {
                 pattern: "src/main.rs".into(),
-                position: Some(LineCol::new(40, None))
+                position: Some(LineCol::at(40, None))
             }
         );
         assert_eq!(
             Request::parse("mai:40:5"),
             Request::File {
                 pattern: "mai".into(),
-                position: Some(LineCol::new(40, Some(5)))
+                position: Some(LineCol::at(40, Some(5)))
             }
         );
         assert_eq!(
@@ -151,11 +151,11 @@ mod tests {
         );
         assert_eq!(
             Request::parse(":12"),
-            Request::Line(Some(LineCol::new(12, None)))
+            Request::Line(Some(LineCol::at(12, None)))
         );
         assert_eq!(
             Request::parse(":12:3"),
-            Request::Line(Some(LineCol::new(12, Some(3))))
+            Request::Line(Some(LineCol::at(12, Some(3))))
         );
         assert_eq!(Request::parse(":x"), Request::Line(None));
         assert_eq!(

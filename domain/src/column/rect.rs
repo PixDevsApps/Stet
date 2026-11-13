@@ -1,25 +1,20 @@
 //! The rectangle and where its rows fall on each line.
 
 use super::visual::locate;
-use crate::text::{CharOffset, LineIndex};
+use crate::text::{CharOffset, Line, LineIndex, VisualColumn};
+use crate::view::TabWidth;
 use std::ops::Range;
 
 /// A line and a visual column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct VisualPos {
-    pub line: usize,
-    pub column: usize,
+    pub line: Line,
+    pub column: VisualColumn,
 }
 
 impl VisualPos {
-    pub const fn new(line: usize, column: usize) -> Self {
+    pub const fn new(line: Line, column: VisualColumn) -> Self {
         Self { line, column }
-    }
-}
-
-impl From<(usize, usize)> for VisualPos {
-    fn from((line, column): (usize, usize)) -> Self {
-        Self::new(line, column)
     }
 }
 
@@ -33,29 +28,27 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub fn new(anchor: impl Into<VisualPos>, cursor: impl Into<VisualPos>) -> Self {
-        Self {
-            anchor: anchor.into(),
-            cursor: cursor.into(),
-        }
+    pub const fn new(anchor: VisualPos, cursor: VisualPos) -> Self {
+        Self { anchor, cursor }
     }
 
-    pub fn top(self) -> usize {
+    pub fn top(self) -> Line {
         self.anchor.line.min(self.cursor.line)
     }
 
-    pub fn bottom(self) -> usize {
+    pub fn bottom(self) -> Line {
         self.anchor.line.max(self.cursor.line)
     }
 
-    pub fn left(self) -> usize {
+    pub fn left(self) -> VisualColumn {
         self.anchor.column.min(self.cursor.column)
     }
 
-    pub fn right(self) -> usize {
+    pub fn right(self) -> VisualColumn {
         self.anchor.column.max(self.cursor.column)
     }
 
+    /// The cells between the left and right columns.
     pub fn width(self) -> usize {
         self.right() - self.left()
     }
@@ -66,30 +59,25 @@ impl Rect {
     }
 
     /// The lines the rectangle covers, whether or not the text has them.
-    pub fn lines(self) -> Range<usize> {
+    pub fn lines(self) -> Range<Line> {
         self.top()..self.bottom().saturating_add(1)
     }
 
     /// A column caret at `column` on the same lines.
     #[must_use]
-    pub fn with_column(self, column: usize) -> Self {
-        Self::new((self.anchor.line, column), (self.cursor.line, column))
+    pub fn with_column(self, column: VisualColumn) -> Self {
+        Self::new(
+            VisualPos::new(self.anchor.line, column),
+            VisualPos::new(self.cursor.line, column),
+        )
     }
 
     /// The same rectangle `delta` lines down (up when negative), stopping at line 0. It moves a
     /// rectangle into and out of a snapshot of some of the document's lines.
     #[must_use]
     pub fn shift_lines(self, delta: isize) -> Self {
-        Self::new(
-            (
-                self.anchor.line.saturating_add_signed(delta),
-                self.anchor.column,
-            ),
-            (
-                self.cursor.line.saturating_add_signed(delta),
-                self.cursor.column,
-            ),
-        )
+        let shift = |at: VisualPos| VisualPos::new(at.line.saturating_add_signed(delta), at.column);
+        Self::new(shift(self.anchor), shift(self.cursor))
     }
 }
 
@@ -101,7 +89,7 @@ impl Rect {
 /// end plus the virtual cells.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineSpan {
-    pub line: usize,
+    pub line: Line,
     /// Document character offsets of the characters at or containing the left and right edges.
     pub chars: Range<CharOffset>,
     pub pad_left: usize,
@@ -112,11 +100,11 @@ impl LineSpan {
     /// The span of `rect`'s columns on `line`, whose text without `\n` is `line_text` and whose
     /// first character is at document offset `line_start`.
     pub fn new(
-        line: usize,
+        line: Line,
         line_text: &str,
         line_start: CharOffset,
         rect: Rect,
-        tab_width: usize,
+        tab_width: TabWidth,
     ) -> Self {
         let left = locate(line_text, rect.left(), tab_width);
         let right = if rect.is_empty() {
@@ -134,21 +122,24 @@ impl LineSpan {
 }
 
 /// The part of `lines` that the indexed text has.
-pub(super) fn clamp_lines(index: &LineIndex, lines: Range<usize>) -> Range<usize> {
-    let count = index.line_count();
-    lines.start.min(count)..lines.end.min(count)
+pub(super) fn clamp_lines(index: &LineIndex, lines: Range<Line>) -> Range<Line> {
+    let end = index.end_line();
+    lines.start.min(end)..lines.end.min(end)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::column::testing::{col, pos, tab};
     use crate::column::visual::visual_column;
-    use crate::text::testing::chars;
+    use crate::text::OffsetRange;
+    use crate::text::testing::{chars, line};
     use proptest::prelude::*;
 
     /// The spans of `rect` on the lines of `text` it covers.
-    fn spans(text: &str, index: &LineIndex, rect: Rect, tab_width: usize) -> Vec<LineSpan> {
+    fn spans(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth) -> Vec<LineSpan> {
         clamp_lines(index, rect.lines())
+            .iter()
             .map(|line| {
                 LineSpan::new(
                     line,
@@ -163,43 +154,43 @@ mod tests {
 
     #[test]
     fn normalizes_anchor_and_cursor() {
-        let rect = Rect::new((9, 12), (2, 4));
+        let rect = Rect::new(pos(9, 12), pos(2, 4));
         assert_eq!(
             (rect.top(), rect.bottom(), rect.left(), rect.right()),
-            (2, 9, 4, 12)
+            (line(2), line(9), col(4), col(12))
         );
-        assert_eq!((rect.lines(), rect.width()), (2..10, 8));
+        assert_eq!((rect.lines().get(), rect.width()), (2..10, 8));
         assert!(!rect.is_empty());
-        let caret = rect.with_column(6);
+        let caret = rect.with_column(col(6));
         assert!(caret.is_empty());
-        assert_eq!((caret.anchor, caret.cursor), ((9, 6).into(), (2, 6).into()));
+        assert_eq!((caret.anchor, caret.cursor), (pos(9, 6), pos(2, 6)));
         let moved = rect.shift_lines(-3);
-        assert_eq!((moved.top(), moved.bottom()), (0, 6));
-        assert_eq!(moved.shift_lines(3).lines(), 3..10);
+        assert_eq!((moved.top(), moved.bottom()), (line(0), line(6)));
+        assert_eq!(moved.shift_lines(3).lines().get(), 3..10);
     }
 
     #[test]
     fn spans_give_each_edge_as_a_character_plus_cells() {
         let text = "abcdefgh\t= 3;\n\tx\nab";
         let index = LineIndex::new(text);
-        let spans = spans(text, &index, Rect::new((0, 2), (5, 10)), 4);
+        let spans = spans(text, &index, Rect::new(pos(0, 2), pos(5, 10)), tab(4));
         assert_eq!(
             spans,
             vec![
                 LineSpan {
-                    line: 0,
+                    line: line(0),
                     chars: chars(2..8),
                     pad_left: 0,
                     pad_right: 2,
                 },
                 LineSpan {
-                    line: 1,
+                    line: line(1),
                     chars: chars(14..16),
                     pad_left: 2,
                     pad_right: 5,
                 },
                 LineSpan {
-                    line: 2,
+                    line: line(2),
                     chars: chars(19..19),
                     pad_left: 0,
                     pad_right: 8,
@@ -220,15 +211,16 @@ mod tests {
         #[test]
         fn span_edges_land_on_the_rectangle_columns(
             text in text(),
-            tab in 1usize..9,
+            cells in 1u8..9,
             (a, b) in (0usize..8, 0usize..8),
             (left, right) in (0usize..24, 0usize..24),
         ) {
+            let tab = tab(cells);
             let index = LineIndex::new(&text);
-            let rect = Rect::new((a, left), (b, right));
+            let rect = Rect::new(pos(a, left), pos(b, right));
             let spans = spans(&text, &index, rect, tab);
             let lines = clamp_lines(&index, rect.lines());
-            prop_assert_eq!(spans.iter().map(|span| span.line).collect::<Vec<_>>(), lines.collect::<Vec<_>>());
+            prop_assert_eq!(spans.iter().map(|span| span.line).collect::<Vec<_>>(), lines.iter().collect::<Vec<_>>());
             for span in spans {
                 let line_text = &text[index.line_bytes(span.line)];
                 let start = index.line_chars(span.line).start;

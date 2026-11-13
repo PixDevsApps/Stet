@@ -2,7 +2,6 @@
 //! document stays open in the other view; Close All asks once for every tab it closes; Restore
 //! Closed Tab reopens the last closed tabs, an untitled one with its text.
 
-use crate::convert::to_u32;
 use crate::editor::EditorPage;
 use crate::window::dialogs::SaveChoice;
 use crate::window::{Location, Window, page_of};
@@ -172,10 +171,7 @@ impl Window {
             ClosedTab::File { path, position } => {
                 self.open_locations(vec![Location {
                     path,
-                    position: Some(LineCol::new(
-                        to_u32(position.line + 1),
-                        Some(to_u32(position.column + 1)),
-                    )),
+                    position: Some(LineCol::from(position)),
                     create: false,
                 }]);
             }

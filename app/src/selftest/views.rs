@@ -4,7 +4,7 @@
 
 use super::registry::{Command, commands};
 use super::script::boolean;
-use super::{Harness, StepResult, WAIT_TIMEOUT, build, equal, number};
+use super::{Harness, StepResult, WAIT_TIMEOUT, build, equal, number, script_line};
 use crate::convert::{BufferPositions, IterPosition, to_i32};
 use crate::editor::EditorPage;
 use gtk4 as gtk;
@@ -15,6 +15,7 @@ use sourceview5::prelude::*;
 use std::time::{Duration, Instant};
 use stet_domain::diff::{LineKind, Side};
 use stet_domain::marks::MarkStyle;
+use stet_domain::text::{Line, OffsetRange};
 
 pub(super) const COMMANDS: &[Command] = commands![
     "gutter-click" (1, 1) => gutter_click,
@@ -86,7 +87,7 @@ impl Harness {
         let line = number(&args[0])?;
         let buffer = page.buffer();
         let iter = buffer
-            .iter_at_line_number(line.saturating_sub(1))
+            .iter_at_line_start(script_line(line))
             .ok_or_else(|| format!("there is no line {line}"))?;
         let state = gtk::gdk::ModifierType::empty();
         page.view().emit_by_name::<()>(
@@ -182,7 +183,7 @@ impl Harness {
         let view = page.view();
         let iter = page
             .buffer()
-            .iter_at_line_number(line.saturating_sub(1))
+            .iter_at_line_start(script_line(line))
             .ok_or_else(|| format!("there is no line {line}"))?;
         let (y, _) = view.line_yrange(&iter);
         if let Some(adjustment) = view.vadjustment() {
@@ -291,7 +292,7 @@ impl Harness {
             .bookmarks()
             .lines()
             .iter()
-            .map(|line| (line + 1).to_string())
+            .map(|line| line.number().to_string())
             .collect();
         let shown = if lines.is_empty() {
             "none".to_owned()
@@ -467,7 +468,7 @@ impl Harness {
         let iter = page.buffer().iter_at_char(caret);
         equal(
             "cursor (line, column)",
-            (iter.line_number() + 1, iter.column() + 1),
+            (iter.display_line().get(), iter.display_column().get()),
             (number(&args[1])?, number(&args[2])?),
         )
     }
@@ -493,7 +494,7 @@ impl Harness {
     fn assert_compare_line(&self, args: &[String]) -> StepResult {
         let (page, _, _) = self.compare_page(&args[0])?;
         let line = number(&args[1])?;
-        let kind = crate::editor::comparison::line_kind_at(&page, line.saturating_sub(1));
+        let kind = crate::editor::comparison::line_kind_at(&page, script_line(line));
         equal("line kind", kind_name(kind).to_owned(), args[2].clone())
     }
 
@@ -501,14 +502,14 @@ impl Harness {
     /// right end of the line, as rendered.
     fn assert_compare_paint(&self, args: &[String]) -> StepResult {
         let (page, _, _) = self.compare_page(&args[0])?;
-        let line = number(&args[1])?.saturating_sub(1);
+        let line = script_line(number(&args[1])?);
         let (painted, [red, green, blue, _]) = painted_kind(&page, line)?;
         if painted == args[2] {
             Ok(())
         } else {
             Err(format!(
                 "line {} is painted {painted} (#{red:02x}{green:02x}{blue:02x}), wanted {}",
-                line + 1,
+                line.number(),
                 args[2]
             ))
         }
@@ -519,12 +520,7 @@ impl Harness {
     fn assert_text_background(&self, args: &[String]) -> StepResult {
         let page = self.page()?;
         let (line, column) = (number(&args[0])?, number(&args[1])?);
-        text_background(
-            &page,
-            line.saturating_sub(1),
-            column.saturating_sub(1),
-            &args[2],
-        )
+        text_background(&page, script_line(line), column.saturating_sub(1), &args[2])
     }
 
     /// `assert-compare-inline old|new <line> <ranges>|none`: the changed columns of a line,
@@ -532,7 +528,7 @@ impl Harness {
     fn assert_compare_inline(&self, args: &[String]) -> StepResult {
         let (page, _, _) = self.compare_page(&args[0])?;
         let line = number(&args[1])?;
-        let ranges = crate::editor::comparison::inline_ranges_at(&page, line.saturating_sub(1));
+        let ranges = crate::editor::comparison::inline_ranges_at(&page, script_line(line));
         let shown = if ranges.is_empty() {
             "none".to_owned()
         } else {
@@ -579,8 +575,9 @@ impl Harness {
     /// comparison.
     fn assert_compare_clean(&self, _: &[String]) -> StepResult {
         let page = self.page()?;
-        let lines = page.buffer().total_lines();
-        let coloured = (0..lines)
+        let lines = Line::ZERO..page.buffer().end_line();
+        let coloured = lines
+            .iter()
             .filter(|line| crate::editor::comparison::line_kind_at(&page, *line).is_some())
             .count();
         let view = page.view();
@@ -652,9 +649,9 @@ impl Harness {
         let (old, _, comparison) = self.compare_page("old")?;
         let (new, _, _) = self.compare_page("new")?;
         let alignment = &comparison.alignment;
-        let y = |page: &EditorPage, line: usize| {
+        let y = |page: &EditorPage, line: Line| {
             page.buffer()
-                .iter_at_line_number(line)
+                .iter_at_line_start(line)
                 .map(|iter| page.view().line_yrange(&iter).0)
         };
         let mut checked = 0;
@@ -998,14 +995,14 @@ fn view_index(word: &str) -> Result<usize, String> {
     }
 }
 
-/// The comparison background `page`'s view paints at the right end of `line` (zero-based), as
+/// The comparison background `page`'s view paints at the right end of `line`, as
 /// rendered: the kind whose scheme colour the pixel has, or "none"; and the pixel.
-fn painted_kind(page: &EditorPage, line: usize) -> Result<(&'static str, [u8; 4]), String> {
+fn painted_kind(page: &EditorPage, line: Line) -> Result<(&'static str, [u8; 4]), String> {
     let view = page.view();
     let buffer = page.buffer();
     let iter = buffer
-        .iter_at_line_number(line)
-        .ok_or_else(|| format!("there is no line {}", line + 1))?;
+        .iter_at_line_start(line)
+        .ok_or_else(|| format!("there is no line {}", line.number()))?;
     let (top, _) = view.line_yrange(&iter);
     let (_, y) = view.buffer_to_window_coords(gtk::TextWindowType::Widget, 0, top);
     let pixel = super::screenshot::pixel(view.upcast_ref(), view.width() - 4, y + 2)?;
@@ -1036,15 +1033,14 @@ fn near(color: &gtk::gdk::RGBA, pixel: [u8; 4]) -> bool {
         .all(|(wanted, got)| ((wanted * 255.0).round() - f32::from(got)).abs() <= 2.0)
 }
 
-/// Checks that `page`'s view paints the top left corner of the character at `line` and
-/// `column` (zero-based), above any glyph, in the background of the scheme's `style`, as
-/// rendered.
-fn text_background(page: &EditorPage, line: usize, column: usize, style: &str) -> StepResult {
+/// Checks that `page`'s view paints the top left corner of the character `column` characters
+/// into `line`, above any glyph, in the background of the scheme's `style`, as rendered.
+fn text_background(page: &EditorPage, line: Line, column: usize, style: &str) -> StepResult {
     let view = page.view();
     let buffer = page.buffer();
     let iter = buffer
         .iter_at_line_column(line, column)
-        .ok_or_else(|| format!("there is no line {}, column {}", line + 1, column + 1))?;
+        .ok_or_else(|| format!("there is no line {}, column {}", line.number(), column + 1))?;
     let cell = view.iter_location(&iter);
     let (x, y) =
         view.buffer_to_window_coords(gtk::TextWindowType::Widget, cell.x() + 1, cell.y() + 1);
@@ -1060,7 +1056,7 @@ fn text_background(page: &EditorPage, line: usize, column: usize, style: &str) -
     } else {
         Err(format!(
             "line {}, column {} is painted #{red:02x}{green:02x}{blue:02x}, wanted {style} ({})",
-            line + 1,
+            line.number(),
             column + 1,
             wanted.to_str()
         ))
