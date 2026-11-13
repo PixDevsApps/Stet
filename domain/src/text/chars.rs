@@ -4,11 +4,13 @@
 pub const NUL_PLACEHOLDER: char = '\u{2400}';
 
 /// A word character, as Scintilla counts them: a letter, digit or `_`.
+#[must_use]
 pub fn is_word_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
 /// `c` lowercased to one character, so that folded text keeps its character count.
+#[must_use]
 pub fn fold_char(c: char) -> char {
     if c.is_ascii() {
         c.to_ascii_lowercase()

@@ -8,6 +8,7 @@ use serde::de::IgnoredAny;
 
 use super::{Breaks, Change, Indent, SyntaxError, Target, reformat_target};
 
+/// A JSON syntax error found while formatting.
 pub type JsonError = SyntaxError;
 
 /// Checks that `text` is exactly one JSON value (RFC 8259), with whitespace around it.

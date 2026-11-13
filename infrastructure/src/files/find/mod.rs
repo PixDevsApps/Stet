@@ -45,6 +45,7 @@ use super::{FileError, JobHandle, PathError, StartError};
 use crate::search::{Hit, Matcher, SearchError, document_hits};
 use engine::{CancelRead, FileMatcher, FileSink};
 
+/// How many matches a [`FifRequest::new`] request stops at.
 pub const DEFAULT_MAX_HITS: usize = 50_000;
 /// Searches that need whole files in memory skip larger files.
 pub const MAX_WHOLE_FILE_BYTES: u64 = 256 << 20;
@@ -54,15 +55,19 @@ const MAX_ERRORS: usize = 100;
 const HEAD_BYTES: usize = 64 << 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// What Find in Files searches, where, and how.
 pub struct FifRequest {
     /// Folders (or files) to search.
     pub roots: Vec<PathBuf>,
     /// The filter list, such as `*.rs *.toml !*.min.js !\target !+\node_modules`.
     pub filters: String,
+    /// Search hidden files and folders too.
     pub include_hidden: bool,
     /// Skip what `.gitignore`, `.ignore` and git's excludes ignore (inside git repositories).
     pub respect_gitignore: bool,
+    /// Descend into subfolders of the roots.
     pub include_subfolders: bool,
+    /// The search text and its options.
     pub query: Query,
     /// Stop after this many matches and set [`FifSummary::truncated`].
     pub max_hits: usize,
@@ -84,6 +89,7 @@ pub struct OpenDocument {
 impl FifRequest {
     /// Every file under `roots`, with subfolders, without hidden files, respecting
     /// `.gitignore`, up to [`DEFAULT_MAX_HITS`] matches.
+    #[must_use]
     pub fn new(roots: Vec<PathBuf>, query: Query) -> Self {
         let walk = WalkOptions::default();
         Self {
@@ -110,19 +116,26 @@ impl FifRequest {
 /// The matching lines of one file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileHits {
+    /// The file the matches are in.
     pub path: PathBuf,
+    /// The matching lines, in file order.
     pub hits: Vec<Hit>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// How a Find in Files run ended, as the results panel's status line reports it.
 pub struct FifSummary {
+    /// How many files were searched.
     pub files_searched: usize,
+    /// How many files had at least one match.
     pub files_matched: usize,
     /// Matches reported, at most the request's `max_hits`.
     pub hits: usize,
     /// The hit cap was reached; the search stopped early.
     pub truncated: bool,
+    /// The run was cancelled before it finished.
     pub cancelled: bool,
+    /// How long the run took.
     pub elapsed: Duration,
     /// Unreadable folders and files, at most 100.
     pub errors: Vec<PathError>,
@@ -404,6 +417,7 @@ impl Shared {
 /// Whether the walk reads a file in `encoding` as text: UTF-8, with or without a byte-order
 /// mark, and UTF-16 with one. Files in any other encoding are searched as bytes, so an open
 /// document in one of them is better searched from its text.
+#[must_use]
 pub fn reads_as_text(encoding: &'static Encoding, bom: bool) -> bool {
     encoding == UTF_8 || (bom && (encoding == UTF_16LE || encoding == UTF_16BE))
 }

@@ -1,3 +1,7 @@
+//! Where Omarchy keeps what Stet reads: its state directory, which holds `current/`, and the
+//! `omarchy-theme-color` script. The `_in` variants take the root or home explicitly, so tests
+//! can point them at a temporary folder.
+
 use std::path::{Path, PathBuf};
 
 const THEME_COLOR_SCRIPT: &str = "usr/share/omarchy/bin/omarchy-theme-color";
@@ -8,16 +12,19 @@ pub const STATE_DIR_ENV: &str = "STET_OMARCHY_STATE_DIR";
 
 /// Where Omarchy keeps its state: `~/.local/state`. Omarchy's scripts write
 /// `$HOME/.local/state/omarchy` whatever `$XDG_STATE_HOME` says, so Stet looks there too.
+#[must_use]
 pub fn state_home(home: &Path) -> PathBuf {
     home.join(".local/state")
 }
 
 /// Omarchy's state directory, which holds `current/`.
+#[must_use]
 pub fn omarchy_dir_in(state_home: &Path) -> PathBuf {
     state_home.join("omarchy")
 }
 
 /// The resolver script, when installed under `root` (`/` outside tests).
+#[must_use]
 pub fn theme_color_script_in(root: &Path) -> Option<PathBuf> {
     let script = root.join(THEME_COLOR_SCRIPT);
     script.is_file().then_some(script)
@@ -31,6 +38,8 @@ pub fn omarchy_dir() -> PathBuf {
     }
 }
 
+/// The installed `omarchy-theme-color` script, or `None` outside Omarchy.
+#[must_use]
 pub fn theme_color_script() -> Option<PathBuf> {
     theme_color_script_in(Path::new("/"))
 }

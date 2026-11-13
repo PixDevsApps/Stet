@@ -1,16 +1,26 @@
+//! Line endings: the three kinds, counting them in a file, and normalizing text to LF. The
+//! buffer always holds LF (ADR-008); a document keeps the line ending it is saved with.
+
 use std::borrow::Cow;
 
+/// A line ending, the one a document is saved with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Eol {
+    /// `\n`, as on Linux and macOS.
     #[default]
     Lf,
+    /// `\r\n`, as on Windows.
     CrLf,
+    /// `\r`, as on classic Mac OS.
     Cr,
 }
 
 impl Eol {
+    /// Every line ending, in the order the menus list them.
     pub const ALL: [Self; 3] = [Self::Lf, Self::CrLf, Self::Cr];
 
+    /// The characters written at the end of each line.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Lf => "\n",
@@ -19,6 +29,8 @@ impl Eol {
         }
     }
 
+    /// The name the status bar and the menus show.
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Lf => "LF",
@@ -31,12 +43,17 @@ impl Eol {
 /// Line-ending counts of an ASCII-compatible byte sequence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct EolStats {
+    /// Lone `\n`s.
     pub lf: usize,
+    /// `\r\n` pairs.
     pub crlf: usize,
+    /// Lone `\r`s.
     pub cr: usize,
 }
 
 impl EolStats {
+    /// Counts the line endings of `bytes`.
+    #[must_use]
     pub fn detect(bytes: &[u8]) -> Self {
         let mut stats = Self::default();
         for index in memchr::memchr2_iter(b'\r', b'\n', bytes) {
@@ -53,11 +70,14 @@ impl EolStats {
         stats
     }
 
+    /// How many line endings there are of all kinds.
+    #[must_use]
     pub fn total(&self) -> usize {
         self.lf + self.crlf + self.cr
     }
 
     /// The most frequent line ending. A tie for the highest count falls back to LF.
+    #[must_use]
     pub fn dominant(&self) -> Option<Eol> {
         let counts = [
             (Eol::Lf, self.lf),
@@ -75,6 +95,8 @@ impl EolStats {
         }
     }
 
+    /// Whether more than one kind of line ending occurs.
+    #[must_use]
     pub fn is_mixed(&self) -> bool {
         [self.lf, self.crlf, self.cr]
             .iter()
@@ -85,6 +107,7 @@ impl EolStats {
 }
 
 /// Replaces every CRLF and lone CR with LF, borrowing when there is nothing to replace.
+#[must_use]
 pub fn normalize_to_lf(text: &str) -> Cow<'_, str> {
     let bytes = text.as_bytes();
     if memchr::memchr(b'\r', bytes).is_none() {
@@ -124,6 +147,8 @@ pub struct LfNormalizer {
 }
 
 impl LfNormalizer {
+    /// A normalizer that has seen no text yet.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -168,6 +193,7 @@ impl LfNormalizer {
     }
 
     /// The line-ending counts of everything pushed so far.
+    #[must_use]
     pub fn finish(mut self) -> EolStats {
         if self.pending_cr {
             self.stats.cr += 1;

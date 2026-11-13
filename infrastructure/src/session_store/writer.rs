@@ -1,3 +1,7 @@
+//! The store's writer thread, which holds the lock and does every write in commit order.
+//! Backups reach the disk before the manifest that references them, and removed backups are
+//! deleted only after a manifest without them is on disk.
+
 use super::fsutil::{remove_file, remove_files_in, sync_dir};
 use super::layout::Layout;
 use super::restore;

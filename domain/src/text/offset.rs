@@ -3,6 +3,7 @@
 use super::units::{Anchor, ByteOffset, CharOffset, Line};
 
 /// Characters in `bytes`: the bytes that do not continue a UTF-8 sequence.
+#[must_use]
 pub fn count_chars(bytes: &[u8]) -> usize {
     bytes
         .iter()
@@ -11,6 +12,7 @@ pub fn count_chars(bytes: &[u8]) -> usize {
 }
 
 /// The start of the character after the one at byte `at` (one past the end at the end).
+#[must_use]
 pub fn next_boundary(bytes: &[u8], at: usize) -> usize {
     let mut next = at + 1;
     while bytes.get(next).is_some_and(|&byte| byte & 0xC0 == 0x80) {
@@ -21,6 +23,7 @@ pub fn next_boundary(bytes: &[u8], at: usize) -> usize {
 
 /// The byte offset of character `target`, counting from `from` (or from the start of the
 /// text when `target` lies before it). `None` beyond the end of `text`.
+#[must_use]
 pub fn char_to_byte(text: &str, from: Anchor, target: CharOffset) -> Option<ByteOffset> {
     const BLOCK: usize = 64;
     if target < from.char {
@@ -55,11 +58,13 @@ pub struct CharCursor<'a> {
 
 impl<'a> CharCursor<'a> {
     /// A cursor at the start of `text`.
+    #[must_use]
     pub fn new(text: &'a str) -> Self {
         Self::at(text, Anchor::START)
     }
 
     /// A cursor at `at`, a point of `text` known in both units.
+    #[must_use]
     pub fn at(text: &'a str, at: Anchor) -> Self {
         Self {
             bytes: text.as_bytes(),
@@ -88,6 +93,7 @@ pub struct ByteCursor<'a> {
 
 impl<'a> ByteCursor<'a> {
     /// A cursor at the start of `text`.
+    #[must_use]
     pub fn new(text: &'a str) -> Self {
         Self {
             text,
@@ -118,6 +124,7 @@ pub struct LineCursor<'a> {
 
 impl<'a> LineCursor<'a> {
     /// A cursor at byte `byte` of `text`.
+    #[must_use]
     pub fn at(text: &'a str, byte: ByteOffset) -> Self {
         let bytes = text.as_bytes();
         Self {

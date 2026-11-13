@@ -17,9 +17,12 @@ use super::{
 };
 use crate::text::{ByteOffset, CharOffset, Line, OffsetRange, TextEdit};
 
+/// A language's comment tokens, from GtkSourceView's language metadata.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CommentTokens {
+    /// The line comment token, such as `//`.
     pub line: Option<String>,
+    /// The block comment's start and end tokens, such as `/*` and `*/`.
     pub block: Option<(String, String)>,
 }
 
@@ -44,16 +47,19 @@ impl CommentTokens {
 }
 
 /// Comments or uncomments the lines of the target (Ctrl+Q).
+#[must_use]
 pub fn toggle_line(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     line_comments(text, target, tokens, Mode::Toggle)
 }
 
 /// Comments the lines of the target (Ctrl+K).
+#[must_use]
 pub fn comment_lines(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     line_comments(text, target, tokens, Mode::Comment)
 }
 
 /// Uncomments the lines of the target that are commented (Ctrl+Shift+K).
+#[must_use]
 pub fn uncomment_lines(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     line_comments(text, target, tokens, Mode::Uncomment)
 }
@@ -62,6 +68,7 @@ pub fn uncomment_lines(text: &str, target: &Target, tokens: &CommentTokens) -> C
 /// otherwise wraps the selection, or with a caret the line without its indentation and
 /// trailing blanks, in the block tokens (Ctrl+Shift+Q). A wrapped selection is selected with
 /// its tokens, so toggling again unwraps it. Does nothing without block tokens.
+#[must_use]
 pub fn toggle_block(text: &str, target: &Target, tokens: &CommentTokens) -> Change {
     let Some((open, close)) = tokens.block_tokens() else {
         return Change::default();

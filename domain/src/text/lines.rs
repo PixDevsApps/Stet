@@ -14,18 +14,22 @@ pub const DISPLAY_BREAK_CHARS: usize = 1_000;
 /// The longest line of LF-separated text and its length in characters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LongestLine {
+    /// The line, the first of the longest when several tie.
     pub line: Line,
+    /// Its length in characters, without the `\n`.
     pub chars: usize,
 }
 
 /// The number of lines of LF-separated text, as GtkTextBuffer counts them: one more than
 /// its line breaks.
+#[must_use]
 pub fn line_count(text: &str) -> usize {
     memchr::memchr_iter(b'\n', text.as_bytes()).count() + 1
 }
 
 /// Finds the longest line, counting characters only for lines whose byte length could beat
 /// the longest so far.
+#[must_use]
 pub fn longest_line(text: &str) -> LongestLine {
     let bytes = text.as_bytes();
     let mut longest = LongestLine::default();
@@ -48,6 +52,7 @@ pub fn longest_line(text: &str) -> LongestLine {
 
 /// `text` with a line break after every `width` characters of each line that is longer, so
 /// that it can be shown; shorter lines are copied as they are. `width` must not be 0.
+#[must_use]
 pub fn break_long_lines(text: &str, width: usize) -> String {
     assert!(width > 0, "a break width of 0");
     let mut out = String::with_capacity(text.len() + text.len() / width + 1);

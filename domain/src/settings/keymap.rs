@@ -33,6 +33,7 @@ impl Keymap {
     }
 
     /// The keys Stet installs for `id`, where its [`KeyScope`] says.
+    #[must_use]
     pub fn installed(&self, id: ActionId) -> Vec<String> {
         match self.overrides.get(&id) {
             Some(keys) => keys.clone(),
@@ -41,6 +42,7 @@ impl Keymap {
     }
 
     /// The application accelerators of a window-scoped action.
+    #[must_use]
     pub fn accels(&self, id: ActionId) -> Vec<String> {
         match id.key_scope() {
             KeyScope::Window => self.installed(id),
@@ -49,6 +51,7 @@ impl Keymap {
     }
 
     /// The editor shortcuts of an editor-scoped action.
+    #[must_use]
     pub fn editor_keys(&self, id: ActionId) -> Vec<String> {
         match id.key_scope() {
             KeyScope::Editor => self.installed(id),
@@ -58,12 +61,14 @@ impl Keymap {
 
     /// Whether `keys.toml` changed the keys of `id`.
     #[cfg(test)]
+    #[must_use]
     pub fn is_changed(&self, id: ActionId) -> bool {
         self.overrides.contains_key(&id)
     }
 
     /// How many actions `keys.toml` changed.
     #[cfg(test)]
+    #[must_use]
     pub fn changed_count(&self) -> usize {
         self.overrides.len()
     }
@@ -257,6 +262,7 @@ fn is_rebindable(id: ActionId) -> bool {
 
 /// The `keys.toml` that Open Keyboard Shortcuts creates: every action Stet lets you rebind,
 /// commented out with its default keys, grouped by its place in the menu.
+#[must_use]
 pub fn default_keys_file() -> String {
     let mut out = String::from(
         "# Stet keyboard shortcuts (keys.toml): your changes to Stet's default keys.\n\

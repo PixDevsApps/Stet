@@ -20,12 +20,16 @@ pub enum Request {
     /// A file whose path matches `pattern`, opened at `position` when one follows it
     /// (`main.rs:40`, `main.rs:40:5`).
     File {
+        /// The text to match against paths.
         pattern: String,
+        /// The line and column after the pattern, if any.
         position: Option<LineCol>,
     },
 }
 
 impl Request {
+    /// Reads the typed text: `:line[:col]`, or a path pattern with an optional `:line[:col]`.
+    #[must_use]
     pub fn parse(text: &str) -> Self {
         let text = text.trim();
         if let Some(rest) = text.strip_prefix(':') {
@@ -47,16 +51,22 @@ impl Request {
 /// Where a row comes from, in the order the popup lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Source {
+    /// A document open in a tab.
     Open,
+    /// A file from the recent-files list.
     Recent,
+    /// A file found by walking the project.
     Project,
 }
 
 /// A row: an index into its group's candidates and the matched characters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
+    /// The group the row belongs to.
     pub source: Source,
+    /// The index into the group's candidates.
     pub index: usize,
+    /// The match's quality; higher is better.
     pub score: i32,
     /// Character indices of the matched characters.
     pub positions: Vec<usize>,
@@ -104,6 +114,7 @@ fn rank_into<S: AsRef<str>>(
 }
 
 /// Sorted character indices grouped into runs of neighbours, for highlighting.
+#[must_use]
 pub fn runs(positions: &[usize]) -> Vec<Range<usize>> {
     let mut runs: Vec<Range<usize>> = Vec::new();
     for &position in positions {

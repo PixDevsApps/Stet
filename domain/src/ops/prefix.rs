@@ -7,6 +7,7 @@ use crate::text::{OffsetRange, TextEdit};
 
 /// Adds `prefix` at the start and `suffix` at the end of every line of the target, empty
 /// lines included.
+#[must_use]
 pub fn add(text: &str, target: &Target, prefix: &str, suffix: &str) -> Change {
     let doc = Doc::new(text);
     let mut edits = Vec::new();

@@ -14,13 +14,19 @@ use super::{
 };
 
 /// Generates [`ActionId`], [`ActionId::ALL`] and [`ActionId::spec`] from one table of
-/// `Variant => spec` rows; attributes and doc comments on a row go to its variant.
+/// `Variant => spec` rows; attributes and doc comments on a row go to its variant, after a
+/// generated line that points to the row's spec.
 macro_rules! actions {
     ($($(#[$attr:meta])* $id:ident => $spec:expr,)*) => {
         /// Every user-visible command.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum ActionId {
-            $($(#[$attr])* $id,)*
+            $(
+                /// A command declared in the action table; [`ActionId::spec`] gives its GAction
+                /// name, label, menu place and keys.
+                $(#[$attr])*
+                $id,
+            )*
         }
 
         impl ActionId {
@@ -39,37 +45,44 @@ macro_rules! actions {
 
 impl ActionId {
     /// The GAction name, without the `app.` or `win.` prefix.
+    #[must_use]
     pub const fn name(self) -> &'static str {
         self.spec().name
     }
 
     /// Whether the action is the application's or the window's.
+    #[must_use]
     pub const fn scope(self) -> ActionScope {
         self.spec().scope
     }
 
     /// The label menus and the palette show.
+    #[must_use]
     pub const fn label(self) -> &'static str {
         self.spec().label
     }
 
     /// The shape of the GAction.
+    #[must_use]
     pub const fn kind(self) -> ActionKind {
         self.spec().kind
     }
 
     /// The default keys.
+    #[must_use]
     pub const fn keys(self) -> Keys {
         self.spec().keys
     }
 
     /// Where the keys work.
+    #[must_use]
     pub const fn key_scope(self) -> KeyScope {
         self.spec().key_scope
     }
 
     /// The default application accelerators, installed with `set_accels_for_action`; an
     /// editor-scoped action has none (its keys are the editors' own shortcuts).
+    #[must_use]
     pub const fn default_accels(self) -> &'static [&'static str] {
         match self.spec().key_scope {
             KeyScope::Window => self.spec().keys.app,
@@ -79,11 +92,13 @@ impl ActionId {
 
     /// Whether the keys are GtkTextView's own bindings, which Stet shows but cannot change
     /// (undo, the clipboard, select all).
+    #[must_use]
     pub const fn has_widget_keys(self) -> bool {
         !self.spec().keys.widget.is_empty()
     }
 
     /// The action called `name`, with or without its `app.` or `win.` prefix.
+    #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         let name = name
             .strip_prefix("win.")
@@ -93,6 +108,7 @@ impl ActionId {
     }
 
     /// The menu that holds the action, `File`, or `File › Open Recent` for nested entries.
+    #[must_use]
     pub fn menu_path(self) -> Option<String> {
         let place = self.spec().menu?;
         Some(match place.submenu {

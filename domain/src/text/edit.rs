@@ -42,48 +42,63 @@ impl TextEdit {
     }
 
     /// Deletes `range`.
+    #[must_use]
     pub fn delete(range: Range<CharOffset>) -> Self {
         Self::new(range, "")
     }
 
     /// The replaced characters.
+    #[must_use]
     pub fn range(&self) -> Range<CharOffset> {
         self.range.clone()
     }
 
     /// Where the replaced characters start, and where the inserted text goes.
+    #[must_use]
     pub fn start(&self) -> CharOffset {
         self.range.start
     }
 
     /// Where the replaced characters end.
+    #[must_use]
     pub fn end(&self) -> CharOffset {
         self.range.end
     }
 
     /// How many characters the edit replaces.
+    #[must_use]
     pub fn removed(&self) -> usize {
         self.range.end - self.range.start
     }
 
+    /// Whether the edit changes nothing: it replaces no characters with no text.
+    #[must_use]
     pub fn is_noop(&self) -> bool {
         self.range.is_empty() && self.insert.is_empty()
     }
 
     /// How many characters longer the text is after this edit.
+    #[must_use]
     pub fn delta(&self) -> isize {
         self.insert.chars().count().cast_signed() - self.removed().cast_signed()
     }
 }
 
+/// Why a set of edits can't be applied to a text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditError {
+    /// An edit reaches past the end of the text.
     OutOfBounds {
+        /// The edit's characters.
         range: Range<CharOffset>,
+        /// The text's length in characters.
         len: usize,
     },
+    /// Two edits replace some of the same characters.
     Overlap {
+        /// The characters of the earlier edit.
         first: Range<CharOffset>,
+        /// The characters of the later edit.
         second: Range<CharOffset>,
     },
 }
@@ -155,12 +170,15 @@ pub fn apply(text: &str, edits: Vec<TextEdit>) -> Result<String, EditError> {
 /// Which side of a replaced range a position inside it moves to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bias {
+    /// To the start of the replaced range.
     Before,
+    /// To the end of the inserted text.
     After,
 }
 
 /// Where `offset` ends up after `edits` (normalized) are applied. Positions inside a replaced
 /// range move to its start or, with [`Bias::After`], its end.
+#[must_use]
 pub fn map_offset(offset: CharOffset, edits: &[TextEdit], bias: Bias) -> CharOffset {
     let mut shift: isize = 0;
     for edit in edits {
@@ -183,6 +201,7 @@ pub fn map_offset(offset: CharOffset, edits: &[TextEdit], bias: Bias) -> CharOff
 /// The one edit that turns `old` into `new` by replacing only what lies between their common
 /// prefix and suffix; `None` when they are equal. A reload from disk applies it, so marks and
 /// the view outside the change stay where they were.
+#[must_use]
 pub fn minimal_edit(old: &str, new: &str) -> Option<TextEdit> {
     if old == new {
         return None;

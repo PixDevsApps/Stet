@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 /// The most paths the list keeps.
 pub const RECENT_LIMIT: usize = 20;
 
+/// The recently opened files, most recent first, each once, at most [`RECENT_LIMIT`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RecentFiles {
     paths: Vec<PathBuf>,
@@ -36,22 +37,28 @@ impl RecentFiles {
         true
     }
 
+    /// Drops `path` from the list. Returns whether the list changed.
     pub fn remove(&mut self, path: &Path) -> bool {
         let before = self.paths.len();
         self.paths.retain(|existing| existing != path);
         self.paths.len() != before
     }
 
+    /// Empties the list. Returns whether it held any path.
     pub fn clear(&mut self) -> bool {
         let changed = !self.paths.is_empty();
         self.paths.clear();
         changed
     }
 
+    /// The paths, most recent first.
+    #[must_use]
     pub fn paths(&self) -> &[PathBuf] {
         &self.paths
     }
 
+    /// Whether the list holds no path.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.paths.is_empty()
     }

@@ -20,15 +20,20 @@ use crate::view::{DEFAULT_FONT_SIZE_PT, HIGHLIGHT_MAX_BYTES, HIGHLIGHT_MAX_LINES
 
 pub use keymap::{Canonical, Keymap, default_keys_file};
 
+/// The settings file's name in Stet's configuration folder.
 pub const CONFIG_FILE: &str = "config.toml";
+/// The keymap file's name in Stet's configuration folder.
 pub const KEYS_FILE: &str = "keys.toml";
 
 /// A mistake in a settings file, at a line and column (counted in characters) as people count
 /// them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileError {
+    /// The line the mistake is on.
     pub line: LineNumber,
+    /// The column the mistake starts at, in characters.
     pub column: NonZeroUsize,
+    /// What is wrong, in a sentence.
     pub message: String,
 }
 
@@ -120,7 +125,9 @@ fn edit_distance(a: &str, b: &str) -> usize {
 /// defaults for the language, then from the global settings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct LanguageIndent {
+    /// The columns a tab takes, if the language sets it.
     pub tab_width: Option<TabWidth>,
+    /// Whether Tab inserts spaces, if the language sets it.
     pub insert_spaces: Option<bool>,
 }
 
@@ -187,6 +194,7 @@ macro_rules! settings {
         #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct Settings {
             $($(#[$attr])* pub $field: $ty,)*
+            /// The `[language.<id>]` tables, by GtkSourceView language id.
             pub languages: BTreeMap<String, LanguageIndent>,
         }
 
@@ -263,9 +271,11 @@ settings! {
     font_size: u32 = DEFAULT_FONT_SIZE_PT as u32, Number(4..=72) {
         note: "points; zoom (Ctrl++ and Ctrl+-) adds to it",
     }
+    /// The columns a tab takes, for new documents and files whose indentation isn't detected.
     tab_width: TabWidth = Indentation::DEFAULT.tab_width, Number(TAB_WIDTHS) {
         heading: ["Indentation of new documents, and of files whose own can't be detected."],
     }
+    /// Whether Tab inserts spaces, for new documents and files whose indentation isn't detected.
     insert_spaces: bool = Indentation::DEFAULT.insert_spaces, Flag {
         note: "true: Tab inserts spaces",
     }
@@ -273,13 +283,17 @@ settings! {
     detect_indentation: bool = true, Flag {
         note: "follow the indentation a file already uses",
     }
+    /// Whether long lines wrap at the window's edge.
     word_wrap: bool = false, Flag {
         heading: ["What the View menu starts with."],
     }
+    /// Whether spaces, tabs and line ends are drawn as marks.
     show_whitespace: bool = false, Flag {}
+    /// Whether the document map shows beside the text; never in large-file mode.
     document_map: bool = false, Flag {
         note: "never in large-file mode",
     }
+    /// Whether the other places of a selected word are highlighted.
     smart_highlight: bool = true, Flag {
         note: "highlight the other places of a selected word",
     }
@@ -287,20 +301,22 @@ settings! {
     word_count: bool = false, Flag {
         note: "count words in the status bar",
     }
-    /// Backups of unsaved work and how often they are written, in seconds.
+    /// Whether unsaved and untitled work is backed up.
     backups: bool = true, Flag {
         heading: [
             "Backups of unsaved and untitled work. With backups off, unsaved changes are never",
             "written anywhere: closing the window asks about them, and logging out loses them.",
         ],
     }
+    /// How often backups are written, in seconds.
     backup_interval: u32 = 7, Number(1..=3600) {
         note: "seconds",
     }
-    /// ADR-014's limits for highlighting a file when it opens.
+    /// The largest file, in bytes, that is highlighted when it opens (ADR-014).
     highlight_max_bytes: usize = HIGHLIGHT_MAX_BYTES, Number(0..=1 << 40) {
         heading: ["Syntax highlighting is off when a file over these sizes opens (ADR-014)."],
     }
+    /// The most lines a file may have to be highlighted when it opens (ADR-014).
     highlight_max_lines: usize = HIGHLIGHT_MAX_LINES, Number(0..=1 << 32) {}
 }
 
@@ -464,6 +480,7 @@ impl Settings {
 
     /// The indentation of a document in `language` (a GtkSourceView id): the global settings,
     /// then Stet's defaults for the language, then the file's `[language.<id>]`.
+    #[must_use]
     pub fn indentation_for(&self, language: Option<&str>) -> Indentation {
         let mut indentation = Indentation {
             tab_width: self.tab_width,
@@ -491,11 +508,13 @@ impl Settings {
     }
 
     /// Whether a file of `bytes` bytes and `lines` lines is highlighted when it opens.
+    #[must_use]
     pub fn highlight_by_default(&self, bytes: usize, lines: usize) -> bool {
         bytes <= self.highlight_max_bytes && lines <= self.highlight_max_lines
     }
 
     /// How often backups are written, or `None` when they are off.
+    #[must_use]
     pub fn backup_every(&self) -> Option<Duration> {
         self.backups
             .then(|| Duration::from_secs(u64::from(self.backup_interval)))
@@ -504,6 +523,7 @@ impl Settings {
 
 /// The `config.toml` that Open Settings creates: every setting commented out with its
 /// default, so the file changes nothing until a line is uncommented.
+#[must_use]
 pub fn default_config_file() -> String {
     let mut out = String::from(
         "# Stet settings (config.toml). Uncomment a line and change it; Stet applies the file\n\

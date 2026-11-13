@@ -1,3 +1,7 @@
+//! The errors of Find in Files, Replace in Files and the project walk: why a run didn't
+//! start, and why one file or folder was skipped. Per-file errors are cloneable and compare by
+//! kind and message, so a run's report can hold and test them.
+
 use std::io;
 use std::mem::discriminant;
 use std::path::PathBuf;
@@ -10,12 +14,16 @@ use crate::search::{PatternError, SearchError};
 #[derive(Debug, thiserror::Error)]
 pub enum StartError {
     #[error(transparent)]
+    /// The search pattern doesn't compile.
     Pattern(#[from] PatternError),
     #[error("invalid filter: {0}")]
+    /// An include or exclude filter isn't a valid glob.
     Filter(#[source] ignore::Error),
     #[error("could not start the search: {0}")]
+    /// The thread that runs the search couldn't be spawned.
     SearchThread(#[source] io::Error),
     #[error("could not start replacing: {0}")]
+    /// The thread that runs the replace couldn't be spawned.
     ReplaceThread(#[source] io::Error),
 }
 
@@ -27,14 +35,19 @@ pub enum FileError {
     #[error(transparent)]
     Walk(Arc<ignore::Error>),
     #[error(transparent)]
+    /// Reading or writing a file failed.
     Io(Arc<io::Error>),
     #[error(transparent)]
+    /// Reading a file to replace in failed.
     Load(Arc<LoadError>),
     #[error(transparent)]
+    /// Saving a file after replacing in it failed.
     Save(Arc<SaveError>),
     #[error(transparent)]
+    /// Searching a file's content failed.
     Search(#[from] SearchError),
     #[error("the search thread panicked")]
+    /// The thread running the search panicked.
     Panicked,
 }
 
@@ -77,6 +90,7 @@ impl From<SaveError> for FileError {
 pub struct PathError {
     /// Empty when the error names no path.
     pub path: PathBuf,
+    /// What went wrong there.
     pub error: FileError,
 }
 

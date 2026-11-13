@@ -42,7 +42,9 @@ pub enum SearchMode {
 /// Which way a search goes from the caret.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
+    /// From the caret towards the end.
     Forward,
+    /// From the caret towards the start.
     Backward,
 }
 
@@ -58,11 +60,15 @@ pub enum Wrap {
 /// The find bar's options, named after its toggles and check boxes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SearchOptions {
+    /// How the find field's text is read.
     pub mode: SearchMode,
+    /// Match case: letters match only in the same case.
     pub match_case: bool,
     /// Normal and Extended modes only; the find bar disables it in Regex mode.
     pub whole_word: bool,
+    /// Wrap around: a search that reaches one end goes on from the other.
     pub wrap: bool,
+    /// Search backward from the caret.
     pub backward: bool,
     /// Count and Replace All work inside the selection ([`SearchOptions::scope`]).
     pub in_selection: bool,
@@ -86,6 +92,8 @@ impl Default for SearchOptions {
 }
 
 impl SearchOptions {
+    /// The default options in `mode`.
+    #[must_use]
     pub fn new(mode: SearchMode) -> Self {
         Self {
             mode,
@@ -93,16 +101,19 @@ impl SearchOptions {
         }
     }
 
+    /// These options with Match case set to `match_case`.
     #[must_use]
     pub fn with_match_case(self, match_case: bool) -> Self {
         Self { match_case, ..self }
     }
 
+    /// These options with Whole word set to `whole_word`.
     #[must_use]
     pub fn with_whole_word(self, whole_word: bool) -> Self {
         Self { whole_word, ..self }
     }
 
+    /// These options with `.` matching line breaks or not.
     #[must_use]
     pub fn with_dot_matches_newline(self, dot_matches_newline: bool) -> Self {
         Self {
@@ -115,6 +126,7 @@ impl SearchOptions {
     /// the whole text with Wrap around; otherwise from the caret (or the selection's start) to
     /// the end, or backward from the start to the caret (or the selection's end). An empty
     /// selection counts as no selection. `end` is the end of the text.
+    #[must_use]
     pub fn scope(
         &self,
         caret: CharOffset,
@@ -137,11 +149,15 @@ impl SearchOptions {
 /// A search as typed: the find field and the options.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Query {
+    /// The find field's text.
     pub pattern: String,
+    /// The find bar's options.
     pub options: SearchOptions,
 }
 
 impl Query {
+    /// A search for `pattern` with `options`.
+    #[must_use]
     pub fn new(pattern: impl Into<String>, options: SearchOptions) -> Self {
         Self {
             pattern: pattern.into(),
@@ -149,18 +165,25 @@ impl Query {
         }
     }
 
+    /// A Normal-mode search for `pattern` with the default options.
+    #[must_use]
     pub fn normal(pattern: impl Into<String>) -> Self {
         Self::new(pattern, SearchOptions::new(SearchMode::Normal))
     }
 
+    /// An Extended-mode search for `pattern` with the default options.
+    #[must_use]
     pub fn extended(pattern: impl Into<String>) -> Self {
         Self::new(pattern, SearchOptions::new(SearchMode::Extended))
     }
 
+    /// A Regex-mode search for `pattern` with the default options.
+    #[must_use]
     pub fn regex(pattern: impl Into<String>) -> Self {
         Self::new(pattern, SearchOptions::new(SearchMode::Regex))
     }
 
+    /// This search with `options` instead of its own.
     #[must_use]
     pub fn with_options(self, options: SearchOptions) -> Self {
         Self { options, ..self }
@@ -169,6 +192,7 @@ impl Query {
 
 /// Normalizes text the way the loader normalizes a document: CRLF and CR become LF
 /// (ADR-008) and NUL becomes [`NUL_PLACEHOLDER`](crate::text::NUL_PLACEHOLDER) (ADR-007).
+#[must_use]
 pub fn to_buffer_text(text: &str) -> Cow<'_, str> {
     if memchr::memchr2(b'\r', 0, text.as_bytes()).is_none() {
         return Cow::Borrowed(text);

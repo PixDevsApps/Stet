@@ -40,19 +40,25 @@ const NONE: i32 = i32::MIN / 2;
 /// A matched candidate: its score and the character indices of the matched characters.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Match {
+    /// The match's quality; higher is better.
     pub score: i32,
+    /// The character indices of the matched characters, in order.
     pub positions: Vec<usize>,
 }
 
 /// A match from [`rank`], with the candidate's index.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ranked {
+    /// The candidate's index in the slice that was ranked.
     pub index: usize,
+    /// The match's quality; higher is better.
     pub score: i32,
+    /// The character indices of the matched characters, in order.
     pub positions: Vec<usize>,
 }
 
 /// Scores `candidate` against `query`.
+#[must_use]
 pub fn score(query: &str, candidate: &str) -> Option<Match> {
     Matcher::new(query).score(candidate)
 }
@@ -134,6 +140,8 @@ struct Scratch {
 }
 
 impl Matcher {
+    /// A query for paths, with smart case: it ignores case unless it has an uppercase letter.
+    #[must_use]
     pub fn new(query: &str) -> Self {
         let case_sensitive = query.chars().any(char::is_uppercase);
         let query: Vec<char> = query
@@ -163,10 +171,13 @@ impl Matcher {
     }
 
     /// Whether the query has no characters to match; it then matches everything with score 0.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.query.is_empty()
     }
 
+    /// Scores `candidate` with the positions of its matched characters; `None` if it doesn't
+    /// match.
     pub fn score(&mut self, candidate: &str) -> Option<Match> {
         self.run(candidate, true)
             .map(|(score, positions)| Match { score, positions })

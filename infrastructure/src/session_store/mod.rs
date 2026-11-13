@@ -147,10 +147,15 @@ pub enum ManifestSource {
     /// `session.json`.
     Current,
     /// `session.json.prev`, because `session.json` was unusable.
-    Previous { current: ManifestProblem },
+    Previous {
+        /// Why `session.json` was unusable.
+        current: ManifestProblem,
+    },
     /// Neither, so the session is empty; on a first run both are `Missing`.
     Empty {
+        /// Why `session.json` was unusable.
         current: ManifestProblem,
+        /// Why `session.json.prev` was unusable.
         previous: ManifestProblem,
     },
 }
@@ -163,7 +168,12 @@ pub enum ManifestProblem {
     /// The file exists but couldn't be read.
     Unreadable(io::ErrorKind),
     /// Not a JSON object, or a malformed `schema_version`; where the first error is.
-    Invalid { line: usize, column: usize },
+    Invalid {
+        /// The line, counted from 1.
+        line: usize,
+        /// The column, counted from 1.
+        column: usize,
+    },
 }
 
 /// A text that no manifest references, in `backup/orphaned/`.
@@ -275,6 +285,7 @@ impl SessionStore {
     }
 
     /// Where the backup `id` is kept, or `None` for an invalid id.
+    #[must_use]
     pub fn backup_path(&self, id: &str) -> Option<PathBuf> {
         is_valid_id(id).then(|| self.layout.backup(id))
     }
@@ -314,6 +325,7 @@ impl SessionStore {
     }
 
     /// The writer's progress and last error, without waiting for it.
+    #[must_use]
     pub fn status(&self) -> StoreStatus {
         self.shared.status()
     }
@@ -372,6 +384,7 @@ impl Drop for SessionStore {
 }
 
 /// A new tab or backup id: a UUIDv7, so ids sort by creation time.
+#[must_use]
 pub fn new_id() -> RecordId {
     uuid::Uuid::now_v7()
         .to_string()

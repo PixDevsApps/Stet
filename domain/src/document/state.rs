@@ -20,11 +20,13 @@ pub enum ReadOnly {
 
 impl ReadOnly {
     /// Whether "Edit Anyway" may lift it: the text is the file's, only the file is protected.
+    #[must_use]
     pub const fn can_lift(self) -> bool {
         matches!(self, Self::Binary | Self::NotWritable)
     }
 
     /// Why a save was refused before writing anything.
+    #[must_use]
     pub const fn message(self) -> &'static str {
         match self {
             Self::Binary => {
@@ -58,20 +60,26 @@ pub enum TextOrigin {
 /// Why the last save could not write the file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Unwritable {
+    /// The user lacks permission to write the file or its folder.
     Permission,
+    /// The file is on a file system mounted read-only.
     ReadOnlyFilesystem,
 }
 
 /// The file on disk, as last compared with the document's baseline fingerprint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DiskState {
+    /// The file matches the document's baseline.
     #[default]
     Same,
     /// Changed while the document had unsaved changes; the banner asks what to keep.
     Changed,
     /// Deleted or moved away. `clean_revision` is the buffer's revision at that moment when
     /// it had no unsaved changes, so a file that comes back can reload quietly.
-    Deleted { clean_revision: Option<u64> },
+    Deleted {
+        /// The buffer's revision when the file went, if it had no unsaved changes then.
+        clean_revision: Option<u64>,
+    },
 }
 
 /// Why saving can't write back the bytes that were read.
@@ -85,6 +93,7 @@ pub enum Loss {
 
 impl Loss {
     /// What decoding reported: malformed bytes outweigh an encoding that doesn't round-trip.
+    #[must_use]
     pub const fn of(malformed: bool, not_round_trip: bool) -> Option<Self> {
         if malformed {
             Some(Self::Malformed)

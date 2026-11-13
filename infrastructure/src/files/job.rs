@@ -1,3 +1,7 @@
+//! The job a Find in Files or Replace in Files run is: a thread with its own sink, stopped
+//! through a shared [`CancelToken`]. Waiting for the job also waits for the sink's last call,
+//! so nothing reaches the caller after [`JobHandle::wait`] returns.
+
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,16 +16,19 @@ use super::StartError;
 pub struct CancelToken(Arc<AtomicBool>);
 
 impl CancelToken {
+    /// A token nobody has cancelled yet.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Asks every holder of this token, or of its clones, to stop.
     pub fn cancel(&self) {
         self.0.store(true, Ordering::SeqCst);
     }
 
     #[must_use]
+    /// Whether [`Self::cancel`] was called on this token or any of its clones.
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Relaxed)
     }
@@ -124,6 +131,7 @@ impl<S, P> JobHandle<S, P> {
         self.control.cancel();
     }
 
+    /// Whether the run's thread has ended, so [`Self::wait`] won't block.
     pub fn is_finished(&self) -> bool {
         self.thread.as_ref().is_none_or(JoinHandle::is_finished)
     }

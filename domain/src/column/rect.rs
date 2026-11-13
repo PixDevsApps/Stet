@@ -8,11 +8,15 @@ use std::ops::Range;
 /// A line and a visual column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct VisualPos {
+    /// The line, counted from 0.
     pub line: Line,
+    /// The column, with tabs expanded to their tab stops.
     pub column: VisualColumn,
 }
 
 impl VisualPos {
+    /// The position at `column` on `line`.
+    #[must_use]
     pub const fn new(line: Line, column: VisualColumn) -> Self {
         Self { line, column }
     }
@@ -23,42 +27,57 @@ impl VisualPos {
 /// caret.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rect {
+    /// The corner where the selection started; it stays put while the cursor moves.
     pub anchor: VisualPos,
+    /// The corner that moves, on the line of the primary caret.
     pub cursor: VisualPos,
 }
 
 impl Rect {
+    /// The rectangle spanned from `anchor` to `cursor`.
+    #[must_use]
     pub const fn new(anchor: VisualPos, cursor: VisualPos) -> Self {
         Self { anchor, cursor }
     }
 
+    /// The first line the rectangle covers.
+    #[must_use]
     pub fn top(self) -> Line {
         self.anchor.line.min(self.cursor.line)
     }
 
+    /// The last line the rectangle covers.
+    #[must_use]
     pub fn bottom(self) -> Line {
         self.anchor.line.max(self.cursor.line)
     }
 
+    /// The column of the rectangle's left edge.
+    #[must_use]
     pub fn left(self) -> VisualColumn {
         self.anchor.column.min(self.cursor.column)
     }
 
+    /// The column of the rectangle's right edge.
+    #[must_use]
     pub fn right(self) -> VisualColumn {
         self.anchor.column.max(self.cursor.column)
     }
 
     /// The cells between the left and right columns.
+    #[must_use]
     pub fn width(self) -> usize {
         self.right() - self.left()
     }
 
     /// Whether the rectangle covers no cells, that is, whether it is a column caret.
+    #[must_use]
     pub fn is_empty(self) -> bool {
         self.anchor.column == self.cursor.column
     }
 
     /// The lines the rectangle covers, whether or not the text has them.
+    #[must_use]
     pub fn lines(self) -> Range<Line> {
         self.top()..self.bottom().saturating_add(1)
     }
@@ -89,16 +108,20 @@ impl Rect {
 /// end plus the virtual cells.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineSpan {
+    /// The line the span is on.
     pub line: Line,
     /// Document character offsets of the characters at or containing the left and right edges.
     pub chars: Range<CharOffset>,
+    /// Cells from the character at `chars.start` to the left edge.
     pub pad_left: usize,
+    /// Cells from the character at `chars.end` to the right edge.
     pub pad_right: usize,
 }
 
 impl LineSpan {
     /// The span of `rect`'s columns on `line`, whose text without `\n` is `line_text` and whose
     /// first character is at document offset `line_start`.
+    #[must_use]
     pub fn new(
         line: Line,
         line_text: &str,

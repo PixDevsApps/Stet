@@ -1,3 +1,7 @@
+//! File metadata as Stet uses it: the [`FileMeta`] a tab keeps and the [`Fingerprint`] that
+//! tells a change on disk from Stet's own save. Both follow symbolic links to the file a save
+//! would write.
+
 use std::fs::{self, Metadata};
 use std::io;
 use std::os::unix::fs::MetadataExt;
@@ -12,6 +16,7 @@ use stet_domain::session::Fingerprint;
 /// store's type, so a baseline taken at load or save is the one a session keeps (ADR-006).
 /// Recorded right after Stet's own saves so that they don't count as outside changes; compare
 /// with [`Fingerprint::matches`], which ignores the device number.
+#[must_use]
 pub fn fingerprint_of(metadata: &Metadata) -> Fingerprint {
     Fingerprint {
         dev: metadata.dev(),
@@ -26,16 +31,24 @@ pub fn fingerprint(path: &Path) -> io::Result<Fingerprint> {
     Ok(fingerprint_of(&fs::metadata(path)?))
 }
 
+/// What Stet knows about a file on disk when it opens it: identity, size, owner and access.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileMeta {
+    /// The size in bytes.
     pub size: u64,
+    /// The last modification time, in nanoseconds since the Unix epoch.
     pub mtime_ns: i64,
+    /// The device the file is on.
     pub dev: u64,
+    /// The inode number.
     pub ino: u64,
     /// `st_mode`: the file type and permission bits.
     pub mode: u32,
+    /// The owner's user id.
     pub uid: u32,
+    /// The owner's group id.
     pub gid: u32,
+    /// How many hard links the file has.
     pub nlink: u64,
     /// The current user may write the file, by `access(2)`. False on a read-only file system.
     pub writable: bool,
@@ -65,6 +78,8 @@ impl FileMeta {
         })
     }
 
+    /// The fingerprint these metadata give, to compare with a later one.
+    #[must_use]
     pub fn fingerprint(&self) -> Fingerprint {
         Fingerprint {
             dev: self.dev,

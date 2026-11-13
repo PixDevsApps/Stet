@@ -11,6 +11,7 @@ pub const MAX_ID_LEN: usize = 64;
 
 /// Whether `id` can name a tab or backup: 1 to [`MAX_ID_LEN`] ASCII letters, digits, `-` and
 /// `_`, so it is always a plain file name.
+#[must_use]
 pub fn is_valid_id(id: &str) -> bool {
     (1..=MAX_ID_LEN).contains(&id.len())
         && id
@@ -30,6 +31,7 @@ pub struct RecordId(String);
 
 impl RecordId {
     /// The id as text; empty for the empty id.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }

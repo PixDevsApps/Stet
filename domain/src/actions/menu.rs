@@ -8,14 +8,23 @@ use std::collections::BTreeMap;
 /// The hamburger menu's submenus, in the order the menu lists them, and its first page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Menu {
+    /// Opening, saving and closing files.
     File,
+    /// Undo, the clipboard, line endings, column mode and the text tools.
     Edit,
+    /// Find and replace, marks, bookmarks and jumps through the document.
     Search,
+    /// Zoom, moving between tabs, the command palette and the comparison's views.
     View,
+    /// Reinterpreting the document in another encoding, or converting it to one.
     Encoding,
+    /// The highlighting language.
     Language,
+    /// The settings files and the default editor.
     Settings,
+    /// JSON and XML formatting and validation, and comparing documents.
     Tools,
+    /// The keyboard shortcuts and About.
     Help,
     /// The menu's first page itself, below its submenus: not one of [`Menu::ALL`].
     Main,
@@ -50,6 +59,7 @@ impl Menu {
     ];
 
     /// The name the menu shows.
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::File => "File",
@@ -71,9 +81,13 @@ impl Menu {
 /// parent's section `parent_section`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MenuPlace {
+    /// The top-level menu the entry is in.
     pub menu: Menu,
+    /// The nested submenu's label, or `None` for the menu itself.
     pub submenu: Option<&'static str>,
+    /// The section inside the menu or nested submenu, counted from 0.
     pub section: u8,
+    /// The section of the parent menu that holds the nested submenu.
     pub parent_section: u8,
 }
 
@@ -187,7 +201,9 @@ fn submenu_rank(submenu: &str) -> usize {
 /// A menu: its own items, then its sections, which are drawn with separators between them.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MenuTree {
+    /// The entries before the first section.
     pub items: Vec<MenuItem>,
+    /// The sections, in order.
     pub sections: Vec<MenuSection>,
 }
 
@@ -215,7 +231,9 @@ impl MenuTree {
 /// A group of items, with an optional heading.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MenuSection {
+    /// The heading drawn above the section.
     pub label: Option<&'static str>,
+    /// The section's entries, in order.
     pub items: Vec<MenuItem>,
 }
 
@@ -227,8 +245,11 @@ pub enum MenuItem {
     /// Runs the action and is hidden while it is disabled: of two alternatives, only the one
     /// that applies shows.
     ActionWhenEnabled(ActionId),
+    /// A nested submenu.
     Submenu {
+        /// The submenu's name in its parent.
         label: &'static str,
+        /// The submenu's entries.
         menu: MenuTree,
     },
     /// One entry per value of a list known only at run time, each running the action (one

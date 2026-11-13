@@ -24,6 +24,7 @@ pub const MIB: u64 = 1024 * 1024;
 pub const APP_NAME: &str = "Stet";
 
 /// The tab label: the name, with a dot in front while there are unsaved changes.
+#[must_use]
 pub fn tab_title(name: &str, dirty: bool) -> String {
     if dirty {
         format!("● {name}")
@@ -33,6 +34,7 @@ pub fn tab_title(name: &str, dirty: bool) -> String {
 }
 
 /// `file — dir — Stet`, or `Untitled 1 — Stet`; a `*` in front marks unsaved changes.
+#[must_use]
 pub fn window_title(name: &str, dir: Option<&str>, dirty: bool) -> String {
     let marker = if dirty { "*" } else { "" };
     match dir {
@@ -42,6 +44,7 @@ pub fn window_title(name: &str, dir: Option<&str>, dirty: bool) -> String {
 }
 
 /// `path` with a leading `home` shown as `~`.
+#[must_use]
 pub fn tilde(path: &Path, home: Option<&Path>) -> String {
     if let Some(home) = home.filter(|home| !home.as_os_str().is_empty() && home != &Path::new("/"))
         && let Ok(rest) = path.strip_prefix(home)
@@ -56,6 +59,7 @@ pub fn tilde(path: &Path, home: Option<&Path>) -> String {
 }
 
 /// `text` as a path, where `~` and `~/…` name `home`; unchanged without one.
+#[must_use]
 pub fn expand_home(text: &str, home: Option<&Path>) -> PathBuf {
     match (text.strip_prefix('~'), home) {
         (Some(""), Some(home)) => home.to_path_buf(),
@@ -66,12 +70,14 @@ pub fn expand_home(text: &str, home: Option<&Path>) -> PathBuf {
 
 /// The command that edits `path` as root with Stet (INTEGRATIONS.md), for the read-only
 /// banner: `SUDO_EDITOR="stet --wait" sudoedit <path>`, the path quoted for a POSIX shell.
+#[must_use]
 pub fn sudoedit_command(path: &str) -> String {
     format!("SUDO_EDITOR=\"stet --wait\" sudoedit {}", shell_quote(path))
 }
 
 /// `text` as one word of a POSIX shell command line: unchanged when it only has characters
 /// the shell takes literally, otherwise in single quotes.
+#[must_use]
 pub fn shell_quote(text: &str) -> String {
     let plain = |c: char| c.is_ascii_alphanumeric() || "/._-+,:@%=".contains(c);
     if !text.is_empty() && text.chars().all(plain) {

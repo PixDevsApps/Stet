@@ -6,12 +6,15 @@ use super::{Indent, SyntaxError, json, xml};
 /// A language the long-line path can pretty-print.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormatKind {
+    /// JSON, formatted by [`json`].
     Json,
+    /// XML, formatted by [`xml`].
     Xml,
 }
 
 impl FormatKind {
     /// Guesses from the first character that isn't whitespace.
+    #[must_use]
     pub fn sniff(text: &str) -> Option<Self> {
         match text.trim_start().chars().next()? {
             '{' | '[' => Some(Self::Json),
@@ -20,6 +23,8 @@ impl FormatKind {
         }
     }
 
+    /// The name a banner or message shows.
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Json => "JSON",
@@ -28,6 +33,7 @@ impl FormatKind {
     }
 
     /// The GtkSourceView language id.
+    #[must_use]
     pub const fn language(self) -> &'static str {
         match self {
             Self::Json => "json",

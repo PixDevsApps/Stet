@@ -1,16 +1,19 @@
 //! Counts as the status bar, the find bar, the dialogs and the banners word them.
 
 /// `one` for a count of 1, `many` for any other.
+#[must_use]
 pub fn plural<'a>(count: usize, one: &'a str, many: &'a str) -> &'a str {
     if count == 1 { one } else { many }
 }
 
 /// `1 match`, `3 matches`.
+#[must_use]
 pub fn counted(count: usize, one: &str, many: &str) -> String {
     format!("{count} {}", plural(count, one, many))
 }
 
 /// `12345678` as `12,345,678`.
+#[must_use]
 pub fn grouped(number: usize) -> String {
     let digits = number.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);

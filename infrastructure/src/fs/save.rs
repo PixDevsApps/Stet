@@ -1,3 +1,7 @@
+//! Saving a document's bytes without ever leaving a truncated file. A save renames a synced
+//! temporary file over the target when it can and otherwise overwrites in place after a synced
+//! backup copy, keeping the file's mode, owner and extended attributes either way.
+
 use std::ffi::OsStr;
 use std::fs::{self, File, Metadata, OpenOptions, Permissions};
 use std::io::{self, ErrorKind, Write};
@@ -19,6 +23,7 @@ use crate::encoding::Unmappable;
 /// How many symbolic links [`safe_save`] follows by hand to a file that doesn't exist yet.
 const MAX_LINKS: usize = 40;
 
+/// What [`safe_save`] needs besides the path and the bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveOptions {
     /// Where an in-place save keeps a copy of the previous content until the new content is
@@ -27,6 +32,8 @@ pub struct SaveOptions {
 }
 
 impl SaveOptions {
+    /// Options that keep in-place backups in `backup_dir`.
+    #[must_use]
     pub fn new(backup_dir: impl Into<PathBuf>) -> Self {
         Self {
             backup_dir: backup_dir.into(),
@@ -34,6 +41,7 @@ impl SaveOptions {
     }
 }
 
+/// How [`safe_save`] replaced the file's content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SaveMethod {
     /// A new file was written next to the target and renamed over it.
@@ -44,34 +52,55 @@ pub enum SaveMethod {
     InPlace,
 }
 
+/// What a successful [`safe_save`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveOutcome {
     /// Of the saved file, to recognize this save when the file monitor reports it.
     pub fingerprint: Fingerprint,
+    /// Whether the file was renamed over or overwritten in place.
     pub method: SaveMethod,
     /// The file written: the path with its symbolic links resolved.
     pub target: PathBuf,
 }
 
+/// Why [`safe_save`] failed.
 #[derive(Debug, thiserror::Error)]
 pub enum SaveError {
+    /// The text has characters the target encoding can't represent; nothing was written.
     #[error(transparent)]
     Unmappable(#[from] Unmappable),
     /// The file or its directory isn't writable. The UI shows the read-only banner, which
     /// suggests `SUDO_EDITOR="stet --wait" sudoedit`.
     #[error("permission denied writing {}", .path.display())]
-    PermissionDenied { path: PathBuf },
+    PermissionDenied {
+        /// The file that was to be saved.
+        path: PathBuf,
+    },
+    /// The file lives on a file system mounted read-only.
     #[error("{} is on a read-only file system", .path.display())]
-    ReadOnlyFilesystem { path: PathBuf },
+    ReadOnlyFilesystem {
+        /// The file that was to be saved.
+        path: PathBuf,
+    },
+    /// The path names a directory, a device or another file that isn't a regular file.
     #[error("{} is not a regular file", .path.display())]
-    NotRegularFile { path: PathBuf },
+    NotRegularFile {
+        /// The path that was to be saved.
+        path: PathBuf,
+    },
+    /// The disk or the user's quota is full.
     #[error("not enough disk space to save {}", .path.display())]
-    NoSpace { path: PathBuf },
+    NoSpace {
+        /// The file that was to be saved.
+        path: PathBuf,
+    },
     /// Nothing was written.
     #[error("could not back up {} before overwriting it: {source}", .path.display())]
     Backup {
+        /// The file that was to be saved.
         path: PathBuf,
         #[source]
+        /// Why the backup copy failed.
         source: io::Error,
     },
     /// Overwriting in place failed partway; the previous content is in `backup`.
@@ -81,15 +110,21 @@ pub enum SaveError {
         .backup.display()
     )]
     Interrupted {
+        /// The file that was being overwritten.
         path: PathBuf,
+        /// The copy of the previous content, kept for recovery.
         backup: PathBuf,
         #[source]
+        /// Why the overwrite stopped.
         source: io::Error,
     },
+    /// Any other I/O error; nothing is known to be lost.
     #[error("could not save {}: {source}", .path.display())]
     Io {
+        /// The file that was to be saved.
         path: PathBuf,
         #[source]
+        /// The underlying error.
         source: io::Error,
     },
 }
@@ -387,6 +422,10 @@ fn backup_copy(target: &Path, backup_dir: &Path) -> io::Result<PathBuf> {
 /// `min_age` ago, so that a save another process is running keeps its file. Other files,
 /// including the temporary files of other targets, are never touched. Returns how many were
 /// removed; a file that can't be inspected or removed is skipped.
+#[expect(
+    clippy::must_use_candidate,
+    reason = "removing the files is the point; the count is for logging"
+)]
 pub fn remove_stale_temps(target: &Path, min_age: Duration) -> usize {
     let (Some(dir), Some(name)) = (target.parent(), target.file_name()) else {
         return 0;

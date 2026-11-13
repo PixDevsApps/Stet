@@ -129,6 +129,7 @@ fn lookup(table: &[(&str, &'static str)], key: &str) -> Option<&'static str> {
 }
 
 /// A hint from the file name alone. Checked before GtkSourceView's globs, so it overrides them.
+#[must_use]
 pub fn from_file_name(name: &str) -> Option<&'static str> {
     if let Some(id) = lookup(FILE_NAMES, name) {
         return Some(id);
@@ -139,6 +140,7 @@ pub fn from_file_name(name: &str) -> Option<&'static str> {
 
 /// A hint from the first line of the text: a shebang (`#!/usr/bin/env python3`), an XML or
 /// HTML declaration, or an Emacs or Vim modeline.
+#[must_use]
 pub fn from_first_line(line: &str) -> Option<&'static str> {
     let line = line.trim_start_matches('\u{feff}').trim_end();
     if let Some(command) = line.strip_prefix("#!") {

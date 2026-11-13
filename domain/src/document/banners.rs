@@ -12,18 +12,28 @@ use crate::text::{DISPLAY_BREAK_CHARS, Eol, EolStats, grouped};
 /// What a banner is about. Banners stack in this order, the most urgent on top.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BannerKind {
+    /// Reading the file into the tab, with its progress.
     Loading,
+    /// The file changed on disk or is gone.
     Disk,
     /// What restoring the session found: a file changed since its backup, or unsaved
     /// changes that could not be restored.
     Restore,
+    /// The tab refuses edits ([`ReadOnly`]) or the last save could not write the file.
     ReadOnly,
+    /// The file contains NUL bytes.
     Binary,
+    /// Saving can't give back the bytes that were read ([`Loss`]).
     Lossy,
+    /// The file has both NUL bytes and real ␀ characters, which save alike.
     Placeholder,
+    /// The file mixes line endings.
     MixedEol,
+    /// Long lines were broken for display or pretty-printed.
     LongLines,
+    /// The file is open in large-file mode.
     LargeFile,
+    /// The size limits held syntax highlighting back.
     Highlighting,
 }
 
@@ -72,6 +82,7 @@ pub enum BannerAction {
 
 impl BannerAction {
     /// The button's label.
+    #[must_use]
     pub fn label(&self) -> String {
         match self {
             Self::Reload => "Reload".to_owned(),
@@ -92,15 +103,20 @@ impl BannerAction {
 /// One banner to show: its kind, its text and its buttons in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BannerSpec {
+    /// Where the banner stacks.
     pub kind: BannerKind,
+    /// The sentence the banner shows.
     pub title: String,
+    /// The buttons, left to right.
     pub actions: Vec<BannerAction>,
 }
 
 /// The highlighting limits of `config.toml` (ADR-014).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HighlightLimits {
+    /// Highlighting stays off for a file of more bytes than this.
     pub max_bytes: usize,
+    /// Highlighting stays off for a file of more lines than this.
     pub max_lines: usize,
 }
 
@@ -111,11 +127,15 @@ pub struct BannerFacts {
     pub name: String,
     /// The file, for the sudoedit command.
     pub path: Option<PathBuf>,
+    /// How the file on disk compares with the document.
     pub disk: DiskState,
     /// The changed file is a restored backup's, whose file changed while Stet was closed.
     pub restored_conflict: bool,
+    /// Why the tab refuses edits, if it does.
     pub read_only: Option<ReadOnly>,
+    /// Why the last save could not write the file, if it failed.
     pub unwritable: Option<Unwritable>,
+    /// Why saving can't give back the bytes that were read, if it can't.
     pub loss: Option<Loss>,
     /// The save encoding as the status bar shows it.
     pub encoding: String,
@@ -127,9 +147,11 @@ pub struct BannerFacts {
     pub mixed_eol: bool,
     /// The user chose to keep the mixed line endings for now.
     pub mixed_kept: bool,
+    /// The count of each line ending in the file as read.
     pub eol_stats: EolStats,
     /// The line ending the next save writes.
     pub eol: Eol,
+    /// Where the buffer's text came from.
     pub origin: TextOrigin,
     /// The file's size in bytes, in large-file mode.
     pub large_file: Option<u64>,
@@ -140,6 +162,7 @@ pub struct BannerFacts {
 
 /// The banners `facts` call for, most urgent first: one at most of each of
 /// [`BannerKind::FROM_STATE`].
+#[must_use]
 pub fn banners_for(facts: &BannerFacts) -> Vec<BannerSpec> {
     let banners = [
         disk(facts),

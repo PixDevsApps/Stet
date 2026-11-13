@@ -15,6 +15,7 @@ pub const FIRST_LINE_READ: usize = 256;
 const MAX_FILE_NAME_BYTES: usize = 200;
 
 /// `Untitled N`.
+#[must_use]
 pub fn untitled_name(number: u32) -> String {
     format!("Untitled {number}")
 }
@@ -88,6 +89,7 @@ fn fold(line: &str, limit: usize) -> Option<String> {
 /// spaces, white space is folded, a trailing ellipsis and dots or spaces at either end go, and
 /// `extension` (without its dot) is added, `txt` when there is none. `None` when nothing is
 /// left of the name.
+#[must_use]
 pub fn save_file_name(name: &str, extension: Option<&str>) -> Option<String> {
     let cleaned: String = name
         .trim_end_matches('…')

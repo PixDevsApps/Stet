@@ -1,6 +1,7 @@
 //! Words as the status bar counts them.
 
 /// Words: runs of characters between white space.
+#[must_use]
 pub fn count_words(text: &str) -> usize {
     text.split_whitespace().count()
 }

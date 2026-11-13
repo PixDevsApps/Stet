@@ -8,7 +8,9 @@ use std::ops::Range;
 /// two are equal when nothing is selected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Selection {
+    /// Where the caret is.
     pub cursor: CharOffset,
+    /// Where the selection started; the caret's offset when nothing is selected.
     pub anchor: CharOffset,
 }
 
@@ -22,6 +24,7 @@ impl Selection {
     }
 
     /// `range` selected with the caret at its end.
+    #[must_use]
     pub fn forward(range: Range<CharOffset>) -> Self {
         Self {
             cursor: range.end,
@@ -30,6 +33,7 @@ impl Selection {
     }
 
     /// `range` selected with the caret at its start.
+    #[must_use]
     pub fn backward(range: Range<CharOffset>) -> Self {
         Self {
             cursor: range.start,
@@ -48,11 +52,13 @@ impl Selection {
     }
 
     /// The selected characters, in order.
+    #[must_use]
     pub fn range(self) -> Range<CharOffset> {
         self.cursor.min(self.anchor)..self.cursor.max(self.anchor)
     }
 
     /// Whether the caret is at the start of a non-empty selection.
+    #[must_use]
     pub fn is_backward(self) -> bool {
         self.cursor < self.anchor
     }

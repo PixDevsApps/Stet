@@ -1,3 +1,6 @@
+//! The few file operations the session store repeats: syncing a folder, removing a file that
+//! may already be gone, and emptying a folder of its files. Errors keep the action and path.
+
 use super::StoreError;
 use crate::fs::durable;
 use std::fs;

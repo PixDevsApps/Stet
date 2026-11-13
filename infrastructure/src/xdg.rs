@@ -5,6 +5,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+/// The folder name Stet uses under each XDG base directory.
 pub const APP_DIR: &str = "stet";
 
 /// An XDG base directory: the variable when it holds an absolute path, else `home/fallback`.
@@ -20,14 +21,20 @@ fn from_env(variable: &str, fallback: &str) -> PathBuf {
     base_dir(std::env::var_os(variable).as_deref(), &home, fallback)
 }
 
+/// `$XDG_STATE_HOME`, or `~/.local/state`.
+#[must_use]
 pub fn state_home() -> PathBuf {
     from_env("XDG_STATE_HOME", ".local/state")
 }
 
+/// `$XDG_CACHE_HOME`, or `~/.cache`.
+#[must_use]
 pub fn cache_home() -> PathBuf {
     from_env("XDG_CACHE_HOME", ".cache")
 }
 
+/// `$XDG_CONFIG_HOME`, or `~/.config`.
+#[must_use]
 pub fn config_home() -> PathBuf {
     from_env("XDG_CONFIG_HOME", ".config")
 }
@@ -44,6 +51,8 @@ pub struct StetDirs {
 }
 
 impl StetDirs {
+    /// Stet's folders under the user's XDG base directories.
+    #[must_use]
     pub fn from_env() -> Self {
         Self {
             state: state_home().join(APP_DIR),
@@ -53,6 +62,7 @@ impl StetDirs {
     }
 
     /// Everything under one root, for tests and the self-test harness.
+    #[must_use]
     pub fn under(root: &Path) -> Self {
         Self {
             state: root.join("state").join(APP_DIR),
@@ -61,10 +71,14 @@ impl StetDirs {
         }
     }
 
+    /// `recent.json`, the recent-files list.
+    #[must_use]
     pub fn recent_file(&self) -> PathBuf {
         self.state.join("recent.json")
     }
 
+    /// Where the generated style schemes are written.
+    #[must_use]
     pub fn styles_dir(&self) -> PathBuf {
         self.cache.join("styles")
     }

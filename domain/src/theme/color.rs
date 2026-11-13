@@ -5,15 +5,22 @@ use std::fmt;
 /// An sRGB colour, 8 bits per channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rgb {
+    /// Red.
     pub r: u8,
+    /// Green.
     pub g: u8,
+    /// Blue.
     pub b: u8,
 }
 
 impl Rgb {
+    /// `#000000`.
     pub const BLACK: Self = Self::from_hex(0x000000);
+    /// `#ffffff`.
     pub const WHITE: Self = Self::from_hex(0xffffff);
 
+    /// The colour written `0xrrggbb`; higher bits are ignored.
+    #[must_use]
     pub const fn from_hex(hex: u32) -> Self {
         let [_, r, g, b] = hex.to_be_bytes();
         Self { r, g, b }
@@ -79,6 +86,7 @@ impl Rgb {
     }
 
     /// WCAG 2 relative luminance.
+    #[must_use]
     pub fn relative_luminance(self) -> f64 {
         let linear = |channel: u8| {
             let value = f64::from(channel) / 255.0;
@@ -92,12 +100,14 @@ impl Rgb {
     }
 
     /// WCAG 2 contrast ratio, from 1 to 21.
+    #[must_use]
     pub fn contrast(self, other: Self) -> f64 {
         let (a, b) = (self.relative_luminance(), other.relative_luminance());
         (a.max(b) + 0.05) / (a.min(b) + 0.05)
     }
 
     /// Hue in degrees, then saturation and lightness from 0 to 1.
+    #[must_use]
     pub fn to_hsl(self) -> (f64, f64, f64) {
         let [r, g, b] = [self.r, self.g, self.b].map(|channel| f64::from(channel) / 255.0);
         let (max, min) = (r.max(g).max(b), r.min(g).min(b));
@@ -117,6 +127,8 @@ impl Rgb {
         (hue, saturation, lightness)
     }
 
+    /// The colour with `hue` in degrees and `saturation` and `lightness` from 0 to 1.
+    #[must_use]
     pub fn from_hsl(hue: f64, saturation: f64, lightness: f64) -> Self {
         let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
         let sector = hue.rem_euclid(360.0) / 60.0;
@@ -189,6 +201,7 @@ pub(super) fn distinct<const N: usize>(colors: [Rgb; N], hues: [f64; N]) -> [Rgb
 }
 
 /// Whichever of `a` and `b` contrasts more with `background`.
+#[must_use]
 pub fn readable_on(background: Rgb, a: Rgb, b: Rgb) -> Rgb {
     if background.contrast(a) >= background.contrast(b) {
         a

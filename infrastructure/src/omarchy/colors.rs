@@ -1,3 +1,7 @@
+//! Reading a theme's `colors.toml` and resolving its palette. Omarchy's own
+//! `omarchy-theme-color` resolves the fallbacks when it is installed; otherwise the domain's
+//! resolver applies the same rules, so the palette is the same either way.
+
 use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
@@ -37,6 +41,7 @@ fn parse_line(line: &str) -> Option<(String, String)> {
 }
 
 /// Reads the `key<TAB>value` lines `omarchy-theme-color --all` prints, dropping empty values.
+#[must_use]
 pub fn parse_resolved(output: &str) -> BTreeMap<String, String> {
     output
         .lines()

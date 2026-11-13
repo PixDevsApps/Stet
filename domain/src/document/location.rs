@@ -5,14 +5,18 @@ use std::num::{NonZeroU32, NonZeroUsize};
 
 use crate::text::{LineNumber, Position};
 
+/// A line and an optional column, counted from 1, as the user typed them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LineCol {
+    /// The line.
     pub line: LineNumber,
     /// `None` means the start of the line.
     pub column: Option<NonZeroUsize>,
 }
 
 impl LineCol {
+    /// Line `line`, at `column` or the start of the line.
+    #[must_use]
     pub const fn new(line: LineNumber, column: Option<NonZeroUsize>) -> Self {
         Self { line, column }
     }
@@ -27,6 +31,7 @@ impl LineCol {
     }
 
     /// The position in the text; the caller clamps it to the text.
+    #[must_use]
     pub fn position(self) -> Position {
         Position::new(
             self.line.index(),
@@ -35,7 +40,6 @@ impl LineCol {
     }
 }
 
-/// A line or column number as typed: digits only, from 1 to `u32::MAX`.
 /// The position as people count lines and columns.
 impl From<Position> for LineCol {
     fn from(position: Position) -> Self {
@@ -43,6 +47,7 @@ impl From<Position> for LineCol {
     }
 }
 
+/// A line or column number as typed: digits only, from 1 to `u32::MAX`.
 fn number(text: &str) -> Option<NonZeroUsize> {
     if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
@@ -60,6 +65,7 @@ fn line_number(text: &str) -> Option<LineNumber> {
 }
 
 /// Parses the go-to-line prompt: `12`, `12:5`, and the same with a leading `:`.
+#[must_use]
 pub fn parse_line_col(text: &str) -> Option<LineCol> {
     let text = text.trim();
     let text = text.strip_prefix(':').unwrap_or(text).trim();
@@ -75,6 +81,7 @@ pub fn parse_line_col(text: &str) -> Option<LineCol> {
 /// Splits a `:line` or `:line:col` suffix off a command-line argument, as compilers and
 /// `grep -n` print it (a trailing `:` is allowed). Returns `None` when there is no such suffix.
 /// The caller uses the split only when the literal path does not exist.
+#[must_use]
 pub fn split_location(arg: &str) -> Option<(&str, LineCol)> {
     let trimmed = arg.strip_suffix(':').unwrap_or(arg);
     let (head, last) = trimmed.rsplit_once(':')?;

@@ -76,7 +76,10 @@ pub enum TemplateWarning {
     /// `?` followed by a group number or `{…}` is a conditional; `\?` inserts a `?`.
     Conditional,
     /// A `)` at character `offset` closes nothing: the template ends there.
-    Truncated { offset: usize },
+    Truncated {
+        /// The `)`'s character offset in the template, counted from 0.
+        offset: usize,
+    },
 }
 
 /// A parsed replacement.
@@ -122,6 +125,7 @@ enum CaseOp {
 
 impl Template {
     /// A Regex-mode replacement. Parsing never fails: whatever is not special is literal.
+    #[must_use]
     pub fn parse(text: &str) -> Self {
         let mut parser = Parser {
             chars: text.chars().collect(),
@@ -136,6 +140,7 @@ impl Template {
     }
 
     /// A Normal-mode replacement: the text as typed.
+    #[must_use]
     pub fn literal(text: &str) -> Self {
         let nodes = if text.is_empty() {
             Vec::new()
@@ -162,11 +167,14 @@ impl Template {
         }
     }
 
+    /// What the UI should point out about the template, in the order found.
+    #[must_use]
     pub fn warnings(&self) -> &[TemplateWarning] {
         &self.warnings
     }
 
     /// The expansion when it does not depend on the match, as buffer text.
+    #[must_use]
     pub fn as_literal(&self) -> Option<String> {
         match self.nodes.as_slice() {
             [] => Some(String::new()),
@@ -175,6 +183,7 @@ impl Template {
         }
     }
 
+    /// The replacement for one match, its groups read from `captures`.
     pub fn expand(&self, captures: &dyn Captures) -> String {
         let mut out = String::new();
         self.expand_into(captures, &mut out);

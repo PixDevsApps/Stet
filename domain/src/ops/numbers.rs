@@ -3,12 +3,17 @@
 
 use std::fmt;
 
+/// The base a number sequence is written in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Base {
+    /// Base 10.
     #[default]
     Decimal,
+    /// Base 16.
     Hex,
+    /// Base 8.
     Octal,
+    /// Base 2.
     Binary,
 }
 
@@ -40,14 +45,17 @@ impl std::error::Error for NumberOverflow {}
 /// Numbers from `start`, adding `step` after every `repeat` lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NumberSequence {
+    /// The first number.
     pub start: i64,
     /// May be negative.
     pub step: i64,
     /// How many lines get each number; 0 counts as 1.
     pub repeat: usize,
+    /// The base the numbers are written in.
     pub base: Base,
     /// Hexadecimal digits A–F rather than a–f.
     pub uppercase: bool,
+    /// How numbers narrower than the width are filled.
     pub padding: Padding,
     /// The minimum width in characters, sign included. Every number is as wide as the
     /// sequence's widest one, and at least this wide.

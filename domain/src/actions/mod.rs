@@ -15,7 +15,9 @@ pub use registry::ActionId;
 /// Where an action lives: on the application, or on the window that has focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActionScope {
+    /// On the application (`app.`), working with or without a window.
     App,
+    /// On the window that has focus (`win.`).
     Window,
 }
 
@@ -47,6 +49,7 @@ pub enum ActionKind {
 impl ActionKind {
     /// Whether the action runs with a parameter, given by its own menu entries or pickers; such
     /// an action has no keys and no plain palette entry.
+    #[must_use]
     pub const fn takes_parameter(self) -> bool {
         matches!(self, Self::WithString | Self::WithPath)
     }
@@ -81,7 +84,9 @@ impl Keys {
         self.app.iter().chain(self.widget).copied()
     }
 
+    /// Whether there are no keys at all.
     #[cfg(test)]
+    #[must_use]
     pub fn is_empty(self) -> bool {
         self.app.is_empty() && self.widget.is_empty()
     }
@@ -92,11 +97,17 @@ impl Keys {
 pub struct ActionSpec {
     /// The GAction name, stable across releases (keymaps and scripts refer to it).
     pub name: &'static str,
+    /// Whether the action is the application's or the window's.
     pub scope: ActionScope,
+    /// The shape of the GAction.
     pub kind: ActionKind,
+    /// The label menus and the palette show.
     pub label: &'static str,
+    /// Where the hamburger menu lists the action, if it does.
     pub menu: Option<MenuPlace>,
+    /// The default keys.
     pub keys: Keys,
+    /// Where the keys work.
     pub key_scope: KeyScope,
     /// Listed in the command palette. Parameterized actions are reached through their own
     /// entries instead (recent files, the language picker).

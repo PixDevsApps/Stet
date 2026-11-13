@@ -1,3 +1,7 @@
+//! Where the store's files live under the state directory, and the lock that keeps a second
+//! store from writing there. Every path the store touches comes from [`Layout`], so the file
+//! names are defined once.
+
 use super::StoreError;
 use crate::fs::durable::{PRIVATE_FILE_MODE, ensure_private_dir};
 use std::fs::{File, OpenOptions, Permissions};

@@ -1,3 +1,7 @@
+//! Detecting a file's encoding from its bytes: a byte order mark, then valid UTF-8, then
+//! UTF-16 by where its zero bytes sit, then chardetng among the legacy encodings. NUL bytes
+//! that fit no UTF-16 pattern mark the file as binary.
+
 use std::cmp::Ordering;
 
 use chardetng::{EncodingDetector, Iso2022JpDetection, Utf8Detection};
@@ -13,6 +17,7 @@ const ISO_2022_JP_LEN: usize = 64 * 1024;
 /// Which rule decided the encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DetectionSource {
+    /// The file starts with a byte order mark.
     Bom,
     /// The whole file is valid UTF-8, which includes plain ASCII.
     ValidUtf8,
@@ -26,10 +31,13 @@ pub enum DetectionSource {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The encoding [`detect`] chose for a file, and why.
 pub struct Detection {
+    /// The encoding to decode with.
     pub encoding: &'static Encoding,
     /// The file starts with a byte order mark for `encoding`.
     pub bom: bool,
+    /// The rule that decided.
     pub source: DetectionSource,
     /// NUL bytes near the start that don't fit a UTF-16 pattern; the file opens read-only.
     pub binary: bool,
@@ -38,6 +46,7 @@ pub struct Detection {
 /// Detects the encoding of a whole file: BOM, then valid UTF-8, then UTF-16 by its zero
 /// bytes, then chardetng. Binary data falls back to Windows-1252. The caller applies any
 /// per-file override.
+#[must_use]
 pub fn detect(bytes: &[u8]) -> Detection {
     if let Some(encoding) = bom_encoding(bytes) {
         return Detection {

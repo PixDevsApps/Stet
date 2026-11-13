@@ -49,6 +49,7 @@ pub fn monospace_family_with(fc_match: &Path, config_home: Option<&Path>) -> Str
 
 /// `$XDG_CONFIG_HOME/fontconfig`, which `omarchy-font-set` creates and writes; the host's in a
 /// Flatpak.
+#[must_use]
 pub fn fontconfig_dir() -> PathBuf {
     crate::sandbox::desktop_config_home().join("fontconfig")
 }

@@ -27,6 +27,7 @@ const PLACEHOLDER_UTF8: &[u8] = &{
 };
 
 /// The byte order mark written for `encoding`; empty for encodings without one.
+#[must_use]
 pub fn bom_bytes(encoding: &'static Encoding) -> &'static [u8] {
     if encoding == UTF_8 {
         b"\xEF\xBB\xBF"

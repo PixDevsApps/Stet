@@ -1,3 +1,7 @@
+//! The index of open documents a walk may reach, keyed by their file's path with symbolic
+//! links resolved. Find in Files searches such a file's text instead of the file, and Replace
+//! in Files hands it back to the app instead of writing it.
+
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

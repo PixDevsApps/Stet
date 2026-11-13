@@ -13,7 +13,9 @@ use super::Bookmarks;
 /// Edits to apply as one undo step, and the bookmarks once they are applied.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LineEdit {
+    /// The edits, sorted and non-overlapping.
     pub edits: Vec<TextEdit>,
+    /// The bookmarks once the edits are applied.
     pub bookmarks: Bookmarks,
 }
 
@@ -25,6 +27,7 @@ pub struct Cut {
 }
 
 /// Copy Bookmarked Lines: each bookmarked line with its line break, in order.
+#[must_use]
 pub fn copy_bookmarked_lines(text: &str, index: &LineIndex, bookmarks: &Bookmarks) -> String {
     let last = index.last_line();
     let mut clipboard = String::new();
@@ -37,6 +40,9 @@ pub fn copy_bookmarked_lines(text: &str, index: &LineIndex, bookmarks: &Bookmark
     clipboard
 }
 
+/// Cut Bookmarked Lines: [`copy_bookmarked_lines`] for the clipboard, then
+/// [`delete_bookmarked_lines`].
+#[must_use]
 pub fn cut_bookmarked_lines(text: &str, index: &LineIndex, bookmarks: &Bookmarks) -> Cut {
     Cut {
         clipboard: copy_bookmarked_lines(text, index, bookmarks),
@@ -45,6 +51,7 @@ pub fn cut_bookmarked_lines(text: &str, index: &LineIndex, bookmarks: &Bookmarks
 }
 
 /// Remove Bookmarked Lines.
+#[must_use]
 pub fn delete_bookmarked_lines(index: &LineIndex, bookmarks: &Bookmarks) -> LineEdit {
     LineEdit {
         edits: delete_lines(index, bookmarks.lines().iter().copied()),
@@ -53,6 +60,7 @@ pub fn delete_bookmarked_lines(index: &LineIndex, bookmarks: &Bookmarks) -> Line
 }
 
 /// Remove Unbookmarked Lines: keeps only the bookmarked lines, which stay bookmarked.
+#[must_use]
 pub fn delete_unbookmarked_lines(index: &LineIndex, bookmarks: &Bookmarks) -> LineEdit {
     let end = index.end_line();
     let mut marked = bookmarks.lines().iter().copied().peekable();
@@ -71,6 +79,7 @@ pub fn delete_unbookmarked_lines(index: &LineIndex, bookmarks: &Bookmarks) -> Li
 /// Paste to (Replace) Bookmarked Lines: the text of every bookmarked line becomes `clipboard`
 /// (LF-normalized). One final line break of the clipboard is dropped, since each line keeps its
 /// own. The bookmarks stay on the first line of each pasted block.
+#[must_use]
 pub fn paste_to_bookmarked_lines(
     index: &LineIndex,
     bookmarks: &Bookmarks,

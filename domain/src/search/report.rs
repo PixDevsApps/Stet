@@ -10,13 +10,19 @@ use crate::text::counted;
 /// [`SearchOptions::scope`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScopeKind {
+    /// In the selection.
     Selection,
+    /// In the whole text, with Wrap around.
     Document,
+    /// From the caret to the end.
     FromCaret,
+    /// From the start to the caret, searching backward.
     ToCaret,
 }
 
 impl ScopeKind {
+    /// The words a report ends with, such as `in the selection`.
+    #[must_use]
     pub const fn describe(self) -> &'static str {
         match self {
             Self::Selection => "in the selection",
@@ -29,6 +35,7 @@ impl ScopeKind {
 
 impl SearchOptions {
     /// Which row of the scope table applies; `has_selection` means a non-empty selection.
+    #[must_use]
     pub fn scope_kind(&self, has_selection: bool) -> ScopeKind {
         match () {
             () if self.in_selection && has_selection => ScopeKind::Selection,
@@ -40,6 +47,7 @@ impl SearchOptions {
 }
 
 /// The find bar's report after Count.
+#[must_use]
 pub fn count_message(count: usize, scope: ScopeKind) -> String {
     format!(
         "Count: {} {}",
@@ -49,6 +57,7 @@ pub fn count_message(count: usize, scope: ScopeKind) -> String {
 }
 
 /// The find bar's report after Replace All.
+#[must_use]
 pub fn replace_message(count: usize, scope: ScopeKind) -> String {
     format!(
         "Replaced {} {}",
@@ -58,6 +67,7 @@ pub fn replace_message(count: usize, scope: ScopeKind) -> String {
 }
 
 /// The find bar's report after Replace All in Open Documents.
+#[must_use]
 pub fn replace_in_documents_message(count: usize, documents: usize) -> String {
     format!(
         "Replaced {} in {}",
@@ -67,6 +77,7 @@ pub fn replace_in_documents_message(count: usize, documents: usize) -> String {
 }
 
 /// What the replace field says about a template that is easy to get wrong.
+#[must_use]
 pub fn template_warning(warning: TemplateWarning) -> String {
     match warning {
         TemplateWarning::Grouping => {
@@ -85,6 +96,7 @@ pub fn template_warning(warning: TemplateWarning) -> String {
 
 /// A search's heading in the results panel: `Search "x" (3 hits in 2 files of 10 searched)`.
 /// `searched` is the number of files looked at, when it is known.
+#[must_use]
 pub fn results_heading(
     pattern: &str,
     hits: usize,
@@ -113,6 +125,7 @@ pub fn results_heading(
 }
 
 /// Find in Files' status line while it runs: `Searching ~/src… 3 hits so far`.
+#[must_use]
 pub fn find_in_files_progress(folder: &str, hits: usize) -> String {
     format!(
         "Searching {folder}… {} so far",
@@ -123,6 +136,7 @@ pub fn find_in_files_progress(folder: &str, hits: usize) -> String {
 /// Find in Files' status line once it ends: its `heading`, how long it `took`, whether the user
 /// stopped it or it stopped at the hit limit (`truncated_at`), and how many files could not be
 /// read.
+#[must_use]
 pub fn find_in_files_status(
     heading: &str,
     took: Duration,
@@ -147,6 +161,7 @@ pub fn find_in_files_status(
 }
 
 /// Replace in Files' status line while it runs.
+#[must_use]
 pub fn replace_in_files_progress(folder: &str, searched: usize, changed: usize) -> String {
     format!(
         "Replacing in {folder}… {} searched, {} changed",
@@ -157,6 +172,7 @@ pub fn replace_in_files_progress(folder: &str, searched: usize, changed: usize) 
 
 /// Replace in Files' status line once it ends: its `heading`, how long it `took`, whether the
 /// user stopped it, the files it failed to write and the files listed without their lines.
+#[must_use]
 pub fn replace_in_files_status(
     heading: &str,
     took: Duration,

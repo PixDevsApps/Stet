@@ -1,3 +1,7 @@
+//! Reading a file's raw bytes under the size policy. A file is refused before its bytes are
+//! read when it is too large or memory is short, and the metadata is taken before the read so
+//! that a change during it shows up as a changed fingerprint.
+
 use std::fs::OpenOptions;
 use std::io::{self, ErrorKind, Read};
 use std::os::unix::fs::OpenOptionsExt;
@@ -18,25 +22,49 @@ pub struct Loaded {
     pub class: SizeClass,
 }
 
+/// Why [`load`] couldn't read a file.
 #[derive(Debug, thiserror::Error)]
 pub enum LoadError {
+    /// Nothing exists at the path.
     #[error("{} does not exist", .path.display())]
-    NotFound { path: PathBuf },
+    NotFound {
+        /// The path that was to be read.
+        path: PathBuf,
+    },
+    /// The user may not read the file.
     #[error("permission denied reading {}", .path.display())]
-    PermissionDenied { path: PathBuf },
+    PermissionDenied {
+        /// The path that was to be read.
+        path: PathBuf,
+    },
+    /// The path names a directory.
     #[error("{} is a directory", .path.display())]
-    IsDirectory { path: PathBuf },
+    IsDirectory {
+        /// The path that was to be read.
+        path: PathBuf,
+    },
+    /// The path names a pipe, a socket or a device.
     #[error("{} is not a regular file", .path.display())]
-    NotRegularFile { path: PathBuf },
+    NotRegularFile {
+        /// The path that was to be read.
+        path: PathBuf,
+    },
+    /// The file is over the size policy's limit, or too little memory is free to hold it.
     #[error("{} ({}) is too large to open: {refusal}", .path.display(), human_size(*.size))]
     TooLarge {
+        /// The path that was to be read.
         path: PathBuf,
+        /// The file's size in bytes when it was refused.
         size: u64,
+        /// Which limit refused it.
         refusal: Refusal,
     },
+    /// Any other I/O error.
     #[error("could not read {}: {source}", .path.display())]
     Io {
+        /// The path that was to be read.
         path: PathBuf,
+        /// The underlying error.
         #[source]
         source: io::Error,
     },

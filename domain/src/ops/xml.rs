@@ -14,6 +14,7 @@ use quick_xml::reader::Reader;
 use super::{Breaks, Change, Indent, SyntaxError, Target, reformat_target};
 use crate::text::{Line, LineIndex, LineNumber, Position};
 
+/// An XML syntax error found while formatting.
 pub type XmlError = SyntaxError;
 
 /// Checks well-formedness, namespaces included, with roxmltree. Internal DTD entities are

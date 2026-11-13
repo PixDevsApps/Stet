@@ -1,13 +1,21 @@
+//! Go Back and Go Forward: the caret positions the user jumped from and to, across documents.
+//! Moves close to the current entry update it instead of adding one, and recorded offsets
+//! follow the edits made to their document.
+
 use crate::text::{Bias, CharOffset, Line, TextEdit, map_offset};
 
 /// A caret position: a document and a character offset in it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Location<D> {
+    /// The document.
     pub doc: D,
+    /// The caret's character offset in the document.
     pub offset: CharOffset,
 }
 
 impl<D> Location<D> {
+    /// The location at `offset` in `doc`.
+    #[must_use]
     pub fn new(doc: D, offset: CharOffset) -> Self {
         Self { doc, offset }
     }
@@ -38,14 +46,19 @@ impl<D: PartialEq + Clone> Default for History<D> {
 }
 
 impl<D: PartialEq + Clone> History<D> {
+    /// How many entries [`new`](Self::new) keeps.
     pub const DEFAULT_LIMIT: usize = 100;
+    /// How many lines apart two moves may be for [`new`](Self::new) to merge them.
     pub const DEFAULT_NEAR_LINES: usize = 10;
 
+    /// An empty history with the default limits.
+    #[must_use]
     pub fn new() -> Self {
         Self::with_limits(Self::DEFAULT_LIMIT, Self::DEFAULT_NEAR_LINES)
     }
 
     /// Keeps at most `limit` entries (at least one) and merges moves within `near_lines` lines.
+    #[must_use]
     pub fn with_limits(limit: usize, near_lines: usize) -> Self {
         Self {
             entries: Vec::new(),
@@ -56,19 +69,26 @@ impl<D: PartialEq + Clone> History<D> {
     }
 
     /// Oldest first.
+    #[must_use]
     pub fn entries(&self) -> &[Location<D>] {
         &self.entries
     }
 
+    /// The entry back and forward move from, if any.
+    #[must_use]
     pub fn current(&self) -> Option<&Location<D>> {
         self.entries.get(self.current)
     }
 
+    /// Whether an earlier position is left to go back to.
     #[cfg(test)]
+    #[must_use]
     pub fn can_go_back(&self) -> bool {
         self.current > 0
     }
 
+    /// Whether a newer entry exists to go forward to.
+    #[must_use]
     pub fn can_go_forward(&self) -> bool {
         self.current + 1 < self.entries.len()
     }

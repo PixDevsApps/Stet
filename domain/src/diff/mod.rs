@@ -50,9 +50,12 @@ pub enum IgnoreWhitespace {
     All,
 }
 
+/// What a comparison ignores and whether it looks for moved blocks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CompareOptions {
+    /// Which whitespace differences don't count.
     pub ignore_whitespace: IgnoreWhitespace,
+    /// Letters that differ only in case are equal.
     pub ignore_case: bool,
     /// Lines that are empty once the whitespace option applies take no part in the comparison.
     pub ignore_empty_lines: bool,
@@ -74,11 +77,14 @@ impl Default for CompareOptions {
 /// One of the two compared texts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Side {
+    /// The text in the left view.
     Left,
+    /// The text in the right view.
     Right,
 }
 
 impl Side {
+    /// The opposite side.
     #[must_use]
     pub const fn other(self) -> Self {
         match self {
@@ -95,6 +101,7 @@ impl Side {
     }
 }
 
+/// What a [`Hunk`] holds, for its marker and the summary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HunkKind {
     /// Lines only on the right.
@@ -112,12 +119,17 @@ pub enum HunkKind {
 /// `start`. Ignored empty lines inside the block are part of it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Hunk {
+    /// Whether the hunk adds, removes, changes or moves lines.
     pub kind: HunkKind,
+    /// The hunk's lines in the left text.
     pub left: Range<Line>,
+    /// The hunk's lines in the right text.
     pub right: Range<Line>,
 }
 
 impl Hunk {
+    /// The hunk's lines in `side`'s text.
+    #[must_use]
     pub fn lines(&self, side: Side) -> &Range<Line> {
         match side {
             Side::Left => &self.left,
@@ -139,9 +151,12 @@ pub enum LineKind {
     Moved,
 }
 
+/// Consecutive lines of one side that differ in the same way.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LineRun {
+    /// The lines of the run.
     pub lines: Range<Line>,
+    /// How the run's lines differ.
     pub kind: LineKind,
 }
 
@@ -149,13 +164,19 @@ pub struct LineRun {
 /// offsets within each line) that differ.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InlineDiff {
+    /// The changed line on the left.
     pub left_line: Line,
+    /// The changed line on the right.
     pub right_line: Line,
+    /// The differing columns of the left line.
     pub left: Vec<Range<usize>>,
+    /// The differing columns of the right line.
     pub right: Vec<Range<usize>>,
 }
 
 impl InlineDiff {
+    /// The paired line on `side`.
+    #[must_use]
     pub fn line(&self, side: Side) -> Line {
         match side {
             Side::Left => self.left_line,
@@ -163,6 +184,8 @@ impl InlineDiff {
         }
     }
 
+    /// The differing columns of the line on `side`.
+    #[must_use]
     pub fn columns(&self, side: Side) -> &[Range<usize>] {
         match side {
             Side::Left => &self.left,
@@ -175,15 +198,20 @@ impl InlineDiff {
 /// ignored empty lines sit inside the block.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Move {
+    /// Where the lines were on the left.
     pub left: Range<Line>,
+    /// Where the lines are on the right.
     pub right: Range<Line>,
 }
 
 /// Line counts for the comparison summary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct CompareStats {
+    /// Blocks of differing lines.
     pub hunks: usize,
+    /// Lines only on the right.
     pub added: usize,
+    /// Lines only on the left.
     pub removed: usize,
     /// Pairs of changed lines.
     pub changed: usize,
@@ -194,6 +222,7 @@ pub struct CompareStats {
 impl CompareStats {
     /// "12 lines added, 3 removed, 5 changed, 1 moved", leaving out what is zero; changed
     /// counts pairs of lines. Identical texts are "No differences".
+    #[must_use]
     pub fn summary(&self) -> String {
         let parts: Vec<(usize, &str)> = [
             (self.added, "added"),
@@ -220,6 +249,7 @@ impl CompareStats {
     }
 }
 
+/// The result of [`compare`]: what differs and how the two views line up.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Comparison {
     /// In order on both sides.
@@ -228,24 +258,31 @@ pub struct Comparison {
     pub inline: Vec<InlineDiff>,
     /// Sorted by left line.
     pub moves: Vec<Move>,
+    /// The line counts for the summary.
     pub stats: CompareStats,
+    /// The side-by-side rows the two views pad and scroll by.
     pub alignment: Alignment,
     runs: [Vec<LineRun>; 2],
     hunk_rows: Vec<Range<usize>>,
 }
 
 impl Comparison {
+    /// Whether the two sides have no differences.
     #[cfg(test)]
+    #[must_use]
     pub fn is_identical(&self) -> bool {
         self.hunks.is_empty()
     }
 
     /// The differing lines of `side` with their kind, in order. Lines not listed are equal.
+    #[must_use]
     pub fn line_runs(&self, side: Side) -> &[LineRun] {
         &self.runs[side.index()]
     }
 
+    /// How `line` of `side` differs, or `None` when it is equal.
     #[cfg(test)]
+    #[must_use]
     pub fn line_kind(&self, side: Side, line: Line) -> Option<LineKind> {
         let runs = self.line_runs(side);
         let index = runs.partition_point(|run| run.lines.end <= line);
@@ -254,7 +291,9 @@ impl Comparison {
             .map(|run| run.kind)
     }
 
+    /// The character-level differences on `line` of `side`, if it has any.
     #[cfg(test)]
+    #[must_use]
     pub fn inline_at(&self, side: Side, line: Line) -> Option<&InlineDiff> {
         let index = self.inline.partition_point(|diff| diff.line(side) < line);
         self.inline
@@ -264,12 +303,14 @@ impl Comparison {
 
     /// The rows of the [`Alignment`] that hunk `index` covers.
     #[cfg(test)]
+    #[must_use]
     pub fn hunk_rows(&self, index: usize) -> Range<usize> {
         self.hunk_rows[index].clone()
     }
 
     /// The hunk whose lines on `side` include `line`.
     #[cfg(test)]
+    #[must_use]
     pub fn hunk_at(&self, side: Side, line: Line) -> Option<usize> {
         let index = self
             .hunks
@@ -282,6 +323,7 @@ impl Comparison {
 
     /// The first hunk that starts below the row of `line` on `side`, for Next Difference.
     /// Wrapping around is left to the caller.
+    #[must_use]
     pub fn next_hunk(&self, side: Side, line: Line) -> Option<usize> {
         let row = self.alignment.row_of(side, line);
         let index = self.hunk_rows.partition_point(|rows| rows.start <= row);
@@ -289,6 +331,7 @@ impl Comparison {
     }
 
     /// The last hunk that starts above the row of `line` on `side`, for Previous Difference.
+    #[must_use]
     pub fn prev_hunk(&self, side: Side, line: Line) -> Option<usize> {
         let row = self.alignment.row_of(side, line);
         self.hunk_rows
@@ -298,6 +341,7 @@ impl Comparison {
 }
 
 /// Compares `left` with `right` line by line.
+#[must_use]
 pub fn compare(left: &str, right: &str, options: &CompareOptions) -> Comparison {
     let left_lines: Vec<&str> = left.split('\n').collect();
     let right_lines: Vec<&str> = right.split('\n').collect();

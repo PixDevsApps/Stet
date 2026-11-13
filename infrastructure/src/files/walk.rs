@@ -1,3 +1,7 @@
+//! The one walk Find in Files, Replace in Files and the project walk build on: hidden files,
+//! `.gitignore`, subfolders and the filter list decide which files it visits. Symbolic links
+//! are never followed, so a walk can't loop or leave its roots.
+
 use std::path::{Path, PathBuf};
 
 use ignore::{DirEntry, WalkBuilder};

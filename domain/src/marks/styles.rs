@@ -1,3 +1,7 @@
+//! The Mark dialog's marks and the five style tokens: character ranges per style, kept sorted
+//! and non-overlapping, moved through edits, and turned into bookmarked lines. Empty ranges
+//! are never stored.
+
 use std::ops::Range;
 
 use crate::text::{Bias, CharOffset, Line, LineIndex, OffsetRange, TextEdit};
@@ -5,15 +9,22 @@ use crate::text::{Bias, CharOffset, Line, LineIndex, OffsetRange, TextEdit};
 /// The Mark dialog's style and the five style tokens (Search > Style All Occurrences of Token).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MarkStyle {
+    /// The Mark dialog's style.
     Mark,
+    /// Style token 1.
     Token1,
+    /// Style token 2.
     Token2,
+    /// Style token 3.
     Token3,
+    /// Style token 4.
     Token4,
+    /// Style token 5.
     Token5,
 }
 
 impl MarkStyle {
+    /// Every style, the Mark dialog's first, in [`Self::index`] order.
     pub const ALL: [Self; 6] = [
         Self::Mark,
         Self::Token1,
@@ -23,6 +34,7 @@ impl MarkStyle {
         Self::Token5,
     ];
 
+    /// The five style tokens, in order.
     pub const TOKENS: [Self; 5] = [
         Self::Token1,
         Self::Token2,
@@ -32,6 +44,7 @@ impl MarkStyle {
     ];
 
     /// Style token `number`, from 1 to 5.
+    #[must_use]
     pub const fn token(number: usize) -> Option<Self> {
         match number {
             1..=5 => Some(Self::TOKENS[number - 1]),
@@ -39,11 +52,14 @@ impl MarkStyle {
         }
     }
 
+    /// The style's place in [`Self::ALL`].
+    #[must_use]
     pub const fn index(self) -> usize {
         self as usize
     }
 
     /// A stable id for text tags and scheme styles.
+    #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Mark => "mark",
@@ -64,18 +80,25 @@ pub struct Marks {
 }
 
 impl Marks {
+    /// No marks.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// The marks of `style`, sorted and non-overlapping.
+    #[must_use]
     pub fn ranges(&self, style: MarkStyle) -> &[Range<CharOffset>] {
         &self.ranges[style.index()]
     }
 
+    /// How many marks `style` has.
+    #[must_use]
     pub fn count(&self, style: MarkStyle) -> usize {
         self.ranges(style).len()
     }
 
+    /// Whether no style has a mark.
     pub fn is_empty(&self) -> bool {
         self.ranges.iter().all(Vec::is_empty)
     }
@@ -115,15 +138,18 @@ impl Marks {
         self.add(style, ranges);
     }
 
+    /// Removes the marks of `style`.
     pub fn clear(&mut self, style: MarkStyle) {
         self.ranges[style.index()].clear();
     }
 
+    /// Removes the marks of every style.
     pub fn clear_all(&mut self) {
         self.ranges.iter_mut().for_each(Vec::clear);
     }
 
     /// Jump Down: the first mark of `style` that starts after `offset`, wrapping to the first.
+    #[must_use]
     pub fn next(&self, style: MarkStyle, offset: CharOffset) -> Option<Range<CharOffset>> {
         let ranges = self.ranges(style);
         let index = ranges.partition_point(|range| range.start <= offset);
@@ -131,6 +157,7 @@ impl Marks {
     }
 
     /// Jump Up: the last mark of `style` that starts before `offset`, wrapping to the last.
+    #[must_use]
     pub fn prev(&self, style: MarkStyle, offset: CharOffset) -> Option<Range<CharOffset>> {
         let ranges = self.ranges(style);
         let index = ranges.partition_point(|range| range.start < offset);
@@ -161,6 +188,8 @@ impl Marks {
         }
     }
 
+    /// The lines to bookmark for the marks of `style`, as [`bookmark_lines_of`] finds them.
+    #[must_use]
     pub fn bookmark_lines(&self, style: MarkStyle, index: &LineIndex) -> Vec<Line> {
         bookmark_lines_of(self.ranges(style), index)
     }
@@ -168,6 +197,7 @@ impl Marks {
 
 /// The lines to bookmark for matches in `ranges` (character offsets): every line a match spans,
 /// and the line of an empty match. Sorted and unique.
+#[must_use]
 pub fn bookmark_lines_of(ranges: &[Range<CharOffset>], index: &LineIndex) -> Vec<Line> {
     let mut lines = Vec::new();
     for range in ranges {

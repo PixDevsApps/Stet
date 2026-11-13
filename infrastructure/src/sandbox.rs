@@ -23,6 +23,7 @@ pub fn is_flatpak() -> bool {
 
 /// The configuration folder of the user's desktop: `~/.config` or the host's
 /// `XDG_CONFIG_HOME` in a Flatpak, [`xdg::config_home`] outside one.
+#[must_use]
 pub fn desktop_config_home() -> PathBuf {
     if !is_flatpak() {
         return xdg::config_home();
@@ -32,6 +33,7 @@ pub fn desktop_config_home() -> PathBuf {
 }
 
 /// In a Flatpak: the host's `XDG_CONFIG_HOME` when it is absolute, else `home/.config`.
+#[must_use]
 pub fn host_config_home(host_value: Option<&OsStr>, home: &Path) -> PathBuf {
     xdg::base_dir(host_value, home, ".config")
 }

@@ -1,3 +1,7 @@
+//! Result lines for the results panel: matches grouped by line, with the line's text cut to a
+//! window around its first match when it is long. Find All and Find in Files both produce
+//! [`Hit`]s, so one panel shows either.
+
 use std::ops::Range;
 
 use super::matcher::Match;
@@ -12,6 +16,7 @@ const CONTEXT_CHARS: usize = 40;
 /// results panel shows both.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hit {
+    /// The line the matches are on.
     pub line_number: LineNumber,
     /// The line without its line break, decoded as UTF-8 with U+FFFD for invalid bytes. A line
     /// longer than `MAX_LINE_CHARS` is cut to a window that starts a little before its first
@@ -29,6 +34,7 @@ pub struct Hit {
 impl Hit {
     /// The character column (in the whole line) where the first match starts.
     #[cfg(test)]
+    #[must_use]
     pub fn column(&self) -> CharOffset {
         let start = self.match_ranges.first().map_or(0, |range| range.start);
         self.line_offset + count_chars(&self.line_text.as_bytes()[..start])
@@ -36,6 +42,7 @@ impl Hit {
 }
 
 /// Groups in-document matches (from [`super::Matcher::find_all`] on `text`) into result lines.
+#[must_use]
 pub fn document_hits(text: &str, matches: &[Match]) -> Vec<Hit> {
     let bytes = text.as_bytes();
     let mut cursor = ByteCursor::new(text);

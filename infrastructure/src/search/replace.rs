@@ -1,3 +1,7 @@
+//! Replace All over a text snapshot: the edits a [`Matcher`] and a [`Template`] make, in
+//! character offsets, with the byte ranges recorded while matching. Past
+//! [`BULK_EDIT_THRESHOLD`] edits the result collapses into one edit for the bulk path.
+
 use std::borrow::Cow;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +16,7 @@ use stet_domain::text::{ByteCursor, ByteOffset, CharCursor, CharOffset, OffsetRa
 /// never overlapping. Apply them in one user action.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ReplaceAll {
+    /// The replacements, in order and never overlapping.
     pub edits: Vec<TextEdit>,
     /// Matches replaced. A replacement equal to the matched text counts but makes no edit.
     pub count: usize,
@@ -22,12 +27,14 @@ pub struct ReplaceAll {
 
 impl ReplaceAll {
     /// More edits than the buffer should take one by one.
+    #[must_use]
     pub fn is_bulk(&self) -> bool {
         self.edits.len() > BULK_EDIT_THRESHOLD
     }
 
     /// One edit that replaces the span from the first edit's start to the last one's end, for
     /// the bulk path. `text` must be the text the edits were made for.
+    #[must_use]
     pub fn as_single_edit(&self, text: &str) -> Option<TextEdit> {
         let first = self.edits.first()?;
         let last = self.edits.last()?;
@@ -45,6 +52,7 @@ impl ReplaceAll {
     }
 
     /// The whole text after the replacements.
+    #[must_use]
     pub fn apply(&self, text: &str) -> String {
         let Some(edit) = self.as_single_edit(text) else {
             return text.to_owned();
@@ -60,6 +68,7 @@ impl ReplaceAll {
 
     /// The edits' byte ranges in `text`, the text they were made for (Replace in Files maps
     /// them to the file's own text).
+    #[must_use]
     pub fn byte_ranges(&self, text: &str) -> Vec<Range<ByteOffset>> {
         self.byte_spans(text).into_owned()
     }

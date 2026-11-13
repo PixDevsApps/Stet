@@ -17,7 +17,8 @@
 //! - [`theme`]: colours, the Omarchy palette and the editor's colour roles.
 //! - [`updates`]: checking for a newer release.
 
-#![warn(unreachable_pub)]
+#![warn(unreachable_pub, missing_docs)]
+#![warn(clippy::must_use_candidate)]
 
 pub mod actions;
 pub mod column;

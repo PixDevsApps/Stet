@@ -34,8 +34,10 @@ pub const SCHEMA_VERSION: u32 = 1;
 /// [`LARGE_BACKUP_IDLE`]. A character takes at least a byte, so this is over 16 MiB.
 pub const LARGE_BACKUP_CHARS: usize = 16 * 1024 * 1024;
 
+/// The least time between two backups of a document over [`LARGE_BACKUP_CHARS`].
 pub const LARGE_BACKUP_INTERVAL: Duration = Duration::from_secs(60);
 
+/// How long a document over [`LARGE_BACKUP_CHARS`] must be left alone before a backup.
 pub const LARGE_BACKUP_IDLE: Duration = Duration::from_secs(2);
 
 /// Everything restored at startup: the tabs, the window and the histories.
@@ -237,6 +239,7 @@ impl TabRecord {
     /// The selection as (anchor, caret), clamped to `len` characters: the caret is at the
     /// end of `selection` it equals, so a selection made backwards stays backwards. Without a
     /// selection, both are the caret.
+    #[must_use]
     pub fn anchor_and_caret(&self, len: usize) -> (CharOffset, CharOffset) {
         let end_of_text = CharOffset::ZERO + len;
         let caret = self.caret.min(end_of_text);
@@ -272,11 +275,13 @@ pub enum ViewSlot {
 
 impl ViewSlot {
     /// The slot at `index` among a window's views: 0 is the main view, any other the second.
+    #[must_use]
     pub const fn from_index(index: usize) -> Self {
         if index == 0 { Self::Main } else { Self::Second }
     }
 
     /// The index of the slot among a window's views.
+    #[must_use]
     pub const fn index(self) -> usize {
         match self {
             Self::Main => 0,
@@ -304,8 +309,11 @@ impl From<ViewSlot> for u8 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowState {
+    /// The window's width.
     pub width: i32,
+    /// The window's height.
     pub height: i32,
+    /// Whether the window was maximized.
     pub maximized: bool,
     /// The editor zoom in points over the base font size, as `stet_domain::view::Zoom` has it.
     pub zoom: i32,
@@ -323,6 +331,7 @@ pub struct BackupState {
     pub changed: bool,
     /// In large-file mode: no periodic backup, and closing the window asks instead.
     pub large_file: bool,
+    /// The text's length in characters.
     pub chars: usize,
     /// Since the last backup of this document was written, if it has one.
     pub since_backup: Option<Duration>,
@@ -346,6 +355,7 @@ impl BackupState {
     /// never does periodically, and documents over [`LARGE_BACKUP_CHARS`] wait for
     /// [`LARGE_BACKUP_INTERVAL`] since their last backup and [`LARGE_BACKUP_IDLE`] since the
     /// last edit. The last commit before quitting (`last`) writes every changed text.
+    #[must_use]
     pub fn action(&self, last: bool) -> BackupAction {
         if !self.needs_backup {
             return BackupAction::Remove;
@@ -375,9 +385,13 @@ impl BackupState {
 /// since the Unix epoch. All four fields are required; a partial fingerprint reads as none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Fingerprint {
+    /// The device the file is on.
     pub dev: u64,
+    /// The file's inode number.
     pub ino: u64,
+    /// The file's size in bytes.
     pub size: u64,
+    /// The modification time, in nanoseconds since the Unix epoch.
     pub mtime_ns: i64,
 }
 
@@ -385,6 +399,7 @@ impl Fingerprint {
     /// Whether `now` shows the same file, unchanged. `dev` is not compared: btrfs subvolumes
     /// and device-mapper volumes get their device numbers when mounted or activated, so they
     /// can differ after a reboot.
+    #[must_use]
     pub fn matches(&self, now: &Self) -> bool {
         self.ino == now.ino && self.size == now.size && self.mtime_ns == now.mtime_ns
     }

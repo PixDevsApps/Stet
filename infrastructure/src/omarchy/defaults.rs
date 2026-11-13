@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::fs::durable::{self, FileMode, WriteOptions};
 
 /// The file in Omarchy's state directory (the parent of `current/`).
+#[must_use]
 pub fn editor_file(omarchy_dir: &Path) -> PathBuf {
     omarchy_dir.join("defaults").join("editor")
 }

@@ -1,3 +1,7 @@
+//! The matcher and sink that Find in Files hands `grep-searcher` for each file. Plain text
+//! goes to Rust's regex engine, regexes and whole word to PCRE2 with the in-document dialect;
+//! both check the run's [`CancelToken`] between matches, so a cancel ends a file within one.
+
 use std::fmt::{self, Write as _};
 use std::io::{self, Read};
 use std::ops::Range;

@@ -40,12 +40,14 @@ impl BulkEdit {
 
 impl ColumnEdit {
     /// Whether the edit has too many parts to go to the buffer one by one.
+    #[must_use]
     pub fn needs_bulk(&self) -> bool {
         self.edits.len() > BULK_THRESHOLD
     }
 
     /// The edits as one replacement of the lines they touch, for the text they were made on.
     /// `None` when there are no edits.
+    #[must_use]
     pub fn to_bulk(&self, text: &str, index: &LineIndex) -> Option<BulkEdit> {
         let (first, last) = (self.edits.first()?, self.edits.last()?);
         let lines = index.line_of_char(first.start())..index.line_of_char(last.end()) + 1;

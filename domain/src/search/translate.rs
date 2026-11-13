@@ -79,6 +79,7 @@ impl Note {
     }
 }
 
+/// Why a query can't be translated.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranslateError {
     /// Nothing to search for.
@@ -89,6 +90,7 @@ pub enum TranslateError {
 
 impl TranslateError {
     /// The character offset in the typed pattern that the error is about.
+    #[must_use]
     pub fn offset(&self) -> usize {
         match self {
             Self::EmptyPattern => 0,
@@ -132,6 +134,7 @@ pub struct Translated {
     /// A match can span lines, or the pattern uses whole-text anchors: Find in Files must
     /// search whole files instead of line by line.
     pub needs_whole_text: bool,
+    /// What the translation changed or found, for the UI's hints.
     pub notes: Vec<Note>,
     map: SourceMap,
 }
@@ -139,10 +142,13 @@ pub struct Translated {
 impl Translated {
     /// The character offset in the typed pattern for byte `offset` of [`Translated::pattern`],
     /// for placing PCRE2's error offsets.
+    #[must_use]
     pub fn source_offset(&self, offset: usize) -> usize {
         self.map.source_offset(&self.pattern, offset)
     }
 
+    /// Whether the translation noted `note`.
+    #[must_use]
     pub fn has_note(&self, note: Note) -> bool {
         self.notes.contains(&note)
     }
@@ -153,6 +159,7 @@ pub fn translate(query: &Query) -> Result<Translated, TranslateError> {
     translate_for(query, Target::Buffer)
 }
 
+/// Translates `query` to run on `target`.
 pub fn translate_for(query: &Query, target: Target) -> Result<Translated, TranslateError> {
     if query.pattern.is_empty() {
         return Err(TranslateError::EmptyPattern);

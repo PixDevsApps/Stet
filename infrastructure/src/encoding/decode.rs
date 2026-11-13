@@ -1,3 +1,7 @@
+//! Decoding bytes to text in fixed-size chunks, so the only full-size buffer is the text
+//! itself. Every U+0000 becomes the NUL placeholder, and the decode records whether encoding
+//! the text again would reproduce the input.
+
 use encoding_rs::{CoderResult, Encoder, EncoderResult, Encoding, UTF_8};
 use memchr::memmem;
 use stet_domain::text::{EolStats, LfNormalizer, NUL_PLACEHOLDER};
@@ -34,12 +38,14 @@ impl Decoded {
 
 /// Decodes `bytes` as `encoding`, stripping the encoding's BOM first when `bom` is set and
 /// the input starts with it. Line endings are kept.
+#[must_use]
 pub fn decode(bytes: &[u8], encoding: &'static Encoding, bom: bool) -> Decoded {
     decode_impl(bytes, encoding, bom, None)
 }
 
 /// [`decode`] with the line endings normalized to LF in the same pass (ADR-008), and their
 /// counts.
+#[must_use]
 pub fn decode_to_lf(bytes: &[u8], encoding: &'static Encoding, bom: bool) -> (Decoded, EolStats) {
     let mut normalizer = LfNormalizer::new();
     let decoded = decode_impl(bytes, encoding, bom, Some(&mut normalizer));

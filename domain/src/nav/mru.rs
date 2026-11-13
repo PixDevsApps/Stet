@@ -1,3 +1,7 @@
+//! The tab switcher's order: documents most recently used first. The order stays frozen while
+//! a Ctrl+Tab switch is under way, and the switch ends by committing or cancelling the
+//! selection.
+
 /// Documents in most-recently-used order, for Ctrl+Tab switching.
 ///
 /// Pressing Ctrl+Tab calls [`next`](Self::next) (Ctrl+Shift+Tab [`prev`](Self::prev)), which
@@ -21,6 +25,8 @@ impl<T> Default for Mru<T> {
 }
 
 impl<T: PartialEq> Mru<T> {
+    /// An empty order.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -30,7 +36,9 @@ impl<T: PartialEq> Mru<T> {
         self.order.iter()
     }
 
+    /// The most recently used item.
     #[cfg(test)]
+    #[must_use]
     pub fn current(&self) -> Option<&T> {
         self.order.first()
     }
@@ -86,6 +94,8 @@ impl<T: PartialEq> Mru<T> {
         true
     }
 
+    /// Whether a Ctrl+Tab switch is under way.
+    #[must_use]
     pub fn is_switching(&self) -> bool {
         self.selected.is_some()
     }
@@ -120,11 +130,14 @@ impl<T: PartialEq> Mru<T> {
         self.selected()
     }
 
+    /// The document selected in the switch under way, if any.
+    #[must_use]
     pub fn selected(&self) -> Option<&T> {
         self.selected.map(|index| &self.order[index])
     }
 
     /// The selection's position in [`iter`](Self::iter) order, for the switcher popup.
+    #[must_use]
     pub fn selected_index(&self) -> Option<usize> {
         self.selected
     }

@@ -1,3 +1,7 @@
+//! Bookmarks by line: toggling them, jumping between them, and keeping them on their lines
+//! through edits. The set stays sorted and without duplicates, so the gutter and Next Bookmark
+//! search it by line.
+
 use std::ops::Range;
 
 use crate::text::{CharOffset, Line, LineIndex, OffsetRange, TextEdit};
@@ -9,22 +13,32 @@ pub struct Bookmarks {
 }
 
 impl Bookmarks {
+    /// No bookmarks.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// The bookmarked lines, in order.
+    #[must_use]
     pub fn lines(&self) -> &[Line] {
         &self.lines
     }
 
+    /// How many lines are bookmarked.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.lines.len()
     }
 
+    /// Whether no line is bookmarked.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
     }
 
+    /// Whether `line` is bookmarked.
+    #[must_use]
     pub fn contains(&self, line: Line) -> bool {
         self.lines.binary_search(&line).is_ok()
     }
@@ -61,11 +75,13 @@ impl Bookmarks {
         }
     }
 
+    /// Clear All Bookmarks.
     pub fn clear(&mut self) {
         self.lines.clear();
     }
 
     /// Next Bookmark (F2): the first bookmark below `line`, wrapping to the first one.
+    #[must_use]
     pub fn next(&self, line: Line) -> Option<Line> {
         let index = self.lines.partition_point(|&bookmark| bookmark <= line);
         self.lines
@@ -75,6 +91,7 @@ impl Bookmarks {
     }
 
     /// Previous Bookmark (Shift+F2): the last bookmark above `line`, wrapping to the last one.
+    #[must_use]
     pub fn prev(&self, line: Line) -> Option<Line> {
         let index = self.lines.partition_point(|&bookmark| bookmark < line);
         index
@@ -84,6 +101,7 @@ impl Bookmarks {
     }
 
     /// The bookmarks within `lines`, for painting the visible part of the gutter.
+    #[must_use]
     pub fn in_lines(&self, lines: Range<Line>) -> &[Line] {
         let start = self.lines.partition_point(|&line| line < lines.start);
         let end = self.lines.partition_point(|&line| line < lines.end);

@@ -1,16 +1,20 @@
 //! Indentation: a document's tab width and whether Tab inserts spaces, from the settings, the
 //! language, or the indentation the text already uses.
 
-/// How much of a text [`detect`] reads: enough lines to see the indentation of most files,
-/// cheap to take from the start of a large one.
 use crate::view::TabWidth;
 
+/// How much of a text [`detect`] reads: enough lines to see the indentation of most files,
+/// cheap to take from the start of a large one.
 pub const DETECT_MAX_LINES: usize = 10_000;
+/// The most bytes [`detect`] reads from the start of a text; [`sample`] cuts there.
 pub const DETECT_MAX_BYTES: usize = 256 * 1024;
 
+/// A document's indentation settings: its tab width and what Tab inserts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Indentation {
+    /// The columns between tab stops.
     pub tab_width: TabWidth,
+    /// Tab inserts spaces up to the next tab stop instead of a tab character.
     pub insert_spaces: bool,
 }
 
@@ -22,6 +26,7 @@ impl Indentation {
     };
 
     /// The status bar's item: `Spaces: 4` or `Tab Width: 4`, as other editors say it.
+    #[must_use]
     pub fn label(self) -> String {
         if self.insert_spaces {
             format!("Spaces: {}", self.tab_width)
@@ -50,7 +55,9 @@ impl Default for Indentation {
 /// What a text's indentation says: spaces or tabs, and for spaces the step between levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Detected {
+    /// Lines are indented with spaces rather than tabs.
     pub insert_spaces: bool,
+    /// The step between indentation levels when it is spaces and one step stands out.
     pub width: Option<TabWidth>,
 }
 
@@ -114,6 +121,7 @@ pub fn detect(text: &str) -> Option<Detected> {
 
 /// The start of `text` that [`detect`] needs: at most [`DETECT_MAX_BYTES`], cut at a
 /// character boundary.
+#[must_use]
 pub fn sample(text: &str) -> &str {
     let mut end = text.len().min(DETECT_MAX_BYTES);
     while !text.is_char_boundary(end) {

@@ -10,7 +10,9 @@ use crate::text::is_word_char;
 /// How smart highlighting matches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmartHighlight {
+    /// Letters match only in the same case.
     pub match_case: bool,
+    /// Only whole words match.
     pub whole_word: bool,
 }
 

@@ -94,9 +94,13 @@ pub const HIGHLIGHT_MAX_LINES: usize = 100_000;
 pub struct Zoom(i32);
 
 impl Zoom {
+    /// The smallest zoom, in points.
     pub const MIN: i32 = -5;
+    /// The largest zoom, in points.
     pub const MAX: i32 = 20;
 
+    /// A zoom of `points`, clamped to [`MIN`](Self::MIN)..=[`MAX`](Self::MAX).
+    #[must_use]
     pub const fn new(points: i32) -> Self {
         Self(if points < Self::MIN {
             Self::MIN
@@ -107,21 +111,26 @@ impl Zoom {
         })
     }
 
+    /// The zoom in points over the base font size.
+    #[must_use]
     pub const fn points(self) -> i32 {
         self.0
     }
 
+    /// One point larger, up to [`MAX`](Self::MAX).
     #[must_use]
     pub const fn zoom_in(self) -> Self {
         Self::new(self.0 + 1)
     }
 
+    /// One point smaller, down to [`MIN`](Self::MIN).
     #[must_use]
     pub const fn zoom_out(self) -> Self {
         Self::new(self.0 - 1)
     }
 
     /// The editor font size for a base size, never below 1 pt.
+    #[must_use]
     pub const fn font_size(self, base_pt: i32) -> i32 {
         let size = base_pt + self.0;
         if size < 1 { 1 } else { size }

@@ -1,3 +1,6 @@
+//! The encodings Stet offers, in the order the Reinterpret and Convert popovers list them,
+//! and lookups by encoding, stable id and WHATWG label. `replacement` is never offered.
+
 use encoding_rs::{
     BIG5_INIT, EUC_JP_INIT, EUC_KR_INIT, Encoding, GB18030_INIT, GBK_INIT, IBM866_INIT,
     ISO_2022_JP_INIT, ISO_8859_2_INIT, ISO_8859_3_INIT, ISO_8859_4_INIT, ISO_8859_5_INIT,
@@ -58,8 +61,11 @@ impl EncodingGroup {
 /// One choice in the Reinterpret and Convert popovers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EncodingEntry {
+    /// The name shown in the popovers, with its description.
     pub label: &'static str,
+    /// The encoding the entry decodes and encodes with.
     pub encoding: &'static Encoding,
+    /// The popover section the entry is listed in.
     pub group: EncodingGroup,
     /// Files in this entry start with a byte order mark.
     pub bom: bool,
@@ -68,6 +74,7 @@ pub struct EncodingEntry {
 impl EncodingEntry {
     /// A stable name for actions and settings: the encoding's [`Encoding::name`], with
     /// `+bom` for the variants that write a byte order mark.
+    #[must_use]
     pub fn id(&self) -> String {
         if self.bom {
             format!("{}+bom", self.encoding.name())
@@ -78,6 +85,7 @@ impl EncodingEntry {
 
     /// The label without its description, as the status bar shows it: `UTF-8 BOM`,
     /// `UTF-16 LE`, `Windows-1252`, `Shift_JIS`.
+    #[must_use]
     pub fn short_label(&self) -> String {
         let label = self
             .label
@@ -88,6 +96,7 @@ impl EncodingEntry {
 }
 
 /// The entry an [`EncodingEntry::id`] names, in any letter case.
+#[must_use]
 pub fn entry_for_id(id: &str) -> Option<&'static EncodingEntry> {
     let (name, bom) = match id.strip_suffix("+bom") {
         Some(name) => (name, true),
@@ -183,6 +192,7 @@ pub static ENCODINGS: [EncodingEntry; 42] = [
 
 /// The entry for `encoding`, with or without a BOM; `bom` is ignored for encodings without
 /// one. `None` only for `replacement`.
+#[must_use]
 pub fn entry_for(encoding: &'static Encoding, bom: bool) -> Option<&'static EncodingEntry> {
     let bom = bom && !bom_bytes(encoding).is_empty();
     ENCODINGS
@@ -192,6 +202,7 @@ pub fn entry_for(encoding: &'static Encoding, bom: bool) -> Option<&'static Enco
 
 /// Looks an encoding up by the name [`Encoding::name`] gives, as a session stores it, or by
 /// any other WHATWG label. Never returns `replacement`.
+#[must_use]
 pub fn encoding_for_name(name: &str) -> Option<&'static Encoding> {
     Encoding::for_label_no_replacement(name.trim().as_bytes())
 }

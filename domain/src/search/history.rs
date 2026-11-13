@@ -20,6 +20,8 @@ impl Default for History {
 }
 
 impl History {
+    /// An empty history that keeps at most `limit` entries, and at least one.
+    #[must_use]
     pub fn new(limit: usize) -> Self {
         Self {
             entries: Vec::new(),
@@ -41,18 +43,24 @@ impl History {
     }
 
     /// Most recent first.
+    #[must_use]
     pub fn entries(&self) -> &[String] {
         &self.entries
     }
 
+    /// Entry `index`, 0 being the most recent.
     pub fn get(&self, index: usize) -> Option<&str> {
         self.entries.get(index).map(String::as_str)
     }
 
+    /// How many entries the history holds.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    /// Whether the history holds no entry.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -122,7 +130,9 @@ impl Recall {
 /// Every history the find bar keeps.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SearchHistory {
+    /// The find field's history.
     pub find: History,
+    /// The replace field's history.
     pub replace: History,
     /// Find in Files' folders.
     pub directories: History,

@@ -14,6 +14,7 @@ use super::walk::WalkOptions;
 /// Files go to the sink in batches of at most this many, or whatever arrived in
 /// [`BATCH_INTERVAL`].
 pub const BATCH_FILES: usize = 4096;
+/// The longest a batch waits for more files before it goes to the sink.
 pub const BATCH_INTERVAL: Duration = Duration::from_millis(16);
 
 /// Extensions of files that are not text, which quick open leaves out.
@@ -28,6 +29,7 @@ const BINARY_EXTENSIONS: &[&str] = &[
 
 /// The folder a document belongs to as a project: the nearest folder from `dir` up that holds
 /// `.git` (a folder, or a file in a worktree), else `dir` itself.
+#[must_use]
 pub fn project_root(dir: &Path) -> PathBuf {
     dir.ancestors()
         .find(|folder| folder.join(".git").exists())
@@ -36,6 +38,7 @@ pub fn project_root(dir: &Path) -> PathBuf {
 }
 
 /// Whether `path`'s extension says it is not text.
+#[must_use]
 pub fn looks_binary(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
@@ -49,19 +52,24 @@ pub fn looks_binary(path: &Path) -> bool {
 /// A file the walk found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectFile {
+    /// The file's absolute path.
     pub path: PathBuf,
     /// The path relative to the root, with `/` between folders.
     pub relative: String,
 }
 
+/// How a project walk ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WalkSummary {
+    /// How many files went to the sink.
     pub files: usize,
     /// The cap was reached and the walk stopped there.
     pub truncated: bool,
+    /// The walk stopped because its token was cancelled.
     pub cancelled: bool,
     /// When the first batch went to the sink.
     pub first_batch: Option<Duration>,
+    /// How long the whole walk took.
     pub elapsed: Duration,
 }
 

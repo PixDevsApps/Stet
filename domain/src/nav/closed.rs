@@ -11,13 +11,21 @@ const CLOSED_LIMIT: usize = 20;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClosedTab {
     /// A file's tab: the file opens again with the caret where it was.
-    File { path: PathBuf, position: Position },
+    File {
+        /// The file's path.
+        path: PathBuf,
+        /// Where the caret was.
+        position: Position,
+    },
     /// An untitled tab: its text comes back, with its language and the name it was given.
     Untitled {
+        /// The text the tab held.
         text: String,
+        /// Where the caret was.
         position: Position,
         /// The highlighting language's id.
         language: Option<String>,
+        /// The name given with Rename…, if any.
         name: Option<String>,
     },
 }
@@ -42,10 +50,14 @@ impl ClosedTabs {
         self.tabs.pop_back()
     }
 
+    /// How many closed tabs are remembered.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.tabs.len()
     }
 
+    /// Whether no closed tab is remembered.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.tabs.is_empty()
     }

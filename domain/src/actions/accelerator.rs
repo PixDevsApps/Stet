@@ -4,9 +4,13 @@
 /// An accelerator string split into modifiers and key name, as GTK spells them.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Accelerator {
+    /// Whether Control (GTK's `<Primary>` on Linux) is held.
     pub control: bool,
+    /// Whether Shift is held.
     pub shift: bool,
+    /// Whether Alt is held.
     pub alt: bool,
+    /// Whether Super is held.
     pub super_key: bool,
     /// The key name, lowercased for letters (GTK lowercases them too).
     pub key: String,
@@ -15,6 +19,7 @@ pub struct Accelerator {
 impl Accelerator {
     /// Parses `<Control><Shift>z`-style strings. Accepts GTK's modifier spellings; rejects
     /// empty keys and unknown modifiers. Key names are checked by [`is_key_name`].
+    #[must_use]
     pub fn parse(accel: &str) -> Option<Self> {
         let mut rest = accel;
         let mut parsed = Self {
@@ -47,6 +52,7 @@ impl Accelerator {
     }
 
     /// F1–F35: the keys the user's F-row sends as media keys unless Fn is held.
+    #[must_use]
     pub fn is_function_key(&self) -> bool {
         self.key
             .strip_prefix('F')
@@ -56,6 +62,7 @@ impl Accelerator {
 
     /// One spelling per key, `<Control><Shift><Alt><Super>key`, to compare keys written
     /// differently (`<Ctrl>D`, `<Control>d`).
+    #[must_use]
     pub fn canonical(&self) -> String {
         let mut out = String::new();
         for (on, name) in [
@@ -73,6 +80,7 @@ impl Accelerator {
     }
 
     /// `Ctrl+Shift+Z`, for menus and the palette.
+    #[must_use]
     pub fn display(&self) -> String {
         let mut out = String::new();
         for (on, name) in [
@@ -119,6 +127,7 @@ fn display_key(key: &str) -> String {
 
 /// Key names the registry may use: letters, digits, F-keys and a fixed list of GDK key names.
 /// The app's tests also run every accelerator through GTK's own parser.
+#[must_use]
 pub fn is_key_name(key: &str) -> bool {
     const NAMED: &[&str] = &[
         "Return",

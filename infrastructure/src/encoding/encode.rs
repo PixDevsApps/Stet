@@ -1,3 +1,7 @@
+//! Encoding text back to bytes for a save, strictly: a character the target encoding can't
+//! represent fails the save with [`Unmappable`] instead of being replaced. Line endings and
+//! the NUL placeholder are written back as the [`DocumentFormat`] says.
+
 use std::fmt;
 
 use encoding_rs::{Encoder, EncoderResult, Encoding, UTF_8, UTF_16LE};
@@ -9,10 +13,12 @@ use super::{PLACEHOLDER_UTF8, bom_bytes, is_utf16};
 /// How a document is written back: what the status bar shows and Convert changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DocumentFormat {
+    /// The encoding to write.
     pub encoding: &'static Encoding,
     /// Starts with the byte order mark of UTF-8 or UTF-16; ignored for encodings that have
     /// none.
     pub bom: bool,
+    /// The line ending every line break is written as.
     pub eol: Eol,
     /// Write every placeholder as NUL. Off when the file already had real U+2400
     /// characters, which then stay as they are.
@@ -40,6 +46,7 @@ const CHECK_BUFFER_LEN: usize = 64 * 1024;
 /// Characters the target encoding cannot represent. Nothing was written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unmappable {
+    /// The encoding that can't represent them.
     pub encoding: &'static Encoding,
     /// The first `MAX_LISTED_UNMAPPABLE` of them, with their character offsets in the text.
     pub chars: Vec<(CharOffset, char)>,

@@ -16,11 +16,13 @@ const DESKTOP_ENTRY: &str = include_str!("../../packaging/io.github.pixdevsapps.
 pub const COMMAND: &str = "stet";
 
 /// The MIME types Stet's desktop entry lists, in its order.
+#[must_use]
 pub fn mime_types() -> Vec<&'static str> {
     parse_mime_types(DESKTOP_ENTRY)
 }
 
 /// The `MimeType=` list of a desktop entry's main group.
+#[must_use]
 pub fn parse_mime_types(entry: &str) -> Vec<&str> {
     entry
         .lines()
@@ -40,6 +42,7 @@ pub fn parse_mime_types(entry: &str) -> Vec<&str> {
 
 /// Where the desktop entry `id` is installed: `$XDG_DATA_HOME/applications`, then each
 /// `$XDG_DATA_DIRS` entry, as the desktop entry specification says.
+#[must_use]
 pub fn find_desktop_file(id: &str) -> Option<PathBuf> {
     let data_home = crate::xdg::base_dir(
         std::env::var_os("XDG_DATA_HOME").as_deref(),
@@ -53,6 +56,8 @@ pub fn find_desktop_file(id: &str) -> Option<PathBuf> {
     find_desktop_file_in(id, &data_home, &dirs)
 }
 
+/// The first of `data_home` and `data_dirs` whose `applications` folder holds the entry `id`.
+#[must_use]
 pub fn find_desktop_file_in(id: &str, data_home: &Path, data_dirs: &[PathBuf]) -> Option<PathBuf> {
     std::iter::once(data_home)
         .chain(data_dirs.iter().map(PathBuf::as_path))
@@ -61,10 +66,13 @@ pub fn find_desktop_file_in(id: &str, data_home: &Path, data_dirs: &[PathBuf]) -
 }
 
 /// The program `name` on `$PATH`.
+#[must_use]
 pub fn find_program(name: &str) -> Option<PathBuf> {
     find_program_in(name, &std::env::var_os("PATH").unwrap_or_default())
 }
 
+/// The first executable `name` in the folders of the `$PATH`-style list `path`.
+#[must_use]
 pub fn find_program_in(name: &str, path: &OsStr) -> Option<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
     std::env::split_paths(path)
@@ -144,6 +152,7 @@ pub fn folder_command(dir: &Path, has: &dyn Fn(&str) -> bool) -> Option<Vec<OsSt
 }
 
 /// Whether `name` is on `$PATH`, for [`terminal_command`] and [`folder_command`].
+#[must_use]
 pub fn installed(name: &str) -> bool {
     find_program(name).is_some()
 }

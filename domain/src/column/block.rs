@@ -12,11 +12,13 @@ pub const MIME_TYPE: &str = "application/x-stet-column-block";
 /// A copied block: one row per line of the rectangle, without line breaks.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Block {
+    /// The block's rows, top to bottom.
     pub rows: Vec<String>,
 }
 
 impl Block {
     /// The rows joined with `\n`: the clipboard text under [`MIME_TYPE`] and `text/plain`.
+    #[must_use]
     pub fn to_text(&self) -> String {
         self.rows.join("\n")
     }
@@ -32,6 +34,7 @@ impl Block {
     /// end a row, and one line break at the very end ends the last row instead of starting an
     /// empty one. One row means the text is typed on every line of a rectangle; several are
     /// pasted as a block (ADR-016 amendment).
+    #[must_use]
     pub fn from_plain_text(text: &str) -> Self {
         let text = text.replace("\r\n", "\n").replace('\r', "\n");
         let text = text.strip_suffix('\n').unwrap_or(&text);
@@ -40,6 +43,7 @@ impl Block {
 
     /// The cells of the widest row when the rows start at visual column `column`.
     #[cfg(test)]
+    #[must_use]
     pub fn width(&self, column: VisualColumn, tab_width: TabWidth) -> usize {
         self.rows
             .iter()
@@ -52,6 +56,7 @@ impl Block {
 /// The rectangle's cells on each of its lines. A tab that an edge cuts contributes the spaces
 /// it is drawn as inside the rectangle; virtual space contributes nothing, so a row from a line
 /// that ends inside the rectangle is shorter.
+#[must_use]
 pub fn copy(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth) -> Block {
     let (left, right) = (rect.left(), rect.right());
     let rows = clamp_lines(index, rect.lines())
@@ -93,6 +98,7 @@ fn row(line: &str, left: VisualColumn, right: VisualColumn, tab_width: TabWidth)
 /// of the block's widest row when its line goes on after it, so the text to the right stays
 /// aligned. Rows past the end of the text go on new lines, and a row that contains a line break
 /// counts as several rows. The result is a column caret after the pasted rows.
+#[must_use]
 pub fn paste(
     text: &str,
     index: &LineIndex,

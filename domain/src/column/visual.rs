@@ -14,6 +14,7 @@ pub(super) fn next_column(column: VisualColumn, ch: char, tab_width: TabWidth) -
 }
 
 /// The cells `text` takes when it starts at visual column `column`.
+#[must_use]
 pub fn text_width(text: &str, column: VisualColumn, tab_width: TabWidth) -> usize {
     text.chars()
         .fold(column, |at, ch| next_column(at, ch, tab_width))
@@ -22,6 +23,7 @@ pub fn text_width(text: &str, column: VisualColumn, tab_width: TabWidth) -> usiz
 
 /// Where Home takes a column cursor on `line` (Scintilla's "VC home"): to the end of the line's
 /// indentation, or to column 0 when it is already there.
+#[must_use]
 pub fn home_column(line: &str, current: VisualColumn, tab_width: TabWidth) -> VisualColumn {
     let indent = line
         .chars()
@@ -36,6 +38,7 @@ pub fn home_column(line: &str, current: VisualColumn, tab_width: TabWidth) -> Vi
 
 /// The visual column where character `char_offset` of `line` starts, as
 /// `gtk_source_view_get_visual_column` counts it. Offsets past the end give the line's width.
+#[must_use]
 pub fn visual_column(line: &str, char_offset: usize, tab_width: TabWidth) -> VisualColumn {
     line.chars()
         .take(char_offset)
@@ -77,6 +80,7 @@ impl Located {
 }
 
 /// Where visual column `column` falls in `line`, a line without its `\n`.
+#[must_use]
 pub fn locate(line: &str, column: VisualColumn, tab_width: TabWidth) -> Located {
     let (mut reached, mut char_offset) = (VisualColumn::ZERO, 0);
     for (byte_offset, ch) in line.char_indices() {

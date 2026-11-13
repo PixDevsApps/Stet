@@ -11,21 +11,27 @@ use super::units::{Anchor, ByteOffset, CharOffset, Line};
 /// difference of two [`CharOffset`]s is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Position {
+    /// The line, counted from 0.
     pub line: Line,
+    /// Characters from the line's start, counted from 0.
     pub column: usize,
 }
 
 impl Position {
+    /// The position at `column` on `line`.
+    #[must_use]
     pub const fn new(line: Line, column: usize) -> Self {
         Self { line, column }
     }
 
     /// The column as people count columns, from 1.
+    #[must_use]
     pub const fn column_number(self) -> NonZeroUsize {
         NonZeroUsize::MIN.saturating_add(self.column)
     }
 }
 
+/// Where each line of a text starts, in bytes and in characters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineIndex {
     byte_starts: Vec<usize>,
@@ -35,6 +41,8 @@ pub struct LineIndex {
 }
 
 impl LineIndex {
+    /// Indexes the lines of `text`.
+    #[must_use]
     pub fn new(text: &str) -> Self {
         let mut byte_starts = vec![0];
         let mut char_starts = vec![CharOffset::ZERO];
@@ -56,37 +64,49 @@ impl LineIndex {
     }
 
     /// The number of lines; a text ending in `\n` has an empty last line.
+    #[must_use]
     pub fn line_count(&self) -> usize {
         self.byte_starts.len()
     }
 
     /// The last line, which a text ending in `\n` has empty.
+    #[must_use]
     pub fn last_line(&self) -> Line {
         Line::new(self.line_count() - 1)
     }
 
     /// The end of the lines: one past the last.
+    #[must_use]
     pub fn end_line(&self) -> Line {
         Line::new(self.line_count())
     }
 
+    /// The text's length in characters.
+    #[must_use]
     pub fn len_chars(&self) -> usize {
         self.len_chars
     }
 
     /// The end of the text, after its last character.
+    #[must_use]
     pub fn end_char(&self) -> CharOffset {
         CharOffset::ZERO + self.len_chars
     }
 
+    /// The text's length in bytes.
+    #[must_use]
     pub fn len_bytes(&self) -> usize {
         self.len_bytes
     }
 
+    /// The line that holds character `offset`; a line's `\n` belongs to it.
+    #[must_use]
     pub fn line_of_char(&self, offset: CharOffset) -> Line {
         Line::new(self.char_starts.partition_point(|&start| start <= offset) - 1)
     }
 
+    /// The line that holds byte `offset`; a line's `\n` belongs to it.
+    #[must_use]
     pub fn line_of_byte(&self, offset: ByteOffset) -> Line {
         Line::new(
             self.byte_starts
@@ -96,6 +116,7 @@ impl LineIndex {
     }
 
     /// Characters of `line`, without its `\n`.
+    #[must_use]
     pub fn line_chars(&self, line: Line) -> Range<CharOffset> {
         let start = self.char_starts[line.get()];
         let end = self
@@ -106,6 +127,7 @@ impl LineIndex {
     }
 
     /// Bytes of `line`, without its `\n`, for slicing the text.
+    #[must_use]
     pub fn line_bytes(&self, line: Line) -> Range<usize> {
         let start = self.byte_starts[line.get()];
         let end = self
@@ -124,6 +146,7 @@ impl LineIndex {
     }
 
     /// The character offset of byte `offset` of `text`, the text this index was made for.
+    #[must_use]
     pub fn byte_to_char(&self, text: &str, offset: ByteOffset) -> CharOffset {
         let start = self.line_start(self.line_of_byte(offset));
         CharCursor::at(text, start).char_at(offset)
@@ -131,17 +154,21 @@ impl LineIndex {
 
     /// The byte offset of character `offset` of `text`, the text this index was made for, or
     /// the end of the text beyond it.
+    #[must_use]
     pub fn char_to_byte(&self, text: &str, offset: CharOffset) -> ByteOffset {
         let start = self.line_start(self.line_of_char(offset));
         char_to_byte(text, start, offset).unwrap_or_else(|| ByteOffset::new(text.len()))
     }
 
+    /// The line and column of character `offset`.
+    #[must_use]
     pub fn position(&self, offset: CharOffset) -> Position {
         let line = self.line_of_char(offset);
         Position::new(line, offset - self.char_starts[line.get()])
     }
 
     /// The character offset of `position`, clamped to the end of its line and of the text.
+    #[must_use]
     pub fn offset(&self, position: Position) -> CharOffset {
         let line = position.line.min(self.last_line());
         let range = self.line_chars(line);

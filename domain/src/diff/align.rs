@@ -43,10 +43,12 @@ impl AlignedChunk {
 /// What one side shows in a row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RowSlot {
+    /// The line shown in the row.
     Line(Line),
     /// Padding placed before line `before`; `before` is one past the last line for padding
     /// after it.
     Pad {
+        /// The line the padding comes before.
         before: Line,
     },
 }
@@ -55,7 +57,9 @@ pub enum RowSlot {
 /// that both views have the same rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pad {
+    /// The line the padding goes before; one past the last line means after it.
     pub before: Line,
+    /// How many blank rows.
     pub rows: usize,
 }
 
@@ -69,17 +73,22 @@ pub struct Alignment {
 }
 
 impl Alignment {
+    /// How many rows the layout has, padding included.
+    #[must_use]
     pub fn rows(&self) -> usize {
         self.chunks
             .last()
             .map_or(0, |chunk| chunk.row + chunk.rows())
     }
 
+    /// How many lines `side`'s text has.
+    #[must_use]
     pub fn line_count(&self, side: Side) -> usize {
         self.end(side) - Line::ZERO
     }
 
     /// One past the last line of `side`.
+    #[must_use]
     pub fn end(&self, side: Side) -> Line {
         self.ends[side.index()]
     }
@@ -90,6 +99,7 @@ impl Alignment {
     }
 
     /// The row that shows `line` of `side`; lines past the end count as the last line.
+    #[must_use]
     pub fn row_of(&self, side: Side, line: Line) -> usize {
         let line = line.min(self.end(side).saturating_sub(1));
         let index = self
@@ -101,6 +111,8 @@ impl Alignment {
         )
     }
 
+    /// What `side` shows in `row`: one of its lines or padding.
+    #[must_use]
     pub fn slot(&self, side: Side, row: usize) -> RowSlot {
         let index = self
             .chunks
@@ -123,6 +135,7 @@ impl Alignment {
 
     /// The line of the other side in the same row as `line`, if that row is not padding.
     #[cfg(test)]
+    #[must_use]
     pub fn counterpart(&self, side: Side, line: Line) -> Option<Line> {
         match self.slot(side.other(), self.row_of(side, line)) {
             RowSlot::Line(other) => Some(other),
@@ -131,6 +144,7 @@ impl Alignment {
     }
 
     /// The padding `side` needs to line up with the other side, in line order.
+    #[must_use]
     pub fn pads(&self, side: Side) -> Vec<Pad> {
         let mut pads: Vec<Pad> = Vec::new();
         for chunk in &self.chunks {

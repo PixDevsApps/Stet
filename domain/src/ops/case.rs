@@ -12,9 +12,12 @@ use crate::text::BULK_EDIT_THRESHOLD;
 use super::{Change, Doc, Target, char_len};
 use crate::text::{CharOffset, TextEdit};
 
+/// A case conversion of Edit > Convert Case to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Case {
+    /// Every letter up.
     Upper,
+    /// Every letter down.
     Lower,
     /// The first letter of every word up and the rest down. A letter after an apostrophe
     /// within a word stays down: `don't` becomes `Don't`.
@@ -34,6 +37,7 @@ pub enum Case {
 /// Converts the selection, or with a caret the word at the caret ([`word_at`]); `Lines` and
 /// `Document` convert whole lines and the whole text. A selection is kept on the converted
 /// text, and a caret stays where it was.
+#[must_use]
 pub fn convert(text: &str, target: &Target, case: Case) -> Change {
     let doc = Doc::new(text);
     let (range, caret) = match &target {
@@ -78,6 +82,7 @@ pub fn convert(text: &str, target: &Target, case: Case) -> Change {
 }
 
 /// `text` in `case`.
+#[must_use]
 pub fn transform(text: &str, case: Case) -> String {
     match case {
         Case::Upper => text.to_uppercase(),
@@ -102,6 +107,7 @@ pub fn transform(text: &str, case: Case) -> String {
 
 /// The word at `offset`: the Unicode word (UAX #29) that contains the character at `offset`
 /// or, failing that, ends at `offset`. Words hold at least one letter or digit.
+#[must_use]
 pub fn word_at(text: &str, offset: CharOffset) -> Option<Range<CharOffset>> {
     word_in(&Doc::new(text), offset)
 }

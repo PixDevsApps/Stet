@@ -17,6 +17,7 @@ pub struct ColumnEdit {
     pub rect: Rect,
 }
 
+/// Why a column edit can't be made.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnError {
     /// Text typed or inserted in column mode must not contain a line break; a block of several
@@ -83,6 +84,7 @@ pub fn type_text(
 }
 
 /// Deletes the block's cells on every line; the caret ends up at its left column.
+#[must_use]
 pub fn delete_block(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth) -> ColumnEdit {
     delete_cells(text, index, rect, rect.left(), rect.right(), tab_width)
 }
@@ -90,6 +92,7 @@ pub fn delete_block(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWid
 /// Backspace in column mode. A block is deleted. With a caret, the character before the caret
 /// goes on every line when those characters are equally wide, and otherwise one cell; lines
 /// that end before the deleted cells keep their text. Nothing happens at column 0.
+#[must_use]
 pub fn backspace(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth) -> ColumnEdit {
     let column = rect.left();
     if !rect.is_empty() || column == VisualColumn::ZERO {
@@ -102,6 +105,7 @@ pub fn backspace(text: &str, index: &LineIndex, rect: Rect, tab_width: TabWidth)
 /// Delete in column mode. A block is deleted. With a caret, the character after the caret goes
 /// on every line when those characters are equally wide, and otherwise one cell. Line ends are
 /// never deleted.
+#[must_use]
 pub fn delete_forward(
     text: &str,
     index: &LineIndex,

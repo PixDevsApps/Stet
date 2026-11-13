@@ -32,6 +32,8 @@ pub enum Target {
 }
 
 impl Target {
+    /// The caret at `offset`, with nothing selected.
+    #[must_use]
     pub const fn caret(offset: CharOffset) -> Self {
         Self::Selection(offset..offset)
     }
@@ -63,11 +65,14 @@ impl Change {
         Self { edits, selection }
     }
 
+    /// Whether there is nothing to do.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.edits.is_empty()
     }
 
     /// Whether the UI should apply this change as one bulk replacement.
+    #[must_use]
     pub fn is_bulk(&self) -> bool {
         self.edits.len() > BULK_EDIT_THRESHOLD
     }
@@ -75,6 +80,7 @@ impl Change {
     /// The selection after the change: the explicit one if the operation set it, otherwise
     /// `current` mapped through the edits. A caret moves past text inserted at it; a range
     /// grows over text inserted at its ends.
+    #[must_use]
     pub fn selection_after(&self, current: Range<CharOffset>) -> Range<CharOffset> {
         if let Some(selection) = &self.selection {
             return selection.clone();
@@ -92,6 +98,7 @@ impl Change {
 
     /// The edits as a single replacement of the range they span, for the bulk path. `text` is
     /// the snapshot the change was computed from.
+    #[must_use]
     pub fn coalesce(&self, text: &str) -> Option<TextEdit> {
         let (first, last) = (self.edits.first()?, self.edits.last()?);
         let mut cursor = ByteCursor::new(text);
@@ -110,7 +117,9 @@ impl Change {
 /// Indentation for the JSON and XML formatters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Indent {
+    /// This many spaces per level.
     Spaces(usize),
+    /// One tab per level.
     Tab,
 }
 
@@ -156,9 +165,13 @@ impl Breaks {
 /// `offset` count characters, and `offset` is where the caret should go.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxError {
+    /// What the parser expected or found.
     pub message: String,
+    /// The line of the error.
     pub line: LineNumber,
+    /// The column of the error, in characters.
     pub column: NonZeroUsize,
+    /// Where the caret goes to show the error.
     pub offset: CharOffset,
 }
 

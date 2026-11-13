@@ -49,28 +49,36 @@ pub const MAX_FILE_BYTES: u64 = 50 << 20;
 /// How many replaced lines one file reports at most.
 pub const FILE_HIT_LIMIT: usize = 1_000;
 
+/// What Replace in Files replaces, where, and how.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RifRequest {
     /// Folders (or files) to replace in.
     pub roots: Vec<PathBuf>,
     /// The filter list, as in Find in Files.
     pub filters: String,
+    /// Replace in hidden files and folders too.
     pub include_hidden: bool,
+    /// Skip what `.gitignore`, `.ignore` and git's excludes ignore (inside git repositories).
     pub respect_gitignore: bool,
+    /// Descend into subfolders of the roots.
     pub include_subfolders: bool,
+    /// The search text and its options.
     pub query: Query,
+    /// The replacement, with its references to the match's groups.
     pub template: Template,
     /// The files of open documents, which the run reports instead of writing. The run resolves
     /// symbolic links in these paths.
     pub open_documents: Vec<PathBuf>,
     /// Where an in-place save keeps the previous content while it writes.
     pub backup_dir: PathBuf,
+    /// Files from this size are skipped.
     pub max_file_bytes: u64,
 }
 
 impl RifRequest {
     /// Every file under `roots`, with subfolders, without hidden files, respecting
     /// `.gitignore`, up to [`MAX_FILE_BYTES`].
+    #[must_use]
     pub fn new(roots: Vec<PathBuf>, query: Query, template: Template, backup_dir: PathBuf) -> Self {
         let walk = WalkOptions::default();
         Self {
@@ -101,26 +109,37 @@ impl RifRequest {
 pub enum RifEvent {
     /// Replaced; `written` is false when every replacement equalled its match.
     Replaced {
+        /// The file replaced in, with its links resolved.
         path: PathBuf,
+        /// How many matches were replaced.
         replacements: usize,
+        /// Whether the file was written.
         written: bool,
         /// The replaced text's lines, in the new text.
         hits: Vec<Hit>,
+        /// How the file was written, when it was.
         method: Option<SaveMethod>,
     },
+    /// Left alone for `reason`.
     Skipped {
+        /// The file left alone.
         path: PathBuf,
+        /// Why it was left alone.
         reason: Skip,
         /// The matches, when they were counted before the file was left alone.
         matches: Option<usize>,
     },
+    /// Reading, replacing in or writing the file failed.
     Failed {
+        /// The file that failed.
         path: PathBuf,
+        /// What went wrong.
         error: FileError,
     },
     /// The file of an open document (its path with links resolved): the app replaces in the
     /// document's text.
     OpenDocument {
+        /// The document's file.
         path: PathBuf,
     },
 }
@@ -128,22 +147,32 @@ pub enum RifEvent {
 /// Counts so far, while the run goes on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RifProgress {
+    /// Files searched so far.
     pub files_searched: usize,
+    /// Files written so far.
     pub files_changed: usize,
+    /// Replacements made so far.
     pub replacements: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// How a Replace in Files run ended.
 pub struct RifSummary {
+    /// How many files were searched.
     pub files_searched: usize,
     /// Files written.
     pub files_changed: usize,
     /// Replacements in the files written or reported unchanged; open documents not counted.
     pub replacements: usize,
+    /// Files left alone.
     pub skipped: usize,
+    /// Files that failed.
     pub failed: usize,
+    /// Open documents the run handed back to the app.
     pub open_documents: usize,
+    /// The run was cancelled before it finished.
     pub cancelled: bool,
+    /// How long the run took.
     pub elapsed: Duration,
 }
 
@@ -160,6 +189,8 @@ impl RifSummary {
 pub type RifHandle = JobHandle<RifSummary, Arc<RifCounters>>;
 
 impl RifHandle {
+    /// The counts so far, read without stopping the run.
+    #[must_use]
     pub fn progress(&self) -> RifProgress {
         let counters = self.progress_state();
         RifProgress {

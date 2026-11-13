@@ -251,7 +251,9 @@ pub trait OffsetRange {
 /// start counting there instead of at the start of the text.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Anchor {
+    /// The point as a byte offset.
     pub byte: ByteOffset,
+    /// The same point as a character offset.
     pub char: CharOffset,
 }
 
@@ -262,6 +264,8 @@ impl Anchor {
         char: CharOffset::ZERO,
     };
 
+    /// The point that is byte `byte` and character `char` of a text.
+    #[must_use]
     pub const fn new(byte: ByteOffset, char: CharOffset) -> Self {
         Self { byte, char }
     }

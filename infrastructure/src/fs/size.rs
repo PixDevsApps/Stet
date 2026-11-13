@@ -1,3 +1,6 @@
+//! The size policy: which files open normally, which in large-file mode and which are
+//! refused, by their size and the memory available. Sizes are shown in binary units.
+
 use std::fmt;
 
 use stet_domain::document::MIB;
@@ -24,10 +27,14 @@ impl Default for SizePolicy {
     }
 }
 
+/// How a file opens under a [`SizePolicy`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SizeClass {
+    /// Opens with every feature.
     Normal,
+    /// Opens in large-file mode.
     Large,
+    /// Refused: too large for the policy or for the free memory.
     TooLarge,
 }
 
@@ -59,6 +66,7 @@ impl fmt::Display for Refusal {
 impl SizePolicy {
     /// Classifies a file of `size` bytes; `mem_available` is `MemAvailable` in bytes, `None`
     /// when unknown.
+    #[must_use]
     pub fn classify(&self, size: u64, mem_available: Option<u64>) -> SizeClass {
         if self.refusal(size, mem_available).is_some() {
             SizeClass::TooLarge
@@ -69,6 +77,8 @@ impl SizePolicy {
         }
     }
 
+    /// Why a file of `size` bytes is refused, or `None` when it may open.
+    #[must_use]
     pub fn refusal(&self, size: u64, mem_available: Option<u64>) -> Option<Refusal> {
         if size >= self.refuse_from {
             return Some(Refusal::Size {

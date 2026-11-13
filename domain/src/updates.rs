@@ -23,14 +23,18 @@ pub const MAX_ANSWER: usize = 512 * 1024;
 /// A release's version: three plain numbers.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Version {
+    /// The major version.
     pub major: u32,
+    /// The minor version.
     pub minor: u32,
+    /// The patch version.
     pub patch: u32,
 }
 
 impl Version {
     /// `1.2.3` or a tag, `v1.2.3`; nothing else (no pre-release or build suffix, no sign, no
     /// spaces).
+    #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let text = text.strip_prefix('v').unwrap_or(text);
         let mut parts = text.split('.');
@@ -50,6 +54,7 @@ impl Version {
     }
 
     /// The release's tag, `v1.2.3`.
+    #[must_use]
     pub fn tag(&self) -> String {
         format!("v{self}")
     }
@@ -105,6 +110,8 @@ pub enum Outcome {
     Ahead(Version),
 }
 
+/// Compares the `running` version with the `latest` release.
+#[must_use]
 pub fn compare(running: Version, latest: Version) -> Outcome {
     match running.cmp(&latest) {
         std::cmp::Ordering::Less => Outcome::Newer(latest),
@@ -116,6 +123,7 @@ pub fn compare(running: Version, latest: Version) -> Outcome {
 /// The command that installs `version`'s own package: it downloads that release's package to
 /// `/tmp` and installs it with pacman, which replaces the version installed. The README's
 /// install command is the same with `latest` in place of the version.
+#[must_use]
 pub fn update_command(version: Version) -> String {
     format!(
         "curl -L -o {DOWNLOAD} https://github.com/{REPOSITORY}/releases/download/{}/{PACKAGE} \
@@ -127,13 +135,16 @@ pub fn update_command(version: Version) -> String {
 /// What the dialog says once the check has an answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answer {
+    /// The dialog's heading.
     pub heading: String,
+    /// The dialog's text below the heading.
     pub body: String,
     /// The command that installs the newer release.
     pub command: Option<String>,
 }
 
 /// The dialog's words for the check's `result`, with the Quit key from `keymap`.
+#[must_use]
 pub fn answer(running: Version, result: Result<Version, UpdateError>, keymap: &Keymap) -> Answer {
     let latest = match result {
         Ok(latest) => latest,
@@ -202,6 +213,7 @@ fn failure(error: UpdateError) -> &'static str {
 }
 
 /// GitHub's answer for Stet's latest release: drafts and pre-releases are never it.
+#[must_use]
 pub fn latest_release_url() -> String {
     format!("https://api.github.com/repos/{REPOSITORY}/releases/latest")
 }

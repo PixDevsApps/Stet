@@ -27,8 +27,11 @@ const TEN_GROUPS: &str = r"(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)";
 /// One search with its expected result, written out by hand.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParityRow {
+    /// The row's name, shown when it fails.
     pub name: &'static str,
+    /// The search text as typed.
     pub pattern: &'static str,
+    /// The search mode and its options.
     pub options: SearchOptions,
     /// The searched text, as a buffer holds it.
     pub input: &'static str,
@@ -124,6 +127,8 @@ impl ParityRow {
         self
     }
 
+    /// The search this row runs.
+    #[must_use]
     pub fn query(&self) -> Query {
         Query::new(self.pattern, self.options)
     }
@@ -138,6 +143,7 @@ fn template_row(name: &'static str, template: &'static str, output: &'static str
     clippy::too_many_lines,
     reason = "the parity table, one row per case, reads best as one table"
 )]
+#[must_use]
 pub fn rows() -> Vec<ParityRow> {
     vec![
         // Spike S2, appendix A: pattern probes.

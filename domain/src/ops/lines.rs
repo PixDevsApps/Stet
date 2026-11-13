@@ -30,10 +30,14 @@ pub enum EmptyLines {
     Blank,
 }
 
+/// Which ends of each line [`trim`] strips of spaces and tabs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trim {
+    /// The start of the line.
     Leading,
+    /// The end of the line.
     Trailing,
+    /// Both ends.
     Both,
 }
 
@@ -46,6 +50,7 @@ pub enum Scope {
     All,
 }
 
+/// What [`sort`] compares lines by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortKey {
     /// By code point, so `B` sorts before `a`.
@@ -64,14 +69,18 @@ pub enum SortKey {
     Length,
 }
 
+/// The direction [`sort`] sorts in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Order {
+    /// Smallest first.
     Ascending,
+    /// Largest first.
     Descending,
 }
 
 /// Duplicates the selected text after itself (Ctrl+D). With a caret, `Lines` or `Document`
 /// it duplicates the lines instead. The selection or caret stays on the original.
+#[must_use]
 pub fn duplicate(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     if let Target::Selection(range) = &target {
@@ -92,6 +101,7 @@ pub fn duplicate(text: &str, target: &Target) -> Change {
 
 /// Deletes the lines of the target with their line break (Ctrl+Shift+L). The caret goes to
 /// the start of the line that takes their place, or of the new last line.
+#[must_use]
 pub fn delete(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
@@ -110,6 +120,7 @@ pub fn delete(text: &str, target: &Target) -> Change {
 
 /// Swaps the lines of the target with the line above (Ctrl+Shift+Up). The selection moves
 /// with them.
+#[must_use]
 pub fn move_up(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
@@ -126,6 +137,7 @@ pub fn move_up(text: &str, target: &Target) -> Change {
 
 /// Swaps the lines of the target with the line below (Ctrl+Shift+Down). The selection moves
 /// with them.
+#[must_use]
 pub fn move_down(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
@@ -208,6 +220,7 @@ pub fn join(text: &str, target: &Target) -> Change {
 
 /// Inserts an empty line above the first line of the target and puts the caret on it
 /// (Ctrl+Alt+Enter).
+#[must_use]
 pub fn insert_blank_above(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
@@ -220,6 +233,7 @@ pub fn insert_blank_above(text: &str, target: &Target) -> Change {
 
 /// Inserts an empty line below the last line of the target and puts the caret on it
 /// (Ctrl+Alt+Shift+Enter).
+#[must_use]
 pub fn insert_blank_below(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
@@ -231,6 +245,7 @@ pub fn insert_blank_below(text: &str, target: &Target) -> Change {
 }
 
 /// Removes repeated lines of the target; lines must match exactly.
+#[must_use]
 pub fn remove_duplicates(text: &str, target: &Target, which: Duplicates) -> Change {
     let doc = Doc::new(text);
     let mut seen = HashSet::new();
@@ -250,6 +265,7 @@ pub fn remove_duplicates(text: &str, target: &Target, which: Duplicates) -> Chan
 }
 
 /// Removes the empty lines of the target, or also the lines of spaces and tabs.
+#[must_use]
 pub fn remove_empty(text: &str, target: &Target, which: EmptyLines) -> Change {
     let doc = Doc::new(text);
     let empty: Vec<Line> = doc
@@ -264,6 +280,7 @@ pub fn remove_empty(text: &str, target: &Target, which: EmptyLines) -> Change {
 }
 
 /// Removes spaces and tabs at the start, the end or both ends of each line.
+#[must_use]
 pub fn trim(text: &str, target: &Target, which: Trim) -> Change {
     let doc = Doc::new(text);
     let mut edits = Vec::new();
@@ -296,6 +313,7 @@ pub fn trim(text: &str, target: &Target, which: Trim) -> Change {
 
 /// Replaces tabs with spaces up to the next tab stop. Columns count characters, like
 /// GtkSourceView's visual column.
+#[must_use]
 pub fn tabs_to_spaces(text: &str, target: &Target, tab_width: TabWidth, scope: Scope) -> Change {
     let doc = Doc::new(text);
     let width = tab_width.get();
@@ -323,6 +341,7 @@ pub fn tabs_to_spaces(text: &str, target: &Target, tab_width: TabWidth, scope: S
 
 /// Rewrites runs of spaces and tabs as tabs up to the last tab stop they cross, then spaces,
 /// keeping every column. A single space stays a space.
+#[must_use]
 pub fn spaces_to_tabs(text: &str, target: &Target, tab_width: TabWidth, scope: Scope) -> Change {
     let doc = Doc::new(text);
     let width = tab_width.get();
@@ -392,6 +411,7 @@ impl BlankRun {
 
 /// Sorts the lines of the target. Every sort is stable, also descending: equal lines keep
 /// their order.
+#[must_use]
 pub fn sort(text: &str, target: &Target, key: SortKey, order: Order) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);
@@ -401,6 +421,7 @@ pub fn sort(text: &str, target: &Target, key: SortKey, order: Order) -> Change {
 }
 
 /// Reverses the order of the lines of the target.
+#[must_use]
 pub fn reverse(text: &str, target: &Target) -> Change {
     let doc = Doc::new(text);
     let lines = doc.lines(target);

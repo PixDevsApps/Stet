@@ -23,10 +23,13 @@ pub struct LfText {
     pub text: String,
     /// The byte offsets in `text` of the LFs that were CRLF, in order.
     crlf: Vec<usize>,
+    /// The count of each line ending the raw text had.
     pub stats: EolStats,
 }
 
 impl LfText {
+    /// Normalizes `raw` to LF, remembering where each CRLF was.
+    #[must_use]
     pub fn new(raw: &str) -> Self {
         let bytes = raw.as_bytes();
         let mut text = String::with_capacity(raw.len());
@@ -65,6 +68,7 @@ impl LfText {
 
     /// The line ending that line breaks a replacement inserts get: the file's most frequent
     /// one, LF when it has none (what saving the document would write).
+    #[must_use]
     pub fn eol(&self) -> Eol {
         self.stats.dominant().unwrap_or_default()
     }
@@ -76,6 +80,7 @@ pub struct RawEdit {
     /// Byte range in the raw text, the text before LF normalization: a plain number, since a
     /// [`ByteOffset`] counts bytes of the text that was searched.
     pub range: Range<usize>,
+    /// The text that replaces the range, with the file's line endings.
     pub insert: String,
 }
 
@@ -104,6 +109,7 @@ pub fn raw_edits<'a>(
 /// line breaks into one: in a file with mixed line endings, a CR (kept, or inserted as the
 /// file's line ending) that ends up right before an LF it wasn't paired with reads back as
 /// one CRLF, where the open document would have two lines.
+#[must_use]
 pub fn apply_raw(raw: &str, edits: &[RawEdit]) -> Option<String> {
     let mut out = String::with_capacity(raw.len());
     let mut boundaries = Vec::with_capacity(edits.len() * 2);
@@ -129,11 +135,17 @@ pub enum Skip {
     /// NUL bytes near the start that are not UTF-16: the editor opens it read-only.
     Binary,
     /// Decoding met malformed bytes, or encoding the text again would not give the bytes back.
-    Inexact { encoding: String },
+    Inexact {
+        /// The file's encoding.
+        encoding: String,
+    },
     /// A replacement holds characters the file's encoding cannot represent; the first few.
     Unmappable {
+        /// The file's encoding.
         encoding: String,
+        /// The first few characters it can't represent.
         chars: Vec<char>,
+        /// How many such characters there are in all.
         count: usize,
     },
     /// The user may not write the file.
@@ -141,10 +153,18 @@ pub enum Skip {
     /// The file changed after it was read, before it was written.
     ChangedMeanwhile,
     /// Larger than the limit, in bytes.
-    TooLarge { size: u64, limit: u64 },
+    TooLarge {
+        /// The file's size.
+        size: u64,
+        /// The largest size Replace in Files rewrites.
+        limit: u64,
+    },
     /// The bytes outside the replacements could not be kept exactly (a stateful encoding
     /// such as ISO-2022-JP), so nothing was written.
-    BytesNotKept { encoding: String },
+    BytesNotKept {
+        /// The file's encoding.
+        encoding: String,
+    },
     /// Mixed line endings: a replacement would leave a CR next to an LF it wasn't paired
     /// with, which reads back as one line break instead of two ([`apply_raw`]).
     LineBreaksWouldJoin,
@@ -213,6 +233,8 @@ pub enum DocumentOutcome {
 }
 
 impl DocumentOutcome {
+    /// How the results panel says what happened, after the replacement count.
+    #[must_use]
     pub const fn describe(self) -> &'static str {
         match self {
             Self::Saved => "in the open document, saved",
@@ -224,6 +246,7 @@ impl DocumentOutcome {
 
 /// The run's heading in the results panel: `Replace “a” with “b” (3 replacements in 2 files
 /// of 10 searched; 1 skipped)`.
+#[must_use]
 pub fn heading(
     pattern: &str,
     replacement: &str,
@@ -250,6 +273,7 @@ pub fn heading(
 }
 
 /// A file's row: `3 replacements`, with how an open document took them.
+#[must_use]
 pub fn file_summary(replacements: usize, document: Option<DocumentOutcome>) -> String {
     let count = counted(replacements, "replacement", "replacements");
     match document {

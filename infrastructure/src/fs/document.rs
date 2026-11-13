@@ -1,3 +1,7 @@
+//! Opening and saving a document as a whole: load the bytes, detect or apply the encoding,
+//! decode to an LF buffer, and on save encode in the document's format and write it safely.
+//! The [`DecodeReport`] carries everything the tab's banners and the save need to know.
+
 use std::path::Path;
 
 use encoding_rs::Encoding;
@@ -12,7 +16,9 @@ use crate::encoding::{Detection, DocumentFormat, EncodingEntry, decode_to_lf, de
 /// An encoding the user picked over the detected one (Reinterpret).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EncodingChoice {
+    /// The encoding to decode with.
     pub encoding: &'static Encoding,
+    /// Whether a byte order mark is expected at the start (and written on save).
     pub bom: bool,
 }
 
@@ -28,8 +34,11 @@ impl From<&EncodingEntry> for EncodingChoice {
 /// What decoding found about a file's bytes, without the text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodeReport {
+    /// The encoding the text was decoded with.
     pub encoding: &'static Encoding,
+    /// The file starts with a byte order mark.
     pub bom: bool,
+    /// How many of each line ending the file has.
     pub eol_stats: EolStats,
     /// What detection found, also when a [`EncodingChoice`] overrode it.
     pub detection: Detection,
@@ -37,27 +46,33 @@ pub struct DecodeReport {
     pub had_errors: bool,
     /// Saving in this encoding would not reproduce the file.
     pub lossy_roundtrip: bool,
+    /// How many NUL characters became placeholders.
     pub nul_count: usize,
+    /// The file already contained the placeholder, so saving keeps placeholders as they are.
     pub placeholder_conflict: bool,
 }
 
 impl DecodeReport {
     /// The dominant line ending; LF when there is none.
+    #[must_use]
     pub fn eol(&self) -> Eol {
         self.eol_stats.dominant().unwrap_or_default()
     }
 
     /// More than one kind of line ending. Saving writes [`Self::eol`] everywhere; warn first.
+    #[must_use]
     pub fn mixed_eol(&self) -> bool {
         self.eol_stats.is_mixed()
     }
 
     /// Detection's verdict on the bytes, also under an [`EncodingChoice`]: open read-only.
+    #[must_use]
     pub fn binary(&self) -> bool {
         self.detection.binary
     }
 
     /// The format that writes the document back as it was read.
+    #[must_use]
     pub fn format(&self) -> DocumentFormat {
         DocumentFormat {
             encoding: self.encoding,
@@ -70,6 +85,7 @@ impl DecodeReport {
     /// Saving without edits reproduces the file byte for byte: nothing was lost in decoding
     /// and the line endings weren't mixed.
     #[cfg(test)]
+    #[must_use]
     pub fn round_trips(&self) -> bool {
         !self.lossy_roundtrip && !self.mixed_eol()
     }
@@ -88,9 +104,11 @@ pub(super) struct DecodedDocument {
 pub struct OpenedDocument {
     /// LF-normalized, with NUL mapped to the placeholder: ready to insert.
     pub text: String,
+    /// What decoding found.
     pub report: DecodeReport,
     /// Taken before reading; its fingerprint is the reload baseline.
     pub meta: FileMeta,
+    /// Whether the file opens normally or in large-file mode.
     pub class: SizeClass,
 }
 

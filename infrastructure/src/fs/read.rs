@@ -14,8 +14,11 @@ use super::size::{SizeClass, SizePolicy};
 /// What decoding found, without the text, and the file it came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocInfo {
+    /// What decoding found.
     pub report: DecodeReport,
+    /// The file's metadata, taken before reading.
     pub meta: FileMeta,
+    /// Whether the file opens normally or in large-file mode.
     pub class: SizeClass,
 }
 
@@ -23,9 +26,11 @@ pub struct DocInfo {
 /// [`stet_domain::text::LONG_LINE_CHARS`].
 #[derive(Debug)]
 pub struct ReadFile {
+    /// The report, metadata and size class.
     pub info: DocInfo,
     /// LF-normalized, with NUL mapped to the placeholder.
     pub text: String,
+    /// The longest line, to decide whether the text can be shown.
     pub longest: LongestLine,
     /// Counted here, since a pass over 200 MB has no place on the GTK thread.
     pub lines: usize,

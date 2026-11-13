@@ -4,14 +4,19 @@
 use super::Rgb;
 use std::collections::BTreeMap;
 
+/// Whether a theme is dark or light.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Mode {
+    /// Light text on a dark background.
     #[default]
     Dark,
+    /// Dark text on a light background.
     Light,
 }
 
 impl Mode {
+    /// The mode's name as `colors.toml` writes it.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Dark => "dark",
@@ -58,6 +63,7 @@ const ACCENTS: [&str; 6] = ["red", "yellow", "green", "cyan", "blue", "magenta"]
 /// Two deliberate differences: shades are derived only from `#rrggbb` values (the script
 /// mixes garbage into `#333333`), and a `light.mode` file is the caller's job (insert
 /// `mode = "light"` when neither `mode` nor `theme_type` is set).
+#[must_use]
 pub fn resolve_colors(raw: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut colors = Cascade(
         raw.iter()
@@ -178,33 +184,61 @@ impl Cascade {
 /// The semantic Omarchy palette with every fallback applied.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Palette {
+    /// Whether the theme is dark or light.
     pub mode: Mode,
+    /// The accent, for focus rings and highlights.
     pub accent: Rgb,
+    /// The editor's background.
     pub background: Rgb,
+    /// A darker background, for the header bar, tab strip and status bar.
     pub dark_background: Rgb,
+    /// The darkest background, for popovers and dialogs.
     pub darker_background: Rgb,
+    /// A lighter background, for the current line and cards.
     pub lighter_background: Rgb,
+    /// The text.
     pub foreground: Rgb,
+    /// Dimmer text.
     pub dark_foreground: Rgb,
+    /// Lighter text.
     pub light_foreground: Rgb,
+    /// The brightest text, ANSI `color15`.
     pub bright_foreground: Rgb,
+    /// Muted text such as comments, ANSI `color8`.
     pub muted: Rgb,
+    /// The selection's background.
     pub selection_background: Rgb,
+    /// The selected text.
     pub selection_foreground: Rgb,
+    /// The caret.
     pub cursor: Rgb,
+    /// ANSI `color1`.
     pub red: Rgb,
+    /// ANSI `color3`.
     pub yellow: Rgb,
+    /// Orange, which has no ANSI number.
     pub orange: Rgb,
+    /// ANSI `color2`.
     pub green: Rgb,
+    /// ANSI `color6`.
     pub cyan: Rgb,
+    /// ANSI `color4`.
     pub blue: Rgb,
+    /// ANSI `color5`.
     pub magenta: Rgb,
+    /// Brown, which has no ANSI number.
     pub brown: Rgb,
+    /// ANSI `color9`.
     pub bright_red: Rgb,
+    /// ANSI `color11`.
     pub bright_yellow: Rgb,
+    /// ANSI `color10`.
     pub bright_green: Rgb,
+    /// ANSI `color14`.
     pub bright_cyan: Rgb,
+    /// ANSI `color12`.
     pub bright_blue: Rgb,
+    /// ANSI `color13`.
     pub bright_magenta: Rgb,
 }
 
@@ -241,6 +275,7 @@ impl Palette {
         bright_magenta: Rgb::from_hex(0xe3a1e4),
     };
 
+    /// The built-in light palette, for running outside Omarchy and for keys a light theme lacks.
     pub const LIGHT: Self = Self {
         mode: Mode::Light,
         accent: Rgb::from_hex(0x3584e4),
@@ -272,6 +307,8 @@ impl Palette {
         bright_magenta: Rgb::from_hex(0x9a64b0),
     };
 
+    /// The built-in palette for `mode`.
+    #[must_use]
     pub const fn builtin(mode: Mode) -> Self {
         match mode {
             Mode::Dark => Self::DARK,
@@ -281,6 +318,7 @@ impl Palette {
 
     /// Builds the palette from a raw `colors.toml` map by applying [`resolve_colors`] first.
     #[cfg(test)]
+    #[must_use]
     pub fn from_colors(raw: &BTreeMap<String, String>) -> Self {
         Self::from_resolved(&resolve_colors(raw))
     }
@@ -288,6 +326,7 @@ impl Palette {
     /// Builds the palette from `omarchy-theme-color --all` output or [`resolve_colors`] output.
     /// The cascade is not re-run: like the script, it is not idempotent. Keys still missing or
     /// unparsable come from the built-in palette for the mode; `accent` tries `blue` first.
+    #[must_use]
     pub fn from_resolved(resolved: &BTreeMap<String, String>) -> Self {
         let mode = if resolved
             .get("mode")

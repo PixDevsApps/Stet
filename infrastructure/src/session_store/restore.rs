@@ -1,3 +1,7 @@
+//! Restoring a session at startup: reading `session.json` or its fallback, and repairing what
+//! a crash left in `backup/`. Temp files are deleted, but a complete backup is never deleted
+//! here: one no manifest references moves to `backup/orphaned/` and is reported.
+
 use super::fsutil::remove_file;
 use super::layout::Layout;
 use super::{ManifestProblem, ManifestSource, Orphan, Restored, StoreError, new_id};

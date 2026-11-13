@@ -197,6 +197,7 @@ fn splice(
 /// The lines of the replaced text in `new_text`, the LF text after the edits, for at most
 /// `limit` edits. `ranges` are the edits' byte ranges in the text before
 /// ([`crate::search::ReplaceAll::byte_ranges`]).
+#[must_use]
 pub fn replaced_hits(
     new_text: &str,
     ranges: &[std::ops::Range<ByteOffset>],

@@ -21,25 +21,37 @@ pub const TOKEN_HUES: [f64; 5] = [185.0, 30.0, 50.0, 300.0, 120.0];
 /// Editor and chrome colours derived from a palette, following the DESIGN.md role table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorTheme {
+    /// The palette the colours come from.
     pub palette: Palette,
     /// `lighter_background`, unless it would hide the line or the selection.
     pub current_line: Rgb,
+    /// The selection's background while the editor doesn't have focus.
     pub selection_unfocused: Rgb,
+    /// The background of every search match.
     pub search_match: Rgb,
+    /// The text of the current search match, which has the palette's yellow behind it.
     pub search_current_text: Rgb,
+    /// The background of the other occurrences of the selected word.
     pub smart_highlight: Rgb,
+    /// The background of a snippet's focused placeholder.
     pub snippet_focus: Rgb,
     /// The Find Mark Style and the five token styles, from the palette: red; cyan, orange,
     /// yellow, magenta and green.
     pub mark: Rgb,
+    /// The five token styles' backgrounds, in their order.
     pub tokens: [Rgb; 5],
     /// A comparison's added, removed, changed and moved lines, the changed characters, and
     /// the padding.
     pub compare_added: Rgb,
+    /// Lines only on the left.
     pub compare_removed: Rgb,
+    /// Lines paired with a changed version.
     pub compare_changed: Rgb,
+    /// Lines that moved.
     pub compare_moved: Rgb,
+    /// The characters that differ inside a changed line.
     pub compare_inline: Rgb,
+    /// The padding rows that keep the two views aligned.
     pub compare_pad: Rgb,
     /// Tab strip, status bar, header bar and sidebar.
     pub headerbar: Rgb,
@@ -47,10 +59,13 @@ pub struct EditorTheme {
     pub popover: Rgb,
     /// Cards, hover rows, borders and separators.
     pub card: Rgb,
+    /// Text drawn on the accent colour.
     pub accent_text: Rgb,
 }
 
 impl EditorTheme {
+    /// Derives every role's colour from `palette`.
+    #[must_use]
     pub fn new(palette: &Palette) -> Self {
         let p = palette;
         let current_line = if p.lighter_background == p.selection_background
@@ -85,7 +100,9 @@ impl EditorTheme {
         }
     }
 
+    /// Whether the palette is a dark one.
     #[cfg(test)]
+    #[must_use]
     pub fn is_dark(&self) -> bool {
         self.palette.mode == Mode::Dark
     }

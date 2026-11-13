@@ -1,3 +1,7 @@
+//! The compiled query: PCRE2 over a text snapshot, with the pattern translated and compiled as
+//! GtkSourceView compiles it, so what it finds is what the widget highlights. Matches come back
+//! in character offsets and follow Perl's rules for empty matches.
+
 use std::fmt;
 use std::ops::Range;
 use std::sync::OnceLock;
@@ -25,6 +29,7 @@ const BACKWARD_WINDOW: usize = 64 << 10;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{message} (at character {offset})")]
 pub struct PatternError {
+    /// What is wrong, in PCRE2's or the translator's words.
     pub message: String,
     /// Character offset in the typed pattern.
     pub offset: usize,
@@ -65,14 +70,20 @@ pub(crate) fn pcre2_message(error: impl fmt::Display) -> String {
         .map_or_else(|| text.clone(), |(_, message)| message.to_owned())
 }
 
+/// Why a search over a snapshot failed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SearchError {
+    /// The query doesn't compile.
     #[error(transparent)]
     Pattern(#[from] PatternError),
     /// PCRE2 gave up while matching, for example on its JIT stack or match limit. The
     /// message is PCRE2's own.
     #[error("matching failed: {message}")]
-    Match { message: String },
+    Match {
+        /// PCRE2's message.
+        message: String,
+    },
+    /// The search's cancel flag was set.
     #[error("search cancelled")]
     Cancelled,
     /// A character range outside the text of `len` characters.
@@ -82,7 +93,9 @@ pub enum SearchError {
         .range.end.get()
     )]
     Range {
+        /// The range asked for.
         range: Range<CharOffset>,
+        /// The text's length in characters.
         len: usize,
     },
     /// The text at the given match no longer matches.
@@ -99,7 +112,9 @@ fn match_error(error: pcre2::Error) -> SearchError {
 /// A match in character offsets, the unit of `GtkTextIter` and [`stet_domain::text::TextEdit`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Match {
+    /// Where the match starts.
     pub start: CharOffset,
+    /// Where the match ends (exclusive).
     pub end: CharOffset,
     /// The line of `start`.
     pub line: Line,
@@ -107,6 +122,7 @@ pub struct Match {
 
 impl Match {
     /// The matched characters.
+    #[must_use]
     pub fn range(&self) -> Range<CharOffset> {
         self.start..self.end
     }
@@ -161,6 +177,7 @@ pub(crate) fn build_regex(pattern: &str, caseless: bool) -> Result<Regex, pcre2:
 }
 
 impl Matcher {
+    /// Translates `query` to PCRE2's dialect and compiles it.
     pub fn new(query: &Query) -> Result<Self, PatternError> {
         let translated = translate(query)?;
         let regex = build_regex(
@@ -176,10 +193,12 @@ impl Matcher {
         })
     }
 
+    /// The query this matcher was compiled from.
     pub fn query(&self) -> &Query {
         &self.query
     }
 
+    /// The query as translated for PCRE2, with what the translation found out about it.
     pub fn translated(&self) -> &Translated {
         &self.translated
     }

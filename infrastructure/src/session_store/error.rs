@@ -1,3 +1,6 @@
+//! The session store's errors. They are cloneable, the I/O error shared, so the store's status
+//! can keep the last one and show it after the operation that caused it has returned.
+
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -10,14 +13,19 @@ pub enum StoreError {
     /// `pid` is the process that last took the lock, when it could be read.
     #[error("the session in {} is in use by another Stet process", .state_dir.display())]
     Locked {
+        /// Stet's state folder, whose lock is taken.
         state_dir: PathBuf,
+        /// The process that holds the lock.
         pid: Option<u32>,
     },
     /// A file operation failed; `action` and `path` say which.
     #[error("could not {action} {}: {source}", .path.display())]
     Io {
+        /// What the store was doing, as a verb phrase such as `write` or `remove`.
         action: &'static str,
+        /// The file or folder involved.
         path: PathBuf,
+        /// The underlying error.
         source: Arc<io::Error>,
     },
     /// An id that is not a plain file name; see `stet_domain::session::is_valid_id`.

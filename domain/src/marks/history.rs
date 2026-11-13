@@ -26,7 +26,9 @@ const MAX_STEPS: usize = crate::view::MAX_UNDO_LEVELS as usize;
 pub struct Footprint {
     /// Where the first replacement started.
     pub start: CharOffset,
+    /// Characters the step deleted from `start`.
     pub deleted: usize,
+    /// Characters the step inserted at `start`.
     pub inserted: usize,
 }
 
@@ -71,15 +73,19 @@ impl Footprint {
 /// One step: what it did, and the bookmarks of the lines it replaced before and after.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
+    /// What the step did to the text.
     pub footprint: Footprint,
     /// The text's length in characters before and after the step.
     pub len_before: usize,
+    /// The text's length in characters after the step.
     pub len_after: usize,
     /// The lines the step replaced, before and after it.
     pub lines_before: Range<Line>,
+    /// The lines the step's replacement covers afterwards.
     pub lines_after: Range<Line>,
     /// The bookmarks on those lines, before and after.
     pub before: Bookmarks,
+    /// The bookmarks on [`Self::lines_after`] after the step.
     pub after: Bookmarks,
     /// The marks before and after the step, when there were any.
     pub marks: Option<Box<(Marks, Marks)>>,
@@ -150,16 +156,21 @@ pub struct BookmarkHistory {
 }
 
 impl BookmarkHistory {
+    /// How many steps are kept, undone ones included.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.steps.len()
     }
 
+    /// Whether no step is kept.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.steps.is_empty()
     }
 
     /// Steps that can be undone.
     #[cfg(test)]
+    #[must_use]
     pub fn undoable(&self) -> usize {
         self.applied
     }
@@ -203,12 +214,14 @@ impl BookmarkHistory {
     }
 
     /// The marks from before the step [`Self::undone`] just took back, if it kept them.
+    #[must_use]
     pub fn undone_marks(&self) -> Option<&Marks> {
         let step = self.steps.get(self.applied)?;
         step.marks.as_ref().map(|marks| &marks.0)
     }
 
     /// The marks from after the step [`Self::redone`] just made again, if it kept them.
+    #[must_use]
     pub fn redone_marks(&self) -> Option<&Marks> {
         let step = self.steps.get(self.applied.checked_sub(1)?)?;
         step.marks.as_ref().map(|marks| &marks.1)

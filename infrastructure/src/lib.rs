@@ -1,6 +1,7 @@
 //! Standard-library I/O for the editor. No GTK; testable headless.
 
-#![warn(unreachable_pub)]
+#![warn(unreachable_pub, missing_docs)]
+#![warn(clippy::must_use_candidate)]
 
 pub mod desktop;
 pub mod encoding;
