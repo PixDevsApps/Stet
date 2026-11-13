@@ -25,7 +25,7 @@ use super::files::Caret;
 use crate::banner::{BannerButton, BannerKind};
 use crate::editor::{DiskState, DocState, EditorPage, LoadStats, ReadOnly, TextOrigin, Unwritable};
 use crate::loader;
-use crate::session::{FLUSH_TIMEOUT, open_store, unavailable_message};
+use crate::session::{FLUSH_TIMEOUT, LOCK_RETRY, unavailable_message};
 use crate::worker;
 use gtk4::{gio, glib};
 use libadwaita::prelude::*;
@@ -47,7 +47,7 @@ use stet_domain::text::line_count;
 use stet_domain::view::Zoom;
 use stet_infrastructure::encoding::{encoding_for_name, entry_for, entry_for_id};
 use stet_infrastructure::fs::{
-    DocumentFormat, EncodingChoice, LoadError, SizeClass, SizePolicy, file_meta,
+    DocumentFormat, EncodingChoice, LoadError, SizeClass, SizePolicy, file_meta, read_file,
 };
 use stet_infrastructure::recent as recent_store;
 use stet_infrastructure::session_store::{
@@ -153,7 +153,7 @@ impl Window {
             let state_dir = dirs.state.clone();
             let recent_file = dirs.recent_file();
             let opened = worker::run(move || {
-                let store = open_store(&state_dir)?;
+                let store = SessionStore::open_waiting(&state_dir, LOCK_RETRY)?;
                 let restored = store.load()?;
                 // Older versions kept the recent files in recent.json; the session holds them now.
                 let recent = (restored.session.recent_files.is_empty() && recent_file.exists())
@@ -654,7 +654,7 @@ impl Window {
             .and_then(entry_for_id)
             .map(EncodingChoice::from);
         let target = path.clone();
-        let result = worker::run(move || loader::read(&target, choice)).await;
+        let result = worker::run(move || read_file(&target, choice)).await;
         if self.tab_page(page).is_none() {
             return false;
         }

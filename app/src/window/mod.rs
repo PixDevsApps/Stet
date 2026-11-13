@@ -645,7 +645,7 @@ impl Window {
                 move |_| {
                     let window = Window { inner };
                     window.set_active_view(index, false);
-                    let name = ActionId::NewTab.detailed_name();
+                    let name = actions::detailed_name(ActionId::NewTab);
                     let _ = WidgetExt::activate_action(&window.inner.window, &name, None);
                 }
             ));
@@ -750,7 +750,7 @@ impl Window {
                 let window = Window { inner };
                 let _ = WidgetExt::activate_action(
                     &window.inner.window,
-                    &id.detailed_name(),
+                    &actions::detailed_name(id),
                     Some(&entry.id().to_variant()),
                 );
                 if let Some(page) = window.current_page() {
@@ -957,7 +957,8 @@ impl Window {
                 } else {
                     ActionId::ZoomOut
                 };
-                let _ = WidgetExt::activate_action(&inner.window, &id.detailed_name(), None);
+                let _ =
+                    WidgetExt::activate_action(&inner.window, &actions::detailed_name(id), None);
                 glib::Propagation::Stop
             }
         ));
@@ -1989,7 +1990,7 @@ impl Window {
     fn run_palette_command(&self, command: PaletteCommand) {
         match command {
             PaletteCommand::Action(id) => {
-                let name = id.detailed_name();
+                let name = actions::detailed_name(id);
                 if let Err(error) = WidgetExt::activate_action(&self.inner.window, &name, None) {
                     tracing::warn!(%error, name, "palette action failed");
                 }
@@ -1998,7 +1999,7 @@ impl Window {
                 if let Some(path) = path.to_str() {
                     let _ = WidgetExt::activate_action(
                         &self.inner.window,
-                        &ActionId::OpenRecent.detailed_name(),
+                        &actions::detailed_name(ActionId::OpenRecent),
                         Some(&path.to_variant()),
                     );
                 }

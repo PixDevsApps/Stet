@@ -7,12 +7,12 @@
 
 use crate::banner::{Banner, BannerButton, BannerKind};
 use crate::column::StetView;
-use crate::loader::FormatKind;
 use crate::marks::DocMarks;
 use crate::monitor::FileWatch;
 use crate::page_search::{OWN_MATCH_TAG, PageSearch, style_tag};
 use crate::session::TabSession;
 use crate::tabstops::TabStops;
+use crate::theme::scheme::{BOOKMARK_STYLE, SEARCH_CURRENT_STYLE};
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::subclass::prelude::*;
@@ -25,9 +25,9 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use stet_domain::document::{tilde, untitled_name};
 use stet_domain::indent::Indentation;
+use stet_domain::ops::pretty::FormatKind;
 use stet_domain::session::{Fingerprint, TabRecord};
 use stet_domain::text::{EolStats, Position};
-use stet_domain::theme::{BOOKMARK_STYLE, SEARCH_CURRENT_STYLE};
 use stet_domain::untitled::{FIRST_LINE_READ, FIRST_LINE_SCAN, first_line_name};
 use stet_domain::view::{DEFAULT_TAB_WIDTH, MAX_UNDO_LEVELS};
 use stet_infrastructure::encoding::DetectionSource;

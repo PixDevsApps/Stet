@@ -314,7 +314,7 @@ The menu, the palette and the accelerators are generated from the same `ActionId
 
 ## Theme tokens
 
-All colours come from the resolved Omarchy palette (`omarchy-theme-color --all`), mapped in one provider layer ([ADR-004](DECISIONS.md)). Widgets never reference palette keys directly. The UI mapping below is implemented in `domain/src/theme.rs`. Spike S3 confirmed it headless on 2026-09-30 for the surfaces it sampled ([S3-theme.md](spikes/S3-theme.md)); the **M1 gate** confirms the rest, and the syntax mapping is from the approved plan. One S3 finding: `AdwToolbarView` bars are flat by default and show `--window-bg-color`, so the tab strip and status bar need the raised style or explicit CSS to show `--headerbar-bg-color`.
+All colours come from the resolved Omarchy palette (`omarchy-theme-color --all`), mapped in one provider layer ([ADR-004](DECISIONS.md)). Widgets never reference palette keys directly. The UI mapping below is implemented in `domain/src/theme.rs` (the colour of each role) and `app/src/theme/` (the scheme styles and the libadwaita variables they set). Spike S3 confirmed it headless on 2026-09-30 for the surfaces it sampled ([S3-theme.md](spikes/S3-theme.md)); the **M1 gate** confirms the rest, and the syntax mapping is from the approved plan. One S3 finding: `AdwToolbarView` bars are flat by default and show `--window-bg-color`, so the tab strip and status bar need the raised style or explicit CSS to show `--headerbar-bg-color`.
 
 ### UI roles
 

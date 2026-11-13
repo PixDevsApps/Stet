@@ -3,6 +3,7 @@
 //! run (ADR-005 amendment). Each tab has its own search settings, so a query reaches a tab's
 //! context only when the tab is shown, and hidden tabs never rescan.
 
+use crate::theme::scheme::SMART_HIGHLIGHT_STYLE;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use sourceview5::prelude::*;
@@ -10,7 +11,6 @@ use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use stet_domain::search::{Query, Translated};
-use stet_domain::theme::SMART_HIGHLIGHT_STYLE;
 use stet_infrastructure::search::{Match, Matcher};
 
 /// The tag that shows our own matcher's matches, styled like GtkSourceView's `search-match`.

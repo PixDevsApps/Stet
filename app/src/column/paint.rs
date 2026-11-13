@@ -68,7 +68,7 @@ pub(super) fn paint(view: &StetView, rect: Rect, snapshot: &gtk::Snapshot) -> us
 pub(super) fn pads(view: &StetView, pads: &[Pad], snapshot: &gtk::Snapshot) {
     let buffer = view.buffer();
     let visible = view.visible_rect();
-    let color = scheme_color(view, stet_domain::theme::COMPARE_PAD_STYLE)
+    let color = scheme_color(view, crate::theme::scheme::COMPARE_PAD_STYLE)
         .unwrap_or_else(|| view.color().with_alpha(0.08));
     let (x, width) = band(view, &buffer.start_iter());
     let (top, bottom) = (visible.y(), visible.y() + visible.height());

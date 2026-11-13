@@ -1,20 +1,20 @@
-//! The session (ADR-006): what each tab keeps for it, and opening the store. The window
-//! side (restoring, the 7 s backups, quitting and `--wait`) is in `window::session`.
+//! The session (ADR-006): what each tab keeps for it, and how long opening and closing the
+//! store wait. The window side (restoring, the 7 s backups, quitting and `--wait`) is in
+//! `window::session`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use stet_domain::session::TabRecord;
-use stet_infrastructure::session_store::{SessionStore, StoreError, new_id};
+use stet_infrastructure::session_store::{StoreError, new_id};
 
-/// How long a starting instance retries a locked store: a quitting instance holds the lock
-/// until it has flushed, which takes at most [`FLUSH_TIMEOUT`].
+/// How long a starting instance retries a locked store
+/// ([`stet_infrastructure::session_store::SessionStore::open_waiting`]): a quitting instance
+/// holds the lock until it has flushed, which takes at most [`FLUSH_TIMEOUT`].
 pub const LOCK_RETRY: Duration = Duration::from_secs(2);
 
 /// How long quitting, and SIGTERM, SIGHUP and SIGINT, wait for the last commit to reach the
 /// disk.
 pub const FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
-
-const LOCK_POLL: Duration = Duration::from_millis(50);
 
 /// A tab's part in the session.
 #[derive(Debug, Clone)]
@@ -60,20 +60,6 @@ impl Default for TabSession {
     }
 }
 
-/// Opens the store in `dir`, retrying for [`LOCK_RETRY`] while another process holds its lock.
-/// Blocks: call it on a worker.
-pub fn open_store(dir: &Path) -> Result<SessionStore, StoreError> {
-    let started = Instant::now();
-    loop {
-        match SessionStore::open(dir) {
-            Err(StoreError::Locked { .. }) if started.elapsed() < LOCK_RETRY => {
-                std::thread::sleep(LOCK_POLL);
-            }
-            result => return result,
-        }
-    }
-}
-
 /// Why the session is off in this window, for a toast.
 pub fn unavailable_message(error: &StoreError) -> String {
     match error {
@@ -102,46 +88,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_lock_held_briefly_is_waited_for() {
-        let dir = tempfile_dir("lock-brief");
-        let first = open_store(&dir).unwrap();
-        let releaser = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(300));
-            drop(first);
+    fn a_locked_session_names_the_process_holding_it() {
+        let state_dir = PathBuf::from("/state/stet");
+        let message = unavailable_message(&StoreError::Locked {
+            state_dir: state_dir.clone(),
+            pid: Some(4242),
         });
-        let started = Instant::now();
-        let second = open_store(&dir);
-        assert!(second.is_ok(), "{second:?}");
-        assert!(started.elapsed() >= Duration::from_millis(250));
-        releaser.join().unwrap();
-        drop(second);
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn a_lock_held_for_good_is_reported() {
-        let dir = tempfile_dir("lock-held");
-        let first = open_store(&dir).unwrap();
-        let started = Instant::now();
-        let error = open_store(&dir).unwrap_err();
-        assert!(started.elapsed() >= LOCK_RETRY);
-        assert!(matches!(error, StoreError::Locked { .. }), "{error:?}");
-        let message = unavailable_message(&error);
-        assert!(
-            message.contains(&std::process::id().to_string()),
-            "{message}"
-        );
-        drop(first);
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    fn tempfile_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "stet-session-{name}-{}-{}",
-            std::process::id(),
-            new_id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+        assert!(message.contains("process 4242"), "{message}");
+        assert!(message.contains("/state/stet"), "{message}");
+        let message = unavailable_message(&StoreError::Locked {
+            state_dir,
+            pid: None,
+        });
+        assert!(message.starts_with("Another Stet is using"), "{message}");
     }
 }

@@ -12,6 +12,7 @@ pub mod sandbox;
 pub mod search;
 pub mod session_store;
 pub mod settings_files;
+pub mod style_cache;
 pub mod updates;
 pub mod xdg;
 

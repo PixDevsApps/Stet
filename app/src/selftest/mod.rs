@@ -15,6 +15,7 @@ mod session;
 mod tools;
 mod views;
 
+use crate::actions;
 use crate::application;
 use crate::config::{APP_ID, APP_ID_ENV, AppConfig};
 use crate::editor::EditorPage;
@@ -1422,7 +1423,7 @@ echo "$name" > theme.name
         for id in ActionId::ALL {
             let installed: Vec<_> = self
                 .app
-                .accels_for_action(&id.detailed_name())
+                .accels_for_action(&actions::detailed_name(id))
                 .iter()
                 .filter_map(|accel| gtk::accelerator_parse(accel.as_str()))
                 .collect();
@@ -1500,9 +1501,9 @@ echo "$name" > theme.name
             if hidden_recent || spec.kind == stet_domain::actions::ActionKind::WithString {
                 continue;
             }
-            let found = items
-                .iter()
-                .any(|(label, action)| label == spec.label && *action == id.detailed_name());
+            let found = items.iter().any(|(label, action)| {
+                label == spec.label && *action == actions::detailed_name(id)
+            });
             if !found {
                 problems.push(format!("{id:?} ({}) is not in the menu", spec.label));
             }

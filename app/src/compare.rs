@@ -9,14 +9,14 @@
 
 use crate::column::Pad;
 use crate::editor::EditorPage;
+use crate::theme::scheme::{
+    COMPARE_ADDED_STYLE, COMPARE_CHANGED_STYLE, COMPARE_INLINE_STYLE, COMPARE_MOVED_STYLE,
+    COMPARE_REMOVED_STYLE,
+};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use sourceview5::prelude::*;
 use stet_domain::diff::{Comparison, LineKind, Side};
-use stet_domain::theme::{
-    COMPARE_ADDED_STYLE, COMPARE_CHANGED_STYLE, COMPARE_INLINE_STYLE, COMPARE_MOVED_STYLE,
-    COMPARE_REMOVED_STYLE,
-};
 
 /// The line tags, by kind, and the scheme styles they take their colour from.
 const LINE_TAGS: [(LineKind, &str, &str); 4] = [

@@ -1,6 +1,6 @@
 ---
-source: domain/src/theme.rs
-expression: theme.adwaita_css()
+source: app/src/theme/css.rs
+expression: adwaita_css(&theme)
 ---
 :root {
   --window-bg-color: #1e1e2e;

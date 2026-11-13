@@ -10,16 +10,6 @@ pub enum ActionScope {
     Window,
 }
 
-impl ActionScope {
-    /// The GTK action-group prefix: `app` or `win`.
-    pub const fn prefix(self) -> &'static str {
-        match self {
-            Self::App => "app",
-            Self::Window => "win",
-        }
-    }
-}
-
 /// Where an action's keys work (ADR-009 amendment on text-tool keys).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyScope {
@@ -2153,11 +2143,6 @@ impl ActionId {
         !self.spec().keys.widget.is_empty()
     }
 
-    /// The name GTK uses to activate the action: `app.quit`, `win.save`.
-    pub fn detailed_name(self) -> String {
-        format!("{}.{}", self.scope().prefix(), self.name())
-    }
-
     pub fn from_name(name: &str) -> Option<Self> {
         let name = name
             .strip_prefix("win.")
@@ -2402,7 +2387,6 @@ mod tests {
         assert_eq!(names.len(), ActionId::ALL.len());
         for id in ActionId::ALL {
             assert_eq!(ActionId::from_name(id.name()), Some(id));
-            assert_eq!(ActionId::from_name(&id.detailed_name()), Some(id));
         }
         assert_eq!(ActionId::from_name("win.no-such-action"), None);
     }
@@ -2609,8 +2593,6 @@ mod tests {
         }
         assert_eq!(ActionId::Quit.scope(), ActionScope::App);
         assert_eq!(ActionId::CloseTab.scope(), ActionScope::Window);
-        assert_eq!(ActionId::Quit.detailed_name(), "app.quit");
-        assert_eq!(ActionId::NewTab.detailed_name(), "win.new-tab");
     }
 
     #[test]

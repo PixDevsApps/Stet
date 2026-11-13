@@ -23,6 +23,15 @@ pub fn available(id: ActionId) -> bool {
         && stet_infrastructure::sandbox::is_flatpak())
 }
 
+/// The name GTK uses to activate `id`: `app.quit`, `win.save`.
+pub fn detailed_name(id: ActionId) -> String {
+    let prefix = match id.scope() {
+        ActionScope::App => "app",
+        ActionScope::Window => "win",
+    };
+    format!("{prefix}.{}", id.name())
+}
+
 fn simple_action(id: ActionId) -> gio::SimpleAction {
     match id.kind() {
         ActionKind::Command => gio::SimpleAction::new(id.name(), None),
@@ -79,7 +88,7 @@ pub fn install_app_actions(app: &adw::Application) {
         app.add_action(&action);
     }
     for id in ActionId::ALL {
-        app.set_accels_for_action(&id.detailed_name(), id.default_accels());
+        app.set_accels_for_action(&detailed_name(id), id.default_accels());
     }
 }
 
@@ -88,7 +97,7 @@ pub fn apply_accels(app: &adw::Application, keymap: &Keymap) {
     for id in ActionId::ALL {
         let accels = keymap.accels(id);
         let accels: Vec<&str> = accels.iter().map(String::as_str).collect();
-        app.set_accels_for_action(&id.detailed_name(), &accels);
+        app.set_accels_for_action(&detailed_name(id), &accels);
     }
 }
 
@@ -109,7 +118,7 @@ pub fn fill_editor_shortcuts(store: &gio::ListStore, keymap: &Keymap) {
                 continue;
             };
             bound.push(crate::preferences::canonical(&key));
-            let action = gtk::NamedAction::new(&id.detailed_name());
+            let action = gtk::NamedAction::new(&detailed_name(id));
             shortcuts.push(gtk::Shortcut::new(Some(trigger), Some(action)));
         }
     }
@@ -145,7 +154,7 @@ fn escape_label(label: &str) -> String {
 /// A menu entry for `id`. GTK shows an application accelerator by itself; the text view's
 /// own keys and the editors' shortcuts are shown through the `accel` attribute.
 fn item(id: ActionId, keymap: &Keymap) -> gio::MenuItem {
-    let item = gio::MenuItem::new(Some(id.label()), Some(&id.detailed_name()));
+    let item = gio::MenuItem::new(Some(id.label()), Some(&detailed_name(id)));
     if keymap.accels(id).is_empty()
         && let Some(key) = keymap.keys(id).first()
     {
@@ -167,7 +176,7 @@ fn character_sets(id: ActionId, target: &gio::Menu) {
 
 fn encoding_item(id: ActionId, label: &str, encoding: &str) -> gio::MenuItem {
     let item = gio::MenuItem::new(Some(&escape_label(label)), None);
-    item.set_action_and_target_value(Some(&id.detailed_name()), Some(&encoding.to_variant()));
+    item.set_action_and_target_value(Some(&detailed_name(id)), Some(&encoding.to_variant()));
     item
 }
 
@@ -267,7 +276,7 @@ pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
                         );
                         let item = gio::MenuItem::new(Some(&escape_label(&name)), None);
                         item.set_action_and_target_value(
-                            Some(&id.detailed_name()),
+                            Some(&detailed_name(id)),
                             Some(&target_path.to_variant()),
                         );
                         target.append_item(&item);
@@ -319,7 +328,23 @@ pub fn menu_model(recent: &[PathBuf], keymap: &Keymap) -> gio::Menu {
 
 #[cfg(test)]
 mod tests {
-    use stet_domain::actions::ActionId;
+    use super::detailed_name;
+    use stet_domain::actions::{ActionId, ActionScope};
+
+    #[test]
+    fn detailed_names_carry_the_scope_and_resolve() {
+        assert_eq!(detailed_name(ActionId::Quit), "app.quit");
+        assert_eq!(detailed_name(ActionId::NewTab), "win.new-tab");
+        for id in ActionId::ALL {
+            let name = detailed_name(id);
+            let prefix = match id.scope() {
+                ActionScope::App => "app.",
+                ActionScope::Window => "win.",
+            };
+            assert!(name.starts_with(prefix), "{name}");
+            assert_eq!(ActionId::from_name(&name), Some(id));
+        }
+    }
 
     /// GTK's own accelerator parser, called through the C API: it needs no display, unlike
     /// the Rust wrapper, which asserts that GTK is initialised.

@@ -1,6 +1,6 @@
 ---
-source: domain/src/theme.rs
-expression: "theme.style_scheme_xml(\"stet-snapshot\", name)"
+source: app/src/theme/scheme.rs
+expression: "style_scheme_xml(&theme, \"stet-snapshot\", name)"
 ---
 <?xml version="1.0" encoding="UTF-8"?>
 <style-scheme id="stet-snapshot" name="catppuccin" version="1.0">

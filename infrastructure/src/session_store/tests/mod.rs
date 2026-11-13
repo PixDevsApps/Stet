@@ -19,16 +19,7 @@ const WAIT: Duration = Duration::from_secs(30);
 /// process that another test is spawning holds a copy of every descriptor until it execs, so
 /// a store dropped just before can still look locked for a moment.
 fn open(dir: &Path) -> SessionStore {
-    let started = std::time::Instant::now();
-    loop {
-        match SessionStore::open(dir) {
-            Ok(store) => return store,
-            Err(StoreError::Locked { .. }) if started.elapsed() < WAIT => {
-                thread::sleep(Duration::from_millis(1));
-            }
-            Err(error) => panic!("{error}"),
-        }
-    }
+    SessionStore::open_waiting(dir, WAIT).unwrap_or_else(|error| panic!("{error}"))
 }
 
 /// A store whose writer calls `hook` at each [`Phase`].

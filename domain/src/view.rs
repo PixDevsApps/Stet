@@ -59,33 +59,6 @@ impl Zoom {
     }
 }
 
-/// CSS for the editor font (`.stet-editor`) and the monospace chrome (`.stet-mono`).
-pub fn font_css(family: &str, editor_size_pt: i32) -> String {
-    let family = css_string(family);
-    format!(
-        ".stet-editor {{ font-family: {family}; font-size: {editor_size_pt}pt; }}\n\
-         .stet-mono {{ font-family: {family}; }}\n"
-    )
-}
-
-/// A CSS string literal, quoted and escaped.
-fn css_string(text: &str) -> String {
-    let mut quoted = String::with_capacity(text.len() + 2);
-    quoted.push('"');
-    for character in text.chars() {
-        match character {
-            '"' | '\\' => {
-                quoted.push('\\');
-                quoted.push(character);
-            }
-            '\n' | '\r' => quoted.push(' '),
-            _ => quoted.push(character),
-        }
-    }
-    quoted.push('"');
-    quoted
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,18 +73,5 @@ mod tests {
         assert_eq!(Zoom::new(Zoom::MAX).zoom_in().points(), Zoom::MAX);
         assert_eq!(Zoom::new(3).font_size(DEFAULT_FONT_SIZE_PT), 14);
         assert_eq!(Zoom::new(-5).font_size(3), 1);
-    }
-
-    #[test]
-    fn font_css_quotes_the_family() {
-        let css = font_css("JetBrainsMono Nerd Font", 12);
-        assert_eq!(
-            css,
-            ".stet-editor { font-family: \"JetBrainsMono Nerd Font\"; font-size: 12pt; }\n\
-             .stet-mono { font-family: \"JetBrainsMono Nerd Font\"; }\n"
-        );
-        let hostile = font_css("A\"; } * { color: red; \\", 11);
-        assert!(hostile.contains("\"A\\\"; } * { color: red; \\\\\""));
-        assert_eq!(hostile.matches('\n').count(), 2);
     }
 }

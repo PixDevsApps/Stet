@@ -70,6 +70,35 @@ fn a_second_store_is_locked_out() {
 }
 
 #[test]
+fn a_lock_held_briefly_is_waited_for() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = open(dir.path());
+    let releaser = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(300));
+        drop(first);
+    });
+    let started = Instant::now();
+    let second = SessionStore::open_waiting(dir.path(), WAIT);
+    assert!(second.is_ok(), "{second:?}");
+    assert!(started.elapsed() >= Duration::from_millis(250));
+    releaser.join().unwrap();
+}
+
+#[test]
+fn a_lock_held_for_good_is_reported_after_the_wait() {
+    let dir = tempfile::tempdir().unwrap();
+    let _first = open(dir.path());
+    let wait = Duration::from_millis(200);
+    let started = Instant::now();
+    let error = SessionStore::open_waiting(dir.path(), wait).unwrap_err();
+    assert!(started.elapsed() >= wait);
+    assert!(
+        matches!(error, StoreError::Locked { pid: Some(pid), .. } if pid == std::process::id()),
+        "{error:?}"
+    );
+}
+
+#[test]
 fn a_first_run_starts_empty() {
     let dir = tempfile::tempdir().unwrap();
     let restored = open(dir.path()).load().unwrap();

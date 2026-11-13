@@ -7,6 +7,7 @@ pub mod comment;
 pub mod json;
 pub mod lines;
 pub mod prefix;
+pub mod pretty;
 pub mod xml;
 
 use std::fmt;

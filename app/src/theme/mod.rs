@@ -3,23 +3,26 @@
 //! GtkSourceView scheme and libadwaita CSS variables. Outside Omarchy, two built-in palettes
 //! follow the system's dark preference. The font is fontconfig's `monospace` family.
 
+pub mod css;
+#[cfg(test)]
+mod fixtures;
+pub mod scheme;
+
 use crate::monitor::{DirWatch, TriggerRule};
 use crate::worker;
 use gtk4 as gtk;
 use gtk4::{gdk, gio, glib};
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
-use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 use stet_domain::theme::{EditorTheme, Mode, Palette};
-use stet_domain::view::{DEFAULT_FONT_SIZE_PT, Zoom, font_css};
-use stet_infrastructure::omarchy::{colors, font};
-use stet_infrastructure::xdg;
+use stet_domain::view::{DEFAULT_FONT_SIZE_PT, Zoom};
+use stet_infrastructure::omarchy::{CurrentTheme, font, read_current_theme};
+use stet_infrastructure::style_cache::write_scheme;
 
-const STATIC_CSS: &str = include_str!("style.css");
+const STATIC_CSS: &str = include_str!("../style.css");
 
 type SchemeListener = Rc<dyn Fn(&sourceview5::StyleScheme)>;
 
@@ -55,11 +58,6 @@ pub struct Appearance {
     scheme_listeners: RefCell<Vec<SchemeListener>>,
     theme_watch: RefCell<Option<Rc<DirWatch>>>,
     font_watch: RefCell<Option<Rc<DirWatch>>>,
-}
-
-struct OmarchyTheme {
-    name: String,
-    resolved: BTreeMap<String, String>,
 }
 
 impl Appearance {
@@ -254,12 +252,12 @@ impl Appearance {
             tracing::info!("theme reloaded; unchanged");
             return;
         }
-        let id = theme.scheme_id();
+        let id = scheme::scheme_id(&theme);
         let name = match &source {
             ThemeSource::Omarchy(name) => format!("Stet ({name})"),
             ThemeSource::Builtin(mode) => format!("Stet (built-in {})", mode.as_str()),
         };
-        let xml = theme.style_scheme_xml(&id, &name);
+        let xml = scheme::style_scheme_xml(&theme, &id, &name);
         let styles_dir = self.styles_dir.clone();
         let file_id = id.clone();
         let written = worker::run(move || write_scheme(&styles_dir, &file_id, &xml)).await;
@@ -284,7 +282,7 @@ impl Appearance {
         provider.connect_parsing_error(|_, section, error| {
             tracing::warn!(section = %section.to_str(), %error, "theme CSS");
         });
-        provider.load_from_string(&theme.adwaita_css());
+        provider.load_from_string(&css::adwaita_css(&theme));
         let display = gdk::Display::default().expect("a display");
         gtk::style_context_add_provider_for_display(
             &display,
@@ -337,7 +335,7 @@ impl Appearance {
             .editor_family()
             .unwrap_or_else(|| font::FALLBACK_FAMILY.to_owned());
         let size = self.zoom.get().font_size(self.base_size.get());
-        self.font.load_from_string(&font_css(&family, size));
+        self.font.load_from_string(&css::font_css(&family, size));
     }
 }
 
@@ -354,35 +352,9 @@ fn theme_rule() -> TriggerRule {
     })
 }
 
-fn load_omarchy(current: &Path) -> Option<OmarchyTheme> {
-    let colors_file = current.join("theme/colors.toml");
-    if !colors_file.is_file() {
-        return None;
-    }
-    let resolved = match colors::resolve_palette(&colors_file) {
-        Ok(resolved) => resolved,
-        Err(error) => {
-            tracing::warn!(%error, "could not read the Omarchy palette; using the built-in one");
-            return None;
-        }
-    };
-    let name = std::fs::read_to_string(current.join("theme.name"))
-        .map(|name| name.trim().to_owned())
-        .unwrap_or_default();
-    Some(OmarchyTheme { name, resolved })
-}
-
-/// Writes `<id>.xml` and removes other generated schemes, so exactly one is in the search path.
-fn write_scheme(dir: &Path, id: &str, xml: &str) -> io::Result<PathBuf> {
-    xdg::ensure_private_dir(dir)?;
-    let path = dir.join(format!("{id}.xml"));
-    std::fs::write(&path, xml)?;
-    for entry in std::fs::read_dir(dir)?.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.starts_with("stet-omarchy-") && name.ends_with(".xml") && entry.path() != path {
-            let _ = std::fs::remove_file(entry.path());
-        }
-    }
-    Ok(path)
+fn load_omarchy(current: &Path) -> Option<CurrentTheme> {
+    read_current_theme(current).unwrap_or_else(|error| {
+        tracing::warn!(%error, "could not read the Omarchy palette; using the built-in one");
+        None
+    })
 }

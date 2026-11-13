@@ -12,6 +12,7 @@
 //!   the lines the views show, as the find bar's own matches are. Stet's own steps keep
 //!   them from before and after too, as GTK's replay of such a step would drop them.
 
+use crate::theme::scheme::{MARK_STYLE, TOKEN_STYLES};
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::glib::translate::{ToGlibPtr, ToGlibPtrMut};
@@ -21,7 +22,6 @@ use std::cell::{Cell, Ref, RefCell};
 use std::ops::Range;
 use stet_domain::marks::{BookmarkHistory, Bookmarks, Footprint, MarkStyle, Marks, Step};
 use stet_domain::text::{LineIndex, TextEdit};
-use stet_domain::theme::{MARK_STYLE, TOKEN_STYLES};
 
 /// The source-mark category of bookmarks.
 pub const BOOKMARK_CATEGORY: &str = "stet-bookmark";

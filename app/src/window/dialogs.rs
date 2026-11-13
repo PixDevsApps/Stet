@@ -2,7 +2,6 @@
 
 use super::Window;
 use crate::editor::EditorPage;
-use crate::loader::FormatKind;
 use gtk4 as gtk;
 use gtk4::{gio, glib};
 use libadwaita as adw;
@@ -11,6 +10,7 @@ use std::cell::Cell;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use stet_domain::ops::pretty::FormatKind;
 use stet_domain::search::report::plural;
 use stet_domain::text::{LONG_LINE_CHARS, LongestLine};
 use stet_infrastructure::encoding::{Unmappable, status_label};

@@ -8,7 +8,7 @@ use super::{Location, Window};
 use crate::editor::{
     DiskState, DocState, EditorPage, ReadOnly, TextOrigin, Unwritable, read_only_message,
 };
-use crate::loader::{self, DocInfo, FormatKind, ReadFile};
+use crate::loader;
 use crate::worker;
 use gtk4::gio;
 use sourceview5::prelude::*;
@@ -17,11 +17,15 @@ use std::time::{Duration, Instant};
 use stet_domain::indent;
 use stet_domain::language as hints;
 use stet_domain::language::HEAD_BYTES;
-use stet_domain::text::{LONG_LINE_CHARS, LongestLine, Position, line_count, longest_line};
+use stet_domain::ops::pretty::{self, FormatKind};
+use stet_domain::text::{
+    DISPLAY_BREAK_CHARS, LONG_LINE_CHARS, LongestLine, Position, break_long_lines, line_count,
+    longest_line,
+};
 use stet_infrastructure::encoding::status_label;
 use stet_infrastructure::fs::{
-    DocumentFormat, LoadError, MIB, SaveError, SaveOptions, SaveOutcome, remove_stale_temps,
-    save_document,
+    DocInfo, DocumentFormat, LoadError, MIB, ReadFile, SaveError, SaveOptions, SaveOutcome,
+    read_file, remove_stale_temps, save_document,
 };
 
 /// Temporary files that interrupted saves left next to a file are removed after it is saved
@@ -93,7 +97,7 @@ impl Window {
 
     async fn load(&self, page: EditorPage, location: Location) {
         let path = location.path.clone();
-        let result = worker::run(move || loader::read(&path, None)).await;
+        let result = worker::run(move || read_file(&path, None)).await;
         if self.tab_page(&page).is_none() {
             return;
         }
@@ -249,13 +253,13 @@ impl Window {
             _ => self.ask_long_lines(&page.name(), longest, kind).await,
         };
         let breaks = |text: String| {
-            let text = loader::display_breaks(&text);
+            let text = break_long_lines(&text, DISPLAY_BREAK_CHARS);
             let lines = line_count(&text);
             (text, lines, TextOrigin::DisplayBreaks)
         };
         match (choice, kind) {
             (LongLineChoice::Formatted, Some(kind)) => {
-                let formatted = worker::run(move || match loader::format(&text, kind) {
+                let formatted = worker::run(move || match pretty::format(&text, kind) {
                     Ok(formatted) if longest_line(&formatted).chars > LONG_LINE_CHARS => {
                         Ok(breaks(formatted))
                     }

@@ -9,7 +9,7 @@ use super::Window;
 use super::files::Caret;
 use crate::banner::BannerKind;
 use crate::editor::{DiskState, EditorPage, TextOrigin};
-use crate::loader::{self, CHUNK_BYTES, DocInfo, ReadFile};
+use crate::loader::CHUNK_BYTES;
 use crate::monitor::FileWatch;
 use crate::worker;
 use gtk4::prelude::*;
@@ -19,7 +19,9 @@ use std::time::{Duration, Instant};
 use stet_domain::marks::Footprint;
 use stet_domain::session::Fingerprint;
 use stet_domain::text::{LONG_LINE_CHARS, LineIndex, TextEdit, minimal_edit};
-use stet_infrastructure::fs::{EncodingChoice, LoadError, fingerprint};
+use stet_infrastructure::fs::{
+    DocInfo, EncodingChoice, LoadError, ReadFile, fingerprint, read_file, text_chunks,
+};
 
 /// Focus checks closer together than this are skipped.
 const FOCUS_CHECK_INTERVAL: Duration = Duration::from_secs(1);
@@ -248,7 +250,7 @@ impl Window {
         let bookmarked = page.has_bookmarks();
         page.set_loading(true);
         let result = worker::run(move || -> Result<Reloaded, LoadError> {
-            let read = loader::read(&path, choice)?;
+            let read = read_file(&path, choice)?;
             if read.longest.chars > LONG_LINE_CHARS || read.info.class != state.class {
                 return Ok(Reloaded::Full(read));
             }
@@ -314,7 +316,7 @@ impl Window {
             buffer.delete(&mut start, &mut end);
             let mark = buffer.create_mark(None, &start, false);
             let mut first = true;
-            for piece in stet_infrastructure::fs::text_chunks(&edit.insert, CHUNK_BYTES) {
+            for piece in text_chunks(&edit.insert, CHUNK_BYTES) {
                 if !first {
                     gtk4::glib::timeout_future(crate::editor::CHUNK_INTERVAL).await;
                 }
@@ -365,7 +367,7 @@ impl Window {
                 ..Default::default()
             };
         });
-        let result = worker::run(move || loader::read(&path, choice)).await;
+        let result = worker::run(move || read_file(&path, choice)).await;
         if self.tab_page(page).is_none() {
             return false;
         }

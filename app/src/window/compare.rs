@@ -16,7 +16,6 @@
 
 use super::Window;
 use crate::editor::{DocState, EditorPage, ReadOnly};
-use crate::loader;
 use crate::worker;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
@@ -28,7 +27,7 @@ use std::time::{Duration, Instant};
 use stet_domain::actions::ActionId;
 use stet_domain::diff::{self, CompareOptions, Comparison, IgnoreWhitespace, Side};
 use stet_domain::text::{LONG_LINE_CHARS, line_count};
-use stet_infrastructure::fs::LoadError;
+use stet_infrastructure::fs::{LoadError, read_file};
 
 pub use stet_domain::diff::CompareStats;
 
@@ -238,7 +237,7 @@ impl Window {
         label: String,
         choice: Option<stet_infrastructure::fs::EncodingChoice>,
     ) {
-        let read = worker::run(move || loader::read(&path, choice)).await;
+        let read = worker::run(move || read_file(&path, choice)).await;
         let read = match read {
             Some(Ok(read)) => read,
             Some(Err(LoadError::NotFound { .. })) => {

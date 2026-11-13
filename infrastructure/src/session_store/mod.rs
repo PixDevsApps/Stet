@@ -82,12 +82,15 @@ use layout::Layout;
 use std::fmt;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use stet_domain::session::{Session, is_valid_id};
 use writer::{BackupWriter, Reply, Request, Shared};
+
+/// How often [`SessionStore::open_waiting`] tries a locked store again.
+const LOCK_POLL: Duration = Duration::from_millis(50);
 
 /// One commit: the session to write and the backup texts that changed since the last one.
 #[derive(Clone, Default)]
@@ -233,6 +236,20 @@ impl SessionStore {
     /// until it execs. Retry for a moment before treating it as a second instance.
     pub fn open(state_dir: impl Into<PathBuf>) -> Result<Self, StoreError> {
         Self::start(BackupWriter::new(Layout::new(state_dir.into()))?)
+    }
+
+    /// [`Self::open`], retrying for up to `wait` while another process holds the lock, as a
+    /// quitting instance does until it has flushed. Blocks: call it on a worker.
+    pub fn open_waiting(state_dir: &Path, wait: Duration) -> Result<Self, StoreError> {
+        let started = Instant::now();
+        loop {
+            match Self::open(state_dir) {
+                Err(StoreError::Locked { .. }) if started.elapsed() < wait => {
+                    thread::sleep(LOCK_POLL);
+                }
+                result => return result,
+            }
+        }
     }
 
     fn start(writer: BackupWriter) -> Result<Self, StoreError> {
