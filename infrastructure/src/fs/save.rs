@@ -284,7 +284,10 @@ fn keep_owner(file: &File, original: &Metadata) -> io::Result<()> {
 /// attributes that can't be read, make the save fall back to overwriting in place.
 fn copy_xattrs(from: &Path, to: &File) -> Result<(), Atomic> {
     const FALLBACK: Atomic = Atomic::Fallback("the extended attributes can't be copied");
-    let names = match read_xattr(|buffer| rustix::fs::listxattr(from, buffer)) {
+    let names = match read_xattr(
+        || rustix::fs::listxattr_query(from),
+        |buffer| rustix::fs::listxattr(from, buffer),
+    ) {
         Ok(names) => names,
         Err(Errno::OPNOTSUPP | Errno::NOSYS) => return Ok(()),
         Err(_) => return Err(FALLBACK),
@@ -294,7 +297,10 @@ fn copy_xattrs(from: &Path, to: &File) -> Result<(), Atomic> {
         .filter(|name| !name.is_empty())
     {
         let name = OsStr::from_bytes(name);
-        let value = match read_xattr(|buffer| rustix::fs::getxattr(from, name, buffer)) {
+        let value = match read_xattr(
+            || rustix::fs::getxattr_query(from, name),
+            |buffer| rustix::fs::getxattr(from, name, buffer),
+        ) {
             Ok(value) => value,
             Err(Errno::NODATA) => continue,
             Err(_) => return Err(FALLBACK),
@@ -310,10 +316,11 @@ fn copy_xattrs(from: &Path, to: &File) -> Result<(), Atomic> {
 
 /// Calls a size-then-fill xattr function until the value fits.
 fn read_xattr(
+    mut size: impl FnMut() -> rustix::io::Result<usize>,
     mut call: impl FnMut(&mut [u8]) -> rustix::io::Result<usize>,
 ) -> rustix::io::Result<Vec<u8>> {
     loop {
-        let size = call(&mut [])?;
+        let size = size()?;
         let mut buffer = vec![0; size];
         match call(&mut buffer) {
             Ok(len) => {
@@ -738,7 +745,10 @@ mod tests {
         }
         let outcome = setup.save(&path, "new").unwrap();
         assert_eq!(outcome.method, SaveMethod::AtomicRename);
-        let value = read_xattr(|buffer| rustix::fs::getxattr(&path, "user.stet.test", buffer));
+        let value = read_xattr(
+            || rustix::fs::getxattr_query(&path, "user.stet.test"),
+            |buffer| rustix::fs::getxattr(&path, "user.stet.test", buffer),
+        );
         assert_eq!(value.unwrap(), b"kept");
     }
 
