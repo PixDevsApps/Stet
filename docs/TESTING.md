@@ -19,6 +19,8 @@ Run by the agent on the development machine (gtk4 1:4.24.1-1), headless on Broad
 | Command | Result |
 | --- | --- |
 | Phase 0, before any code change, on `6991ded` plus the uncommitted `tools/headless.sh`: `cargo build -p stet`, then every script `tools/headless.sh 93 target/debug/stet --self-test tests/selftest/<name>.stet-test` except `preview*` and `perf-*`, one by one | **52 of 52 pass, 4,786 steps,** among them the 16 that stopped on the Broadway abort since 2026-11-07 (column-clipboard, column-editor, column-large, column, context, focus, indent, large, marks-large, session-settings, session, settings, tab-double-click, tab-names, toolbox-large, toolbox). No `gtk4-broadwayd` left running. |
+| `STET_CI_DISPLAY=93 bash tools/ci.sh --ui` on `a436c42` (the lint table), `782cbe0` (crossbeam and logging), `fce56f7` (the comments) and `ee901fe` (the layer moves) | **Pass** each time: fmt, the crate-list check, Clippy `-D warnings`, the tests (on `ee901fe`: `stet` 42, `stet-domain` 466 with 9 ignored, `stet-infrastructure` 225 with 5 ignored, 1 doc test), the build, the smoke run, and **52 of 52 scripts, 4,789 steps** (3 more than the baseline: the new restore step in `session-settings`). |
+| The new `session-settings.stet-test` steps against the code before the fix (`Settings::default()` in place of `self.settings()` in `put_restored_text`, a scratch change) | **Fail** as they should: `not ok 3 - assert-highlight false` and `not ok 4 - assert-banner "…over 2 MiB or 10 lines"` in the child; 25 of 26. With the fix: 26 of 26. |
 
 ### 2026-11-12 — 1.6.0: the Flatpak
 
