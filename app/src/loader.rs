@@ -6,12 +6,11 @@
 use std::path::Path;
 use stet_domain::ops::{Indent, json, xml};
 use stet_domain::text::{
-    DISPLAY_BREAK_CHARS, Eol, EolStats, LongestLine, break_long_lines, line_count, longest_line,
+    DISPLAY_BREAK_CHARS, LongestLine, break_long_lines, line_count, longest_line,
 };
-use stet_infrastructure::encoding::{Detection, Encoding};
 use stet_infrastructure::fs::{
-    EncodingChoice, FileMeta, LoadError, OpenedDocument, SizeClass, SizePolicy, open_document,
-    open_document_as, text_chunks,
+    DecodeReport, EncodingChoice, FileMeta, LoadError, OpenedDocument, SizeClass, SizePolicy,
+    open_document, open_document_as, text_chunks,
 };
 
 /// The size of the pieces the editor inserts at a time.
@@ -22,20 +21,10 @@ pub const CHUNK_BYTES: usize = 4 * 1024 * 1024;
 /// with it could not even register for accessibility.
 pub const FIRST_CHUNK_BYTES: usize = 64 * 1024;
 
-/// What decoding found, without the text.
+/// What decoding found, without the text, and the file it came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocInfo {
-    pub encoding: &'static Encoding,
-    pub bom: bool,
-    pub eol: Eol,
-    pub mixed_eol: bool,
-    pub eol_stats: EolStats,
-    pub detection: Detection,
-    pub had_errors: bool,
-    pub lossy_roundtrip: bool,
-    pub nul_count: usize,
-    pub placeholder_conflict: bool,
-    pub binary: bool,
+    pub report: DecodeReport,
     pub meta: FileMeta,
     pub class: SizeClass,
 }
@@ -62,17 +51,7 @@ pub fn read(path: &Path, choice: Option<EncodingChoice>) -> Result<ReadFile, Loa
     };
     let OpenedDocument {
         text,
-        encoding,
-        bom,
-        eol,
-        mixed_eol,
-        eol_stats,
-        detection,
-        had_errors,
-        lossy_roundtrip,
-        nul_count,
-        placeholder_conflict,
-        binary,
+        report,
         meta,
         class,
     } = opened;
@@ -80,17 +59,7 @@ pub fn read(path: &Path, choice: Option<EncodingChoice>) -> Result<ReadFile, Loa
     let lines = line_count(&text);
     Ok(ReadFile {
         info: DocInfo {
-            encoding,
-            bom,
-            eol,
-            mixed_eol,
-            eol_stats,
-            detection,
-            had_errors,
-            lossy_roundtrip,
-            nul_count,
-            placeholder_conflict,
-            binary,
+            report,
             meta,
             class,
         },

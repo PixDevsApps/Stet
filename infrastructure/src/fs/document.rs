@@ -50,39 +50,11 @@ impl From<&EncodingEntry> for EncodingChoice {
     }
 }
 
-/// A file's bytes decoded for the buffer, and everything the banners need.
+/// What decoding found about a file's bytes, without the text.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedDocument {
-    /// LF-normalized, with NUL mapped to the placeholder: ready to insert.
-    pub text: String,
+pub struct DecodeReport {
     pub encoding: &'static Encoding,
     pub bom: bool,
-    /// The dominant line ending; LF when there is none.
-    pub eol: Eol,
-    /// More than one kind of line ending. Saving writes `eol` everywhere.
-    pub mixed_eol: bool,
-    pub eol_stats: EolStats,
-    /// What detection found, also when a [`EncodingChoice`] overrode it.
-    pub detection: Detection,
-    pub had_errors: bool,
-    pub lossy_roundtrip: bool,
-    pub nul_count: usize,
-    pub placeholder_conflict: bool,
-    /// Detection's verdict on the bytes, also under an [`EncodingChoice`]: open read-only.
-    pub binary: bool,
-}
-
-/// A decoded document plus the file's metadata and size class.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenedDocument {
-    /// LF-normalized, with NUL mapped to the placeholder: ready to insert.
-    pub text: String,
-    pub encoding: &'static Encoding,
-    pub bom: bool,
-    /// The dominant line ending; LF when there is none.
-    pub eol: Eol,
-    /// More than one kind of line ending. Saving writes `eol` everywhere; warn first.
-    pub mixed_eol: bool,
     pub eol_stats: EolStats,
     /// What detection found, also when a [`EncodingChoice`] overrode it.
     pub detection: Detection,
@@ -92,39 +64,60 @@ pub struct OpenedDocument {
     pub lossy_roundtrip: bool,
     pub nul_count: usize,
     pub placeholder_conflict: bool,
+}
+
+impl DecodeReport {
+    /// The dominant line ending; LF when there is none.
+    pub fn eol(&self) -> Eol {
+        self.eol_stats.dominant().unwrap_or_default()
+    }
+
+    /// More than one kind of line ending. Saving writes [`Self::eol`] everywhere; warn first.
+    pub fn mixed_eol(&self) -> bool {
+        self.eol_stats.is_mixed()
+    }
+
     /// Detection's verdict on the bytes, also under an [`EncodingChoice`]: open read-only.
-    pub binary: bool,
+    pub fn binary(&self) -> bool {
+        self.detection.binary
+    }
+
+    /// The format that writes the document back as it was read.
+    pub fn format(&self) -> DocumentFormat {
+        DocumentFormat {
+            encoding: self.encoding,
+            bom: self.bom,
+            eol: self.eol(),
+            map_placeholder: !self.placeholder_conflict,
+        }
+    }
+
+    /// Saving without edits reproduces the file byte for byte: nothing was lost in decoding
+    /// and the line endings weren't mixed.
+    #[cfg(test)]
+    pub fn round_trips(&self) -> bool {
+        !self.lossy_roundtrip && !self.mixed_eol()
+    }
+}
+
+/// A file's bytes decoded for the buffer, and everything the banners need.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedDocument {
+    /// LF-normalized, with NUL mapped to the placeholder: ready to insert.
+    pub text: String,
+    pub report: DecodeReport,
+}
+
+/// A decoded document plus the file's metadata and size class.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenedDocument {
+    /// LF-normalized, with NUL mapped to the placeholder: ready to insert.
+    pub text: String,
+    pub report: DecodeReport,
     /// Taken before reading; its fingerprint is the reload baseline.
     pub meta: FileMeta,
     pub class: SizeClass,
 }
-
-macro_rules! document_format {
-    ($document:ty) => {
-        impl $document {
-            /// The format that writes this document back as it was read.
-            #[cfg(test)]
-            pub fn format(&self) -> DocumentFormat {
-                DocumentFormat {
-                    encoding: self.encoding,
-                    bom: self.bom,
-                    eol: self.eol,
-                    map_placeholder: !self.placeholder_conflict,
-                }
-            }
-
-            /// Saving without edits reproduces the file byte for byte: nothing was lost in
-            /// decoding and the line endings weren't mixed.
-            #[cfg(test)]
-            pub fn round_trips(&self) -> bool {
-                !self.lossy_roundtrip && !self.mixed_eol
-            }
-        }
-    };
-}
-
-document_format!(DecodedDocument);
-document_format!(OpenedDocument);
 
 /// Detects the encoding, unless `choice` overrides it, and decodes, maps NUL and normalizes
 /// the line endings in one pass. Pure, for callers that already hold the bytes.
@@ -136,17 +129,16 @@ pub fn decode_document(bytes: &[u8], choice: Option<EncodingChoice>) -> DecodedD
     let (decoded, eol_stats) = decode_to_lf(bytes, encoding, bom);
     DecodedDocument {
         text: decoded.text,
-        encoding,
-        bom,
-        eol: eol_stats.dominant().unwrap_or_default(),
-        mixed_eol: eol_stats.is_mixed(),
-        eol_stats,
-        detection,
-        had_errors: decoded.had_errors,
-        lossy_roundtrip: decoded.lossy_roundtrip,
-        nul_count: decoded.nul_count,
-        placeholder_conflict: decoded.placeholder_conflict,
-        binary: detection.binary,
+        report: DecodeReport {
+            encoding,
+            bom,
+            eol_stats,
+            detection,
+            had_errors: decoded.had_errors,
+            lossy_roundtrip: decoded.lossy_roundtrip,
+            nul_count: decoded.nul_count,
+            placeholder_conflict: decoded.placeholder_conflict,
+        },
     }
 }
 
@@ -183,21 +175,11 @@ fn open(
     choice: Option<EncodingChoice>,
 ) -> Result<OpenedDocument, LoadError> {
     let loaded = load(path, policy)?;
-    let document = decode_document(&loaded.bytes, choice);
+    let DecodedDocument { text, report } = decode_document(&loaded.bytes, choice);
     drop(loaded.bytes);
     Ok(OpenedDocument {
-        text: document.text,
-        encoding: document.encoding,
-        bom: document.bom,
-        eol: document.eol,
-        mixed_eol: document.mixed_eol,
-        eol_stats: document.eol_stats,
-        detection: document.detection,
-        had_errors: document.had_errors,
-        lossy_roundtrip: document.lossy_roundtrip,
-        nul_count: document.nul_count,
-        placeholder_conflict: document.placeholder_conflict,
-        binary: document.binary,
+        text,
+        report,
         meta: loaded.meta,
         class: loaded.class,
     })
@@ -265,13 +247,20 @@ mod tests {
             let opened = open_document(&path, &policy).unwrap();
             let name = fixture.name;
             if let Some(encoding) = fixture.encoding {
-                assert_eq!(opened.encoding.name(), encoding.name(), "{name}");
+                assert_eq!(opened.report.encoding.name(), encoding.name(), "{name}");
             }
-            assert_eq!(opened.bom, fixture.bom, "{name}: bom");
-            assert_eq!(opened.binary, fixture.binary, "{name}: binary");
-            assert_eq!(opened.eol, fixture.eol, "{name}: eol");
-            assert_eq!(opened.mixed_eol, fixture.mixed_eol, "{name}: mixed");
-            assert_eq!(opened.lossy_roundtrip, fixture.lossy, "{name}: lossy");
+            assert_eq!(opened.report.bom, fixture.bom, "{name}: bom");
+            assert_eq!(opened.report.binary(), fixture.binary, "{name}: binary");
+            assert_eq!(opened.report.eol(), fixture.eol, "{name}: eol");
+            assert_eq!(
+                opened.report.mixed_eol(),
+                fixture.mixed_eol,
+                "{name}: mixed"
+            );
+            assert_eq!(
+                opened.report.lossy_roundtrip, fixture.lossy,
+                "{name}: lossy"
+            );
             assert!(
                 !opened.text.contains('\0'),
                 "{name}: NUL in the buffer text"
@@ -282,24 +271,24 @@ mod tests {
             match save_document(
                 &saved_path,
                 &opened.text,
-                &opened.format(),
+                &opened.report.format(),
                 &save_options(dir.path()),
             ) {
                 Ok(_) => {
                     let saved = fs::read(&saved_path).unwrap();
                     assert_eq!(
                         saved == fixture.bytes,
-                        opened.round_trips(),
+                        opened.report.round_trips(),
                         "{name}: exactness"
                     );
-                    if opened.mixed_eol && !opened.lossy_roundtrip {
+                    if opened.report.mixed_eol() && !opened.report.lossy_roundtrip {
                         let reopened = open_document(&saved_path, &policy).unwrap();
                         assert_eq!(reopened.text, opened.text, "{name}");
-                        assert!(!reopened.mixed_eol, "{name}");
-                        assert_eq!(reopened.eol, opened.eol, "{name}");
+                        assert!(!reopened.report.mixed_eol(), "{name}");
+                        assert_eq!(reopened.report.eol(), opened.report.eol(), "{name}");
                     }
                 }
-                Err(SaveError::Unmappable(_)) => assert!(opened.lossy_roundtrip, "{name}"),
+                Err(SaveError::Unmappable(_)) => assert!(opened.report.lossy_roundtrip, "{name}"),
                 Err(error) => panic!("{name}: {error}"),
             }
         }
@@ -314,7 +303,7 @@ mod tests {
         let policy = SizePolicy::default();
 
         let detected = open_document(&path, &policy).unwrap();
-        assert_eq!(detected.encoding, WINDOWS_1252);
+        assert_eq!(detected.report.encoding, WINDOWS_1252);
         assert_eq!(detected.text, "Prix : 10 ¤ pour l'½uvre.\n");
 
         let choice = EncodingChoice {
@@ -323,13 +312,13 @@ mod tests {
         };
         let reread = open_document_as(&path, &policy, choice).unwrap();
         assert_eq!(reread.text, "Prix : 10 € pour l'œuvre.\n");
-        assert_eq!(reread.detection.encoding, WINDOWS_1252);
-        assert!(reread.round_trips());
+        assert_eq!(reread.report.detection.encoding, WINDOWS_1252);
+        assert!(reread.report.round_trips());
         let saved = dir.path().join("saved.txt");
         save_document(
             &saved,
             &reread.text,
-            &reread.format(),
+            &reread.report.format(),
             &save_options(dir.path()),
         )
         .unwrap();
@@ -348,10 +337,10 @@ mod tests {
         };
         save_document(&path, "æøå\nsecond␀\n", &format, &save_options(dir.path())).unwrap();
         let opened = open_document(&path, &SizePolicy::default()).unwrap();
-        assert_eq!(opened.format(), format);
+        assert_eq!(opened.report.format(), format);
         assert_eq!(opened.text, "æøå\nsecond␀\n");
-        assert_eq!(opened.nul_count, 1);
-        assert!(opened.round_trips());
+        assert_eq!(opened.report.nul_count, 1);
+        assert!(opened.report.round_trips());
     }
 
     #[test]
@@ -375,15 +364,15 @@ mod tests {
     #[test]
     fn placeholder_conflicts_keep_real_u2400() {
         let decoded = decode_document("a␀b\n".as_bytes(), None);
-        assert!(decoded.placeholder_conflict && !decoded.format().map_placeholder);
+        assert!(decoded.report.placeholder_conflict && !decoded.report.format().map_placeholder);
         assert_eq!(
-            encode_document(&decoded.text, &decoded.format()).unwrap(),
+            encode_document(&decoded.text, &decoded.report.format()).unwrap(),
             "a␀b\n".as_bytes()
         );
         let nul = decode_document(b"a\0b\n", None);
         assert_eq!(nul.text, format!("a{PLACEHOLDER}b\n"));
         assert_eq!(
-            encode_document(&nul.text, &nul.format()).unwrap(),
+            encode_document(&nul.text, &nul.report.format()).unwrap(),
             b"a\0b\n"
         );
     }
@@ -401,8 +390,8 @@ mod tests {
             let bytes = encode_document(text, &format).unwrap();
             let decoded = decode_document(&bytes, Some(entry.into()));
             assert_eq!(decoded.text, text, "{}", entry.label);
-            assert_eq!(decoded.eol, Eol::CrLf, "{}", entry.label);
-            assert!(decoded.round_trips(), "{}", entry.label);
+            assert_eq!(decoded.report.eol(), Eol::CrLf, "{}", entry.label);
+            assert!(decoded.report.round_trips(), "{}", entry.label);
         }
     }
 
@@ -437,11 +426,11 @@ mod tests {
             let bytes = encode_document(&text, &format).unwrap();
             let decoded = decode_document(&bytes, Some(entry.into()));
             prop_assert_eq!(&decoded.text, &text);
-            prop_assert!(decoded.round_trips());
+            prop_assert!(decoded.report.round_trips());
             if text.contains('\n') {
-                prop_assert_eq!(decoded.eol, eol);
+                prop_assert_eq!(decoded.report.eol(), eol);
             }
-            prop_assert_eq!(encode_document(&decoded.text, &decoded.format()).unwrap(), bytes);
+            prop_assert_eq!(encode_document(&decoded.text, &decoded.report.format()).unwrap(), bytes);
         }
     }
 
@@ -489,11 +478,11 @@ mod tests {
         report("decode + normalize, UTF-8 LF", utf8.len(), time);
         drop(decoded);
         let (time, document) = best_of(5, || decode_document(utf8.as_bytes(), None));
-        assert!(document.round_trips() && document.eol == Eol::Lf);
+        assert!(document.report.round_trips() && document.report.eol() == Eol::Lf);
         report("detect + decode + normalize, UTF-8 LF", utf8.len(), time);
         drop(document);
         let (time, document) = best_of(5, || decode_document(crlf.as_bytes(), None));
-        assert!(document.round_trips() && document.eol == Eol::CrLf);
+        assert!(document.report.round_trips() && document.report.eol() == Eol::CrLf);
         report("detect + decode + normalize, UTF-8 CRLF", crlf.len(), time);
         drop(document);
 
@@ -508,7 +497,7 @@ mod tests {
             time,
         );
         let (time, document) = best_of(5, || decode_document(&latin, None));
-        assert!(document.round_trips() && document.encoding == WINDOWS_1252);
+        assert!(document.report.round_trips() && document.report.encoding == WINDOWS_1252);
         report(
             "detect + decode + normalize, Windows-1252 CRLF",
             latin.len(),
@@ -527,7 +516,7 @@ mod tests {
             utf8.len(),
             time,
         );
-        let format = opened.format();
+        let format = opened.report.format();
         let (time, _) = best_of(3, || encode_document(&opened.text, &format).unwrap());
         report("encode_document, UTF-8 LF", utf8.len(), time);
         let crlf_format = DocumentFormat {
@@ -581,7 +570,7 @@ mod tests {
         let before = peak_rss();
         let opened = open_document(&path, &SizePolicy::default()).unwrap();
         let after = peak_rss();
-        assert!(opened.round_trips());
+        assert!(opened.report.round_trips());
         eprintln!(
             "open_document of {:.1} MiB (CRLF): peak RSS grew by {:.1} MiB ({:.2}x the file); the text is {:.1} MiB",
             size as f64 / 1048576.0,

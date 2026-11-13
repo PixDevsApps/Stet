@@ -607,22 +607,18 @@ impl Window {
 
 /// Copies what decoding found into the document model.
 pub(super) fn apply_info(state: &mut DocState, info: &DocInfo, origin: TextOrigin) {
+    let report = &info.report;
     state.canonical = Some(info.meta.canonical.clone());
-    state.format = DocumentFormat {
-        encoding: info.encoding,
-        bom: info.bom,
-        eol: info.eol,
-        map_placeholder: !info.placeholder_conflict,
-    };
-    state.detection = Some(info.detection.source);
-    state.eol_stats = info.eol_stats;
-    state.mixed_eol = info.mixed_eol && origin == TextOrigin::File;
+    state.format = report.format();
+    state.detection = Some(report.detection.source);
+    state.eol_stats = report.eol_stats;
+    state.mixed_eol = report.mixed_eol() && origin == TextOrigin::File;
     state.mixed_kept = false;
-    state.had_errors = info.had_errors;
-    state.lossy_roundtrip = info.lossy_roundtrip;
-    state.binary = info.binary;
-    state.nul_count = info.nul_count;
-    state.placeholder_conflict = info.placeholder_conflict;
+    state.had_errors = report.had_errors;
+    state.lossy_roundtrip = report.lossy_roundtrip;
+    state.binary = report.binary();
+    state.nul_count = report.nul_count;
+    state.placeholder_conflict = report.placeholder_conflict;
     state.class = info.class;
     state.origin = origin;
     state.baseline = Some(info.meta.fingerprint());
@@ -632,7 +628,7 @@ pub(super) fn apply_info(state: &mut DocState, info: &DocInfo, origin: TextOrigi
     state.unwritable = (!info.meta.writable).then_some(Unwritable::Permission);
     state.read_only = if origin == TextOrigin::DisplayBreaks {
         Some(ReadOnly::DisplayBreaks)
-    } else if info.binary {
+    } else if report.binary() {
         Some(ReadOnly::Binary)
     } else if !info.meta.writable {
         Some(ReadOnly::NotWritable)

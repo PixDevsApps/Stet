@@ -144,11 +144,11 @@ fn every_fixture_keeps_its_encoding_bom_and_line_endings() {
         let path = dir.path().join(name);
         fs::write(&path, &plan.bytes).unwrap();
         let reopened = open_document(&path, &crate::fs::SizePolicy::default()).unwrap();
-        assert_eq!(reopened.encoding, detection.encoding, "{name}");
-        assert_eq!(reopened.bom, detection.bom, "{name}");
-        assert_eq!(reopened.eol, fixture.eol, "{name}");
-        assert_eq!(reopened.mixed_eol, fixture.mixed_eol, "{name}");
-        assert!(!reopened.lossy_roundtrip, "{name}");
+        assert_eq!(reopened.report.encoding, detection.encoding, "{name}");
+        assert_eq!(reopened.report.bom, detection.bom, "{name}");
+        assert_eq!(reopened.report.eol(), fixture.eol, "{name}");
+        assert_eq!(reopened.report.mixed_eol(), fixture.mixed_eol, "{name}");
+        assert!(!reopened.report.lossy_roundtrip, "{name}");
         assert_eq!(
             reopened.text,
             lf.replace(word.as_str(), "<\n>"),
