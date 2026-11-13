@@ -50,6 +50,7 @@ The user asked for "a comprehensive architectural review & cleanup: focused on o
 
 **Follow-ups:**
 - **(P1, Done 2026-11-13)** The cleanup, phase by phase; progress is recorded below. All six phases are done; `main` was fast-forwarded to `cleanup/architecture` and pushed with the tag `m0-spikes` (authorization log).
+- **CI on GitHub** (after the push): the first two runs failed, on git's ownership check in the container and on a method Rust 1.99 deprecates; both fixed (`319ae57`, `396aad0`), and the third run passed ([TESTING.md](TESTING.md#2026-11-13--the-architecture-cleanup-adr-020)). The workflow builds with Arch's current Rust, so a deprecation in a new Rust release can turn it red before the code changes; that is its purpose.
 - **(P2, Open)** Newtypes for character and byte offsets (`CharOffset`, `ByteOffset`) through `TextEdit`, `LineIndex` and the search engine: a large mechanical change, left out of this cleanup (Phase 3).
 - **(P3, Open)** `toolbox-large.stet-test`'s `assert-max-block 200` measured 227 ms once in a full `ci.sh --ui` run (2026-11-13, after the worker pool change); three runs alone gave 114–116 ms, the baseline 112 ms. Watch for it.
 
