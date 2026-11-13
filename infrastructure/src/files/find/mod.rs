@@ -356,14 +356,19 @@ impl Shared {
 
     /// Takes up to `wanted` matches from the cap; returns how many were granted.
     fn reserve(&self, wanted: usize) -> usize {
-        let mut granted = 0;
-        let _ = self
-            .hits
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |taken| {
-                granted = wanted.min(self.max_hits.saturating_sub(taken));
-                Some(taken + granted)
-            });
-        granted
+        let mut taken = self.hits.load(Ordering::SeqCst);
+        loop {
+            let granted = wanted.min(self.max_hits.saturating_sub(taken));
+            match self.hits.compare_exchange_weak(
+                taken,
+                taken + granted,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => return granted,
+                Err(actual) => taken = actual,
+            }
+        }
     }
 
     /// The hit cap is reached: the search stops, uncancelled.
