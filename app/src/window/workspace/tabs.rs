@@ -3,20 +3,25 @@
 //! move it to the trash; close the other tabs or those to the right; save. From the tab menu a
 //! command acts on the tab that was clicked, otherwise on the current one (INTEGRATIONS.md
 //! section 7). A double-click on a tab renames it too.
+//!
+//! The tabs' own state is here too ([`TabsState`]), with what the views report about their
+//! tabs: a close asked for, a tab detached, attached or selected, a tab dropped after the last.
 
 use crate::actions;
 use crate::convert::to_i32;
 use crate::editor::EditorPage;
-use crate::runtime::worker;
-use crate::window::Window;
+use crate::runtime::{Flag, Raised, worker};
 use crate::window::dialogs::SaveChoice;
+use crate::window::{Window, page_of};
 use gtk4 as gtk;
 use gtk4::{gio, glib};
 use libadwaita as adw;
 use libadwaita::prelude::*;
+use std::cell::{Cell, RefCell};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use stet_domain::actions::ActionId;
+use stet_domain::nav::{ClosedTab, ClosedTabs};
 use stet_infrastructure::desktop;
 use stet_infrastructure::fs::rename_no_replace;
 
@@ -51,77 +56,297 @@ pub(in crate::window) enum TabTool {
     MoveToTrash,
 }
 
-impl Window {
-    pub(in crate::window) fn connect_tab_menu(&self) {
-        let menu = actions::tab_menu(&self.keymap());
-        for view in &self.inner.views {
-            let tabs = &view.tabs;
-            tabs.set_menu_model(Some(&menu));
-            tabs.connect_setup_menu(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |_, tab_page| {
-                    let window = Window { inner };
-                    match tab_page {
-                        Some(tab_page) => {
-                            window.inner.menu_page.replace(Some(tab_page.clone()));
+/// The tabs' state that the views' signals don't tell: the tab whose menu is open, the last
+/// press on a strip, the closed tabs, and what the window itself is doing to its tabs.
+pub(in crate::window) struct TabsState {
+    /// The tab whose context menu is open.
+    menu_page: RefCell<Option<adw::TabPage>>,
+    /// The tab the last press on a tab strip was on, to tell a double-click on a tab.
+    pressed_tab: glib::WeakRef<adw::TabPage>,
+    /// What Restore Closed Tab brings back.
+    closed: RefCell<ClosedTabs>,
+    /// The window is closing: its tabs' detaches are closes, and the last one leaves no new
+    /// untitled tab behind.
+    closing_window: Cell<bool>,
+    /// Tabs close without asking about unsaved changes.
+    closing_without_prompt: Flag,
+    /// A tab is moving to the other view: its detach and attach are not a close and an open.
+    moving: Flag,
+    /// A tab's close is being finished: its detach is a close, not a tab dragged to the other
+    /// view's strip.
+    finishing_close: Flag,
+    /// The view whose strip took a dropped tab after its last tab, until libadwaita hands the
+    /// tab over.
+    dropped_on: Cell<Option<usize>>,
+    /// Where libadwaita puts that tab, always first; from here it moves to the end of the
+    /// view's tabs. Never on screen.
+    drop_stage: adw::TabView,
+}
+
+impl Default for TabsState {
+    fn default() -> Self {
+        Self {
+            menu_page: RefCell::default(),
+            pressed_tab: glib::WeakRef::new(),
+            closed: RefCell::default(),
+            closing_window: Cell::new(false),
+            closing_without_prompt: Flag::default(),
+            moving: Flag::default(),
+            finishing_close: Flag::default(),
+            dropped_on: Cell::new(None),
+            drop_stage: adw::TabView::new(),
+        }
+    }
+}
+
+impl TabsState {
+    /// Tabs close without asking until the guard drops.
+    pub(in crate::window) fn closing_without_prompt(&self) -> Raised<'_> {
+        self.closing_without_prompt.raise()
+    }
+
+    pub(in crate::window) fn is_closing_without_prompt(&self) -> bool {
+        self.closing_without_prompt.is_raised()
+    }
+
+    /// A tab moves to the other view until the guard drops.
+    pub(in crate::window) fn moving(&self) -> Raised<'_> {
+        self.moving.raise()
+    }
+
+    pub(in crate::window) fn is_moving(&self) -> bool {
+        self.moving.is_raised()
+    }
+
+    /// A tab's close is finished until the guard drops.
+    pub(in crate::window) fn finishing_close(&self) -> Raised<'_> {
+        self.finishing_close.raise()
+    }
+
+    /// From now on the window is closing.
+    pub(in crate::window) fn set_closing_window(&self) {
+        self.closing_window.set(true);
+    }
+
+    pub(in crate::window) fn is_closing_window(&self) -> bool {
+        self.closing_window.get()
+    }
+
+    /// Whether a tab that leaves its view now is closed, rather than dragged elsewhere.
+    pub(in crate::window) fn is_closing(&self) -> bool {
+        self.finishing_close.is_raised() || self.closing_window.get()
+    }
+
+    pub(in crate::window) fn remember_closed(&self, tab: ClosedTab) {
+        self.closed.borrow_mut().push(tab);
+    }
+
+    /// The most recently closed tab, which Restore Closed Tab brings back.
+    pub(in crate::window) fn take_closed(&self) -> Option<ClosedTab> {
+        self.closed.borrow_mut().pop()
+    }
+
+    pub(in crate::window) fn has_closed(&self) -> bool {
+        !self.closed.borrow().is_empty()
+    }
+
+    #[cfg(feature = "selftest")]
+    pub(in crate::window) fn closed_count(&self) -> usize {
+        self.closed.borrow().len()
+    }
+}
+
+/// The tab strips' menus and double-clicks, and what the views report about their tabs:
+/// a close asked for, a tab detached or attached, another tab selected, a tab dropped after
+/// the last one; and the + after the tabs.
+pub(in crate::window) fn connect(window: &Window) {
+    connect_menus(window);
+    connect_double_click(window);
+    connect_views(window);
+    connect_drop_stage(window);
+    for (index, view) in window.inner.views.iter().enumerate() {
+        view.new_tab.connect_clicked(glib::clone!(
+            #[weak]
+            window,
+            move |_| {
+                window.set_active_view(index, false);
+                let name = actions::detailed_name(ActionId::NewTab);
+                let _ = WidgetExt::activate_action(&window.inner.window, &name, None);
+            }
+        ));
+    }
+}
+
+fn connect_menus(window: &Window) {
+    let menu = actions::tab_menu(&window.keymap());
+    for view in &window.inner.views {
+        let tabs = &view.tabs;
+        tabs.set_menu_model(Some(&menu));
+        tabs.connect_setup_menu(glib::clone!(
+            #[weak]
+            window,
+            move |_, tab_page| match tab_page {
+                Some(tab_page) => {
+                    window.inner.tabs.menu_page.replace(Some(tab_page.clone()));
+                    window.update_actions();
+                    window.name_menu_items_soon();
+                }
+                // The menu closed; its command, if any, has run by now or runs from this
+                // event, so the clicked tab is forgotten once the event is done.
+                None => {
+                    let weak = window.downgrade();
+                    glib::idle_add_local_once(move || {
+                        if let Some(window) = weak.upgrade() {
+                            window.inner.tabs.menu_page.replace(None);
                             window.update_actions();
-                            window.name_menu_items_soon();
+                            window.restore_focus();
                         }
-                        // The menu closed; its command, if any, has run by now or runs from
-                        // this event, so the clicked tab is forgotten once the event is done.
-                        None => {
-                            let weak = std::rc::Rc::downgrade(&window.inner);
-                            glib::idle_add_local_once(move || {
-                                if let Some(inner) = weak.upgrade() {
-                                    let window = Window { inner };
-                                    window.inner.menu_page.replace(None);
-                                    window.update_actions();
-                                    window.restore_focus();
-                                }
-                            });
-                        }
-                    }
+                    });
                 }
-            ));
-        }
+            }
+        ));
     }
+}
 
-    /// A double-click on a tab opens Rename…: for its file, or for an untitled tab's name.
-    pub(in crate::window) fn connect_tab_double_click(&self) {
-        for view in &self.inner.views {
-            let click = gtk::GestureClick::builder()
-                .button(gtk::gdk::BUTTON_PRIMARY)
-                .propagation_phase(gtk::PropagationPhase::Capture)
-                .build();
-            click.connect_pressed(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |gesture, presses, x, y| {
-                    let Some(bar) = gesture.widget() else {
-                        return;
+/// A double-click on a tab opens Rename…: for its file, or for an untitled tab's name.
+fn connect_double_click(window: &Window) {
+    for view in &window.inner.views {
+        let click = gtk::GestureClick::builder()
+            .button(gtk::gdk::BUTTON_PRIMARY)
+            .propagation_phase(gtk::PropagationPhase::Capture)
+            .build();
+        click.connect_pressed(glib::clone!(
+            #[weak]
+            window,
+            move |gesture, presses, x, y| {
+                let Some(bar) = gesture.widget() else {
+                    return;
+                };
+                if window.tab_pressed(&bar, presses, x, y) {
+                    // Neither the strip nor a window handle around it takes the press.
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+            }
+        ));
+        view.bar.add_controller(click);
+    }
+}
+
+/// What each view reports about its tabs.
+fn connect_views(window: &Window) {
+    for (index, view) in window.inner.views.iter().enumerate() {
+        view.tabs.connect_close_page(glib::clone!(
+            #[weak]
+            window,
+            #[upgrade_or]
+            glib::Propagation::Stop,
+            move |tabs, tab_page| {
+                window.on_close_page(tabs, tab_page);
+                glib::Propagation::Stop
+            }
+        ));
+        view.tabs.connect_page_detached(glib::clone!(
+            #[weak]
+            window,
+            move |_, tab_page, _| window.on_page_detached(&page_of(tab_page))
+        ));
+        view.tabs.connect_page_attached(glib::clone!(
+            #[weak]
+            window,
+            move |_, _, _| {
+                if !window.inner.tabs.is_moving() {
+                    window.update_layout();
+                }
+            }
+        ));
+        view.tabs.connect_selected_page_notify(glib::clone!(
+            #[weak]
+            window,
+            move |_| window.on_view_selected(index)
+        ));
+        // A tab dropped after the strip's last tab: libadwaita then asks the tab's view for a
+        // new window's tab view to put it in, which is the stage.
+        view.tab_drop.connect_drop(glib::clone!(
+            #[weak]
+            window,
+            #[upgrade_or]
+            false,
+            move |target, _, _, _| {
+                let tabs = &window.inner.tabs;
+                tabs.dropped_on.set(Some(index));
+                if let Some(drag) = target.current_drop().and_then(|drop| drop.drag()) {
+                    drag.connect_dnd_finished(glib::clone!(
+                        #[weak]
+                        window,
+                        move |_| window.inner.tabs.dropped_on.set(None)
+                    ));
+                    drag.connect_cancel(glib::clone!(
+                        #[weak]
+                        window,
+                        move |_, _| window.inner.tabs.dropped_on.set(None)
+                    ));
+                }
+                true
+            }
+        ));
+        view.tabs.connect_create_window(glib::clone!(
+            #[weak]
+            window,
+            #[upgrade_or]
+            None,
+            move |_| {
+                let tabs = &window.inner.tabs;
+                tabs.dropped_on.get().map(|_| tabs.drop_stage.clone())
+            }
+        ));
+    }
+}
+
+/// A tab dropped after a strip's last tab lands on the stage, and moves on to the end of that
+/// strip's view.
+fn connect_drop_stage(window: &Window) {
+    window
+        .inner
+        .tabs
+        .drop_stage
+        .connect_page_attached(glib::clone!(
+            #[weak]
+            window,
+            move |stage, tab_page, _| {
+                let index = window
+                    .inner
+                    .tabs
+                    .dropped_on
+                    .take()
+                    .unwrap_or_else(|| window.inner.active.get());
+                let (stage, tab_page) = (stage.clone(), tab_page.clone());
+                // Once libadwaita has finished attaching it here.
+                glib::spawn_future_local(async move {
+                    let target = &window.inner.views[index].tabs;
+                    let position = if tab_page.is_pinned() {
+                        target.n_pinned_pages()
+                    } else {
+                        target.n_pages()
                     };
-                    if (Window { inner }).tab_pressed(&bar, presses, x, y) {
-                        // Neither the strip nor a window handle around it takes the press.
-                        gesture.set_state(gtk::EventSequenceState::Claimed);
-                    }
-                }
-            ));
-            view.bar.add_controller(click);
-        }
-    }
+                    stage.transfer_page(&tab_page, target, position);
+                });
+            }
+        ));
+}
 
+impl Window {
     /// A press at (`x`, `y`) on tab strip `bar`, the `presses`th of a click: the second one on
     /// the same tab renames it. Returns whether it did.
     pub fn tab_pressed(&self, bar: &gtk::Widget, presses: i32, x: f64, y: f64) -> bool {
         let tab_page = tab_under(bar, x, y);
         // Both presses on the tab itself: a quick second click on a close button lands on the
         // tab that moves in under it.
-        let previous = self.inner.pressed_tab.upgrade();
-        self.inner.pressed_tab.set(tab_page.as_ref());
+        let pressed = &self.inner.tabs.pressed_tab;
+        let previous = pressed.upgrade();
+        pressed.set(tab_page.as_ref());
         match tab_page {
             Some(tab_page) if presses == 2 && previous.as_ref() == Some(&tab_page) => {
-                self.rename_from_tab(&crate::window::page_of(&tab_page))
+                self.rename_from_tab(&page_of(&tab_page))
             }
             _ => false,
         }
@@ -162,10 +387,11 @@ impl Window {
     /// The tab a tab command acts on: the one whose menu is open, else the current one.
     pub(in crate::window) fn context_page(&self) -> Option<EditorPage> {
         self.inner
+            .tabs
             .menu_page
             .borrow()
             .as_ref()
-            .map(crate::window::page_of)
+            .map(page_of)
             .or_else(|| self.current_page())
     }
 

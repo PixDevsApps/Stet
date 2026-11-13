@@ -6,7 +6,6 @@ use crate::editor::BannerButton;
 use crate::editor::EditorPage;
 use crate::window::Window;
 use gtk4::prelude::*;
-use std::rc::Rc;
 use stet_domain::document::DiskState;
 use stet_domain::document::banners::{
     BannerAction, BannerFacts, BannerKind, HighlightLimits, banners_for,
@@ -134,11 +133,10 @@ impl Window {
         label: String,
         run: impl Fn(Window, EditorPage) + 'static,
     ) -> BannerButton {
-        let inner = Rc::downgrade(&self.inner);
+        let window = self.downgrade();
         let page = page.downgrade();
         BannerButton::new(label, move || {
-            if let (Some(inner), Some(page)) = (inner.upgrade(), page.upgrade()) {
-                let window = Window { inner };
+            if let (Some(window), Some(page)) = (window.upgrade(), page.upgrade()) {
                 run(window.clone(), page);
                 window.restore_focus_later();
             }

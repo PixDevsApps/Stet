@@ -718,53 +718,57 @@ fn row_widgets(item: &gtk::ListItem) -> Option<RowWidgets> {
     })
 }
 
-impl Window {
-    pub(in crate::window) fn connect_results_panel(&self) {
-        let results = &self.inner.results;
-        results.connect_jump(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |jump| Window { inner }.jump_to(jump)
+/// A hit chosen in the panel, its keys and buttons, and the match colour of the theme.
+pub(in crate::window) fn connect(window: &Window) {
+    let results = &window.inner.results;
+    results.connect_jump(glib::clone!(
+        #[weak]
+        window,
+        move |jump| window.jump_to(jump)
+    ));
+    results.keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        window,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, state| window.on_results_key(key, state)
+    ));
+    for (button, command) in [
+        (&results.stop, SearchCommand::StopFindInFiles),
+        (&results.copy, SearchCommand::CopyResults),
+        (&results.clear, SearchCommand::ClearResults),
+        (&results.close, SearchCommand::CloseResults),
+    ] {
+        button.connect_clicked(glib::clone!(
+            #[weak]
+            window,
+            move |_| window.run_search(command)
         ));
-        results.keys.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_, key, _, state| Window { inner }.on_results_key(key, state)
-        ));
-        for (button, command) in [
-            (&results.stop, SearchCommand::StopFindInFiles),
-            (&results.copy, SearchCommand::CopyResults),
-            (&results.clear, SearchCommand::ClearResults),
-            (&results.close, SearchCommand::CloseResults),
-        ] {
-            button.connect_clicked(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |_| Window { inner }.run_search(command)
-            ));
-        }
-        let appearance = &self.inner.shared.appearance;
-        appearance.connect_scheme_changed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |scheme| inner.results.set_match_color(search_match_color(scheme))
-        ));
-        if let Some(scheme) = appearance.scheme() {
-            results.set_match_color(search_match_color(&scheme));
-        }
-        if let Some(action) = self.action(ActionId::StopFindInFiles) {
-            action.set_enabled(false);
-        }
     }
+    let appearance = &window.inner.shared.appearance;
+    appearance.connect_scheme_changed(glib::clone!(
+        #[weak]
+        window,
+        move |scheme| window
+            .inner
+            .results
+            .set_match_color(search_match_color(scheme))
+    ));
+    if let Some(scheme) = appearance.scheme() {
+        results.set_match_color(search_match_color(&scheme));
+    }
+    if let Some(action) = window.action(ActionId::StopFindInFiles) {
+        action.set_enabled(false);
+    }
+}
 
+impl Window {
     /// Shows the results panel at its last height, optionally with the focus in it.
     pub fn show_results(&self, focus: bool) {
         let results = &self.inner.results;
         if !results.root.is_visible() {
             results.root.set_visible(true);
-            let paned = self.inner.paned.clone();
+            let paned = self.inner.layout.paned.clone();
             let height = results.height.get();
             let place = move || {
                 let total = paned.height();
@@ -772,7 +776,7 @@ impl Window {
                     paned.set_position(total - height);
                 }
             };
-            if self.inner.paned.height() > 0 {
+            if self.inner.layout.paned.height() > 0 {
                 place();
             } else {
                 glib::idle_add_local_once(place);
@@ -791,7 +795,7 @@ impl Window {
     pub fn hide_results(&self) {
         let results = &self.inner.results;
         if results.root.is_visible() {
-            let paned = &self.inner.paned;
+            let paned = &self.inner.layout.paned;
             let height = paned.height() - paned.position();
             if height > 40 {
                 results.height.set(height);

@@ -13,6 +13,7 @@
 //! level instead (`window::tools::compare`).
 
 use crate::editor::EditorPage;
+use crate::runtime::Flag;
 use crate::window::Window;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -30,7 +31,7 @@ pub struct SplitState {
     vertical: Cell<bool>,
     horizontal: Cell<bool>,
     /// A synchronised scroll is being applied: the other view's own change is not passed on.
-    syncing: Cell<bool>,
+    syncing: Flag,
     /// The scroll positions last seen of the page in front of each view: vertical, horizontal.
     last: [[Cell<f64>; 2]; 2],
     /// The divider position the session restored, used when the window next splits.
@@ -48,46 +49,45 @@ pub(in crate::window) enum SplitCommand {
     SyncHorizontalScrolling,
 }
 
-impl Window {
-    pub(in crate::window) fn connect_split(&self) {
-        let inner = &self.inner;
-        for (index, view) in inner.views.iter().enumerate() {
-            // Focus moving into a view makes it the active one.
-            let focus = gtk::EventControllerFocus::new();
-            focus.connect_enter(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |_| Window { inner }.set_active_view(index, false)
-            ));
-            view.tabs.add_controller(focus);
-            // So does a click on its tab strip, but not on the menu or the window controls at its
-            // ends.
-            let click = gtk::GestureClick::new();
-            click.set_propagation_phase(gtk::PropagationPhase::Capture);
-            click.connect_pressed(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |gesture, _, x, y| {
-                    let window = Window { inner };
-                    let ends = [&window.inner.start, &window.inner.end];
-                    let on_ends = gesture
-                        .widget()
-                        .and_then(|bar| bar.pick(x, y, gtk::PickFlags::DEFAULT))
-                        .is_some_and(|target| {
-                            ends.iter().any(|end| {
-                                target == *end.upcast_ref::<gtk::Widget>()
-                                    || target.is_ancestor(*end)
-                            })
-                        });
-                    if !on_ends {
-                        window.set_active_view(index, true);
-                    }
+/// Makes a view the active one when the user turns to it.
+pub(in crate::window) fn connect(window: &Window) {
+    for (index, view) in window.inner.views.iter().enumerate() {
+        // Focus moving into a view makes it the active one.
+        let focus = gtk::EventControllerFocus::new();
+        focus.connect_enter(glib::clone!(
+            #[weak]
+            window,
+            move |_| window.set_active_view(index, false)
+        ));
+        view.tabs.add_controller(focus);
+        // So does a click on its tab strip, but not on the menu or the window controls at its
+        // ends.
+        let click = gtk::GestureClick::new();
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        click.connect_pressed(glib::clone!(
+            #[weak]
+            window,
+            move |gesture, _, x, y| {
+                let layout = &window.inner.layout;
+                let ends = [&layout.start, &layout.end];
+                let on_ends = gesture
+                    .widget()
+                    .and_then(|bar| bar.pick(x, y, gtk::PickFlags::DEFAULT))
+                    .is_some_and(|target| {
+                        ends.iter().any(|end| {
+                            target == *end.upcast_ref::<gtk::Widget>() || target.is_ancestor(*end)
+                        })
+                    });
+                if !on_ends {
+                    window.set_active_view(index, true);
                 }
-            ));
-            view.bar.add_controller(click);
-        }
+            }
+        ));
+        view.bar.add_controller(click);
     }
+}
 
+impl Window {
     /// Synchronised scrolling for a new tab's view.
     pub(in crate::window) fn connect_page_split(&self, page: &EditorPage) {
         let view = page.view();
@@ -96,11 +96,11 @@ impl Window {
                 continue;
             };
             adjustment.connect_value_changed(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
+                #[weak(rename_to = window)]
+                self,
                 #[weak]
                 page,
-                move |adjustment| Window { inner }.on_scrolled(&page, vertical, adjustment.value())
+                move |adjustment| window.on_scrolled(&page, vertical, adjustment.value())
             ));
         }
     }
@@ -172,16 +172,17 @@ impl Window {
         if other.start_action_widget().is_some() {
             other.set_start_action_widget(None::<&gtk::Widget>);
         }
+        let (start, end) = (&inner.layout.start, &inner.layout.end);
         let bar = &inner.views[first].bar;
         if bar.start_action_widget().is_none() {
-            bar.set_start_action_widget(Some(&inner.start));
+            bar.set_start_action_widget(Some(start));
         }
         let trail = &inner.views[last].trail;
-        if inner.end.parent().as_ref() != Some(trail.upcast_ref()) {
-            if let Some(other) = inner.end.parent().and_downcast::<gtk::Box>() {
-                other.remove(&inner.end);
+        if end.parent().as_ref() != Some(trail.upcast_ref()) {
+            if let Some(other) = end.parent().and_downcast::<gtk::Box>() {
+                other.remove(end);
             }
-            trail.append(&inner.end);
+            trail.append(end);
         }
         let split = counts.iter().all(|count| *count > 0);
         if split && !was_split {
@@ -200,7 +201,7 @@ impl Window {
     fn place_divider(&self) {
         let inner = &self.inner;
         let width = [
-            inner.views_paned.width(),
+            inner.layout.views_paned.width(),
             inner.window.width(),
             inner.window.default_width(),
         ]
@@ -213,6 +214,7 @@ impl Window {
             .take()
             .filter(|position| *position > 0 && *position < width);
         inner
+            .layout
             .views_paned
             .set_position(restored.unwrap_or(width / 2));
     }
@@ -221,7 +223,7 @@ impl Window {
     #[cfg(feature = "selftest")]
     pub fn set_split_position(&self, position: i32) {
         if self.is_split() {
-            self.inner.views_paned.set_position(position);
+            self.inner.layout.views_paned.set_position(position);
         } else {
             self.inner.split.position.set(Some(position));
         }
@@ -230,7 +232,7 @@ impl Window {
     /// The divider's position while the window is split, else 0.
     pub fn split_position(&self) -> i32 {
         if self.is_split() {
-            self.inner.views_paned.position()
+            self.inner.layout.views_paned.position()
         } else {
             0
         }
@@ -312,9 +314,10 @@ impl Window {
         if pinned {
             source.set_page_pinned(&tab_page, false);
         }
-        inner.moving.set(true);
-        source.transfer_page(&tab_page, target, target.n_pages());
-        inner.moving.set(false);
+        {
+            let _moving = inner.tabs.moving();
+            source.transfer_page(&tab_page, target, target.n_pages());
+        }
         if pinned {
             target.set_page_pinned(&tab_page, true);
         }
@@ -402,7 +405,7 @@ impl Window {
 
     fn on_scrolled(&self, page: &EditorPage, vertical: bool, value: f64) {
         let split = &self.inner.split;
-        if split.syncing.get() {
+        if split.syncing.is_raised() {
             return;
         }
         let Some(index) = self.view_of(page) else {
@@ -435,9 +438,10 @@ impl Window {
             adjustment.value() + (value - last)
         };
         let upper = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
-        split.syncing.set(true);
-        adjustment.set_value(target.clamp(adjustment.lower(), upper));
-        split.syncing.set(false);
+        {
+            let _syncing = split.syncing.raise();
+            adjustment.set_value(target.clamp(adjustment.lower(), upper));
+        }
         split.last[1 - index][axis].set(adjustment.value());
     }
 }

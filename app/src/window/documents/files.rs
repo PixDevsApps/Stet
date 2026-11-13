@@ -8,12 +8,15 @@ use crate::editor::{DocState, EditorPage};
 use crate::runtime::worker;
 use crate::window::dialogs::{LongLineChoice, Purpose, UnmappableChoice};
 use crate::window::{Location, Window};
-use gtk4::gio;
+use gtk4 as gtk;
+use gtk4::{gdk, gio, glib};
 use sourceview5::prelude::*;
-use std::path::{Path, PathBuf};
+use std::ffi::OsString;
+use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 use stet_domain::document::language as hints;
 use stet_domain::document::language::HEAD_BYTES;
+use stet_domain::document::location::{self, LineCol};
 use stet_domain::document::{MIB, ReadOnly, TextOrigin, Unwritable, indent};
 use stet_domain::ops::pretty::{self, FormatKind};
 use stet_domain::text::{
@@ -110,7 +113,48 @@ impl Window {
     }
 }
 
+/// Files dropped on the window open as tabs.
+pub(in crate::window) fn connect(window: &Window) {
+    let drop = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
+    drop.set_propagation_phase(gtk::PropagationPhase::Capture);
+    drop.connect_drop(glib::clone!(
+        #[weak]
+        window,
+        #[upgrade_or]
+        false,
+        move |_, value, _, _| match value.get::<gdk::FileList>() {
+            Ok(files) => window.drop_files(files.files()),
+            Err(_) => false,
+        }
+    ));
+    window.inner.window.add_controller(drop);
+}
+
 impl Window {
+    /// Opens files from a command line: `args` as typed, relative to `cwd`, with `-n`/`-c`.
+    /// Paths are resolved on a worker, since `file:line` needs a look at the disk. Returns the
+    /// tabs, for `--wait`.
+    pub async fn open_command_line(
+        &self,
+        cwd: PathBuf,
+        args: Vec<OsString>,
+        line: Option<u32>,
+        column: Option<u32>,
+    ) -> Vec<EditorPage> {
+        if args.is_empty() {
+            return Vec::new();
+        }
+        let default = location::from_options(line, column);
+        let locations = worker::run(move || {
+            args.iter()
+                .map(|arg| resolve_argument(&cwd, arg, default))
+                .collect::<Vec<_>>()
+        })
+        .await
+        .unwrap_or_default();
+        self.open_locations(locations)
+    }
+
     /// Opens `locations` as tabs, or selects the tabs that show them already, and returns
     /// those tabs in order.
     pub fn open_locations(&self, locations: Vec<Location>) -> Vec<EditorPage> {
@@ -201,11 +245,7 @@ impl Window {
             }
             return;
         }
-        let caret = Caret::Open(
-            location
-                .position
-                .map(stet_domain::document::location::LineCol::position),
-        );
+        let caret = Caret::Open(location.position.map(LineCol::position));
         if !self.fill(&page, read, TextOrigin::File, caret).await {
             if self.tab_page(&page).is_some() {
                 self.close_without_prompt(&page);
@@ -363,6 +403,15 @@ impl Window {
         }
         self.open_locations(locations);
         true
+    }
+
+    async fn save_all(&self) {
+        for page in self.documents() {
+            if Self::has_unsaved_changes(&page) {
+                self.select(&page);
+                self.save(&page).await;
+            }
+        }
     }
 
     pub(in crate::window) async fn open_with_dialog(&self) {
@@ -663,5 +712,76 @@ fn open_error(name: &str, error: &LoadError) -> String {
             *size as f64 / MIB as f64
         ),
         LoadError::Io { source, .. } => format!("Could not read “{name}”: {source}"),
+    }
+}
+
+/// One command-line argument: the literal path when it exists; otherwise a `:line[:col]`
+/// suffix is split off (ADR-011, CLI).
+fn resolve_argument(cwd: &Path, arg: &OsString, default: Option<LineCol>) -> Location {
+    let literal = absolute(cwd, Path::new(arg));
+    if literal.exists() {
+        return Location {
+            path: literal,
+            position: default,
+            create: true,
+        };
+    }
+    if let Some((path, position)) = arg.to_str().and_then(location::split_location) {
+        return Location {
+            path: absolute(cwd, Path::new(path)),
+            position: Some(position),
+            create: true,
+        };
+    }
+    Location {
+        path: literal,
+        position: default,
+        create: true,
+    }
+}
+
+/// `path` made absolute against `cwd`, without `.` components. `..` stays, as symlinks make
+/// it meaningful.
+fn absolute(cwd: &Path, path: &Path) -> PathBuf {
+    let joined = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    joined
+        .components()
+        .filter(|component| *component != Component::CurDir)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn arguments_prefer_the_literal_path() {
+        let dir = std::env::temp_dir().join(format!("stet-args-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("b.txt"), "x").unwrap();
+        fs::write(dir.join("odd:12"), "x").unwrap();
+
+        let located = resolve_argument(&dir, &OsString::from("b.txt:40"), None);
+        assert_eq!(located.path, dir.join("b.txt"));
+        assert_eq!(located.position, Some(LineCol::new(40, None)));
+
+        let located = resolve_argument(&dir, &OsString::from("odd:12"), None);
+        assert_eq!(located.path, dir.join("odd:12"));
+        assert_eq!(located.position, None);
+
+        let default = Some(LineCol::new(5, None));
+        let located = resolve_argument(&dir, &OsString::from("./b.txt"), default);
+        assert_eq!(located.path, dir.join("b.txt"));
+        assert_eq!(located.position, default);
+
+        let located = resolve_argument(&dir, &OsString::from("/abs/new.rs:3:4"), None);
+        assert_eq!(located.path, PathBuf::from("/abs/new.rs"));
+        assert_eq!(located.position, Some(LineCol::new(3, Some(4))));
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -1,9 +1,12 @@
-//! The tabs, the views and moving between them: the tab strip's menu and the commands behind it
+//! The tabs, the views and moving between them: the tabs as editor pages ([`pages`]), closing
+//! and restoring them ([`closing`]), the tab strip's menu and the commands behind it
 //! ([`tabs`]), pinned tabs ([`pins`]), the split view ([`split`]), the View menu's window-wide
 //! commands ([`view`]), the Ctrl+Tab switcher and the jumps back and forward ([`nav`]), and
 //! quick open ([`quick_open`]).
 
+pub(super) mod closing;
 pub(super) mod nav;
+pub(super) mod pages;
 pub(super) mod pins;
 pub(super) mod quick_open;
 pub(super) mod split;

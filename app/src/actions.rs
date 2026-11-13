@@ -48,11 +48,11 @@ pub fn install_window_actions(window: &Window) {
     {
         let action = simple_action(id);
         action.connect_activate(glib::clone!(
-            #[weak(rename_to = inner)]
-            window.inner,
+            #[weak]
+            window,
             move |_, parameter| {
                 let parameter = parameter.and_then(glib::Variant::get::<String>);
-                Window { inner }.run_action(id, parameter);
+                window.run_action(id, parameter);
             }
         ));
         window.register_action(id, action);

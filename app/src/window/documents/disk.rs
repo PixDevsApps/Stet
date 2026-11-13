@@ -13,6 +13,7 @@ use crate::runtime::worker;
 use crate::window::Window;
 use crate::window::documents::files::Caret;
 use crate::window::snapshot::{PageSnapshot, Stale};
+use gtk4::glib;
 use gtk4::prelude::*;
 use std::io;
 use std::path::PathBuf;
@@ -42,6 +43,20 @@ enum Reloaded {
     Full(ReadFile),
 }
 
+/// File systems without change events (network mounts) are checked when the window gets the
+/// focus.
+pub(in crate::window) fn connect(window: &Window) {
+    window.inner.window.connect_is_active_notify(glib::clone!(
+        #[weak]
+        window,
+        move |toplevel| {
+            if toplevel.is_active() {
+                window.check_all_files();
+            }
+        }
+    ));
+}
+
 impl Window {
     /// Watches `page`'s file from now on, replacing an earlier watch.
     pub(in crate::window) fn watch_file(&self, page: &EditorPage) {
@@ -49,11 +64,10 @@ impl Window {
             page.set_watch(None);
             return;
         };
-        let inner = std::rc::Rc::downgrade(&self.inner);
+        let window = self.downgrade();
         let weak = page.downgrade();
         let watch = FileWatch::start(&path, move || {
-            if let (Some(inner), Some(page)) = (inner.upgrade(), weak.upgrade()) {
-                let window = Window { inner };
+            if let (Some(window), Some(page)) = (window.upgrade(), weak.upgrade()) {
                 let target = window.clone();
                 window.spawn(async move { target.check_files(vec![page]).await });
             }
@@ -317,7 +331,7 @@ impl Window {
             let mut first = true;
             for piece in text_chunks(&edit.insert, CHUNK_BYTES) {
                 if !first {
-                    gtk4::glib::timeout_future(crate::editor::load::CHUNK_INTERVAL).await;
+                    glib::timeout_future(crate::editor::load::CHUNK_INTERVAL).await;
                 }
                 first = false;
                 let mut at = buffer.iter_at_mark(&mark);

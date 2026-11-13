@@ -1,6 +1,7 @@
 //! The language picker: a filterable list of GtkSourceView's languages, opened from the status
 //! bar or with "Set Language…".
 
+use crate::editor::EditorPage;
 use crate::window::Window;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -264,7 +265,29 @@ pub(in crate::window) enum LanguageCommand {
     Set(Option<String>),
 }
 
+/// A language chosen in the picker goes to the current document.
+pub(in crate::window) fn connect(window: &Window) {
+    window.inner.languages.connect_chosen(glib::clone!(
+        #[weak]
+        window,
+        move |id| {
+            if let Some(page) = window.current_page() {
+                window.set_language(&page, id.as_deref());
+                page.view().grab_focus();
+            }
+        }
+    ));
+}
+
 impl Window {
+    pub fn set_language(&self, page: &EditorPage, id: Option<&str>) {
+        let language = id.and_then(|id| sourceview5::LanguageManager::default().language(id));
+        page.set_language(language.as_ref());
+        self.refresh_indentation(page);
+        self.refresh_banners(page);
+        self.update_status();
+    }
+
     /// Runs a language command.
     pub(in crate::window) fn run_language(&self, command: LanguageCommand) {
         match command {

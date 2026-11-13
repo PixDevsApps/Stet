@@ -56,19 +56,18 @@ impl Window {
         dialog.add_response("close", "Cancel");
         dialog.set_extra_child(Some(&adw::Spinner::new()));
         dialog.connect_closed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
+            #[weak(rename_to = window)]
+            self,
             move |dialog| {
-                let window = Window { inner };
                 window.inner.updates.open.set(false);
-                let ours = window.inner.dialog.borrow().as_ref() == Some(dialog);
+                let ours = window.inner.messages.dialog.borrow().as_ref() == Some(dialog);
                 if ours {
-                    window.inner.dialog.replace(None);
+                    window.inner.messages.dialog.replace(None);
                 }
                 window.restore_focus_later();
             }
         ));
-        self.inner.dialog.replace(Some(dialog.clone()));
+        self.inner.messages.dialog.replace(Some(dialog.clone()));
         dialog.present(Some(&self.inner.window));
         let keymap = self.keymap();
         let window = self.clone();
@@ -77,7 +76,7 @@ impl Window {
                 crate::runtime::worker::run(move || stet_infrastructure::updates::latest(&url))
                     .await
                     .unwrap_or(Err(UpdateError::Offline));
-            if window.inner.dialog.borrow().as_ref() != Some(&dialog) {
+            if window.inner.messages.dialog.borrow().as_ref() != Some(&dialog) {
                 return;
             }
             let answer = updates::answer(running(), result, &keymap);

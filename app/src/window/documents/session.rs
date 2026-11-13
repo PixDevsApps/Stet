@@ -33,7 +33,6 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::io;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use stet_domain::document::banners::BannerKind;
@@ -777,12 +776,11 @@ impl Window {
             page.hide_banner(BannerKind::Restore);
             return;
         }
-        let inner = Rc::downgrade(&self.inner);
+        let window = self.downgrade();
         let weak = page.downgrade();
         let dismiss = BannerButton::new("Dismiss", move || {
-            if let (Some(inner), Some(page)) = (inner.upgrade(), weak.upgrade()) {
+            if let (Some(window), Some(page)) = (window.upgrade(), weak.upgrade()) {
                 page.update_session(|session| session.lost_changes = false);
-                let window = Window { inner };
                 window.restore_banner(&page);
                 window.restore_focus_later();
             }
@@ -810,12 +808,12 @@ impl Window {
             return;
         };
         tracing::info!(seconds = every.as_secs(), "backups on");
-        let weak = Rc::downgrade(&self.inner);
+        let weak = self.downgrade();
         let source = glib::timeout_add_local(every, move || {
-            let Some(inner) = weak.upgrade() else {
+            let Some(window) = weak.upgrade() else {
                 return glib::ControlFlow::Break;
             };
-            Window { inner }.commit_session(false);
+            window.commit_session(false);
             glib::ControlFlow::Continue
         });
         self.inner.session.tick.replace(Some(source));
@@ -1295,7 +1293,7 @@ impl Window {
         self.inner.window.set_visible(false);
         self.end_session().await;
         self.answer_waits();
-        self.inner.closing_window.set(true);
+        self.inner.tabs.set_closing_window();
         self.inner.window.destroy();
     }
 

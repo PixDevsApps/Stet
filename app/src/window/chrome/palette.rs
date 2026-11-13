@@ -1,14 +1,16 @@
 //! The command palette (F1, Ctrl+Shift+P): every palette-visible action from the registry
 //! with its menu path and keys, the recent files, and `:line[:col]` to go to a line.
 
+use crate::actions;
 use crate::convert::to_i32;
+use crate::window::Window;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
-use stet_domain::actions::ActionId;
+use stet_domain::actions::{Accelerator, ActionId, ActionKind};
 use stet_domain::document::location::{LineCol, parse_line_col};
 use stet_domain::fuzzy;
 
@@ -266,4 +268,104 @@ fn row(item: &Item) -> gtk::ListBoxRow {
     .collect();
     row.update_property(&[gtk::accessible::Property::Label(&spoken.join(", "))]);
     row
+}
+
+/// The palette runs its commands through the window.
+pub(in crate::window) fn connect(window: &Window) {
+    window.inner.palette.connect_command(glib::clone!(
+        #[weak]
+        window,
+        move |command| window.run_palette_command(command)
+    ));
+}
+
+impl Window {
+    pub fn open_palette(&self, text: &str) {
+        let items = self.palette_items();
+        self.inner
+            .palette
+            .open(&self.inner.layout.content, items, text);
+    }
+
+    fn palette_items(&self) -> Vec<Item> {
+        let keymap = self.keymap();
+        // Pin Tab and Unpin Tab: only the one that applies.
+        let applies = |id: ActionId| {
+            !matches!(id, ActionId::PinTab | ActionId::UnpinTab)
+                || self.action(id).is_some_and(|action| action.is_enabled())
+        };
+        let mut items: Vec<Item> = ActionId::ALL
+            .into_iter()
+            .filter(|id| id.spec().palette && applies(*id) && actions::available(*id))
+            .map(|id| {
+                let on = id.kind() == ActionKind::Toggle
+                    && self
+                        .action(id)
+                        .and_then(|action| action.state())
+                        .and_then(|state| state.get::<bool>())
+                        .unwrap_or(false);
+                Item {
+                    label: if on {
+                        format!("{} (on)", id.label())
+                    } else {
+                        id.label().to_owned()
+                    },
+                    detail: id.menu_path().unwrap_or_default(),
+                    keys: keymap
+                        .keys(id)
+                        .iter()
+                        .filter_map(|key| Accelerator::parse(key))
+                        .map(|accel| accel.display())
+                        .collect::<Vec<_>>()
+                        .join("  "),
+                    command: Command::Action(id),
+                }
+            })
+            .collect();
+        let home = std::env::home_dir();
+        items.extend(self.inner.shared.recent().paths().iter().map(|path| {
+            let name = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            let dir = path
+                .parent()
+                .map(|dir| stet_domain::document::tilde(dir, home.as_deref()))
+                .unwrap_or_default();
+            Item {
+                label: name,
+                detail: format!("Open Recent › {dir}"),
+                keys: String::new(),
+                command: Command::OpenRecent(path.clone()),
+            }
+        }));
+        items
+    }
+
+    fn run_palette_command(&self, command: Command) {
+        match command {
+            Command::Action(id) => {
+                let name = actions::detailed_name(id);
+                if let Err(error) = WidgetExt::activate_action(&self.inner.window, &name, None) {
+                    tracing::warn!(%error, name, "palette action failed");
+                }
+            }
+            Command::OpenRecent(path) => {
+                if let Some(path) = path.to_str() {
+                    let _ = WidgetExt::activate_action(
+                        &self.inner.window,
+                        &actions::detailed_name(ActionId::OpenRecent),
+                        Some(&path.to_variant()),
+                    );
+                }
+            }
+            Command::GoTo(target) => {
+                if let Some(page) = self.current_page() {
+                    self.note_jump();
+                    page.go_to(target.position());
+                    page.view().grab_focus();
+                }
+            }
+        }
+    }
 }

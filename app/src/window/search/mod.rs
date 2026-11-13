@@ -48,6 +48,12 @@ pub enum SearchCommand {
     CloseResults,
 }
 
+/// The find bar's and the results panel's own signals.
+pub(super) fn connect(window: &Window) {
+    find::connect(window);
+    results::connect(window);
+}
+
 impl Window {
     /// The find bar's commands and the results panel's.
     pub fn run_search(&self, command: SearchCommand) {

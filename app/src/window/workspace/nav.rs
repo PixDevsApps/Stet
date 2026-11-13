@@ -21,7 +21,7 @@
 use crate::convert::to_i32;
 use crate::editor::EditorPage;
 use crate::editor::load::JUMP_LOAD_WAIT;
-use crate::runtime::Debounce;
+use crate::runtime::{Debounce, Flag};
 use crate::window::Window;
 use crate::window::workspace::quick_open::QuickOpen;
 use gtk4 as gtk;
@@ -140,7 +140,7 @@ pub struct Nav {
     /// The tab shown last: a switch to another tab records its caret as the place left.
     shown: glib::WeakRef<EditorPage>,
     /// Back or forward is moving the caret; that is not a jump to record.
-    navigating: Cell<bool>,
+    navigating: Flag,
     ctrl_held: Cell<bool>,
     show_pending: Debounce,
     pub switcher: Switcher,
@@ -166,7 +166,7 @@ impl Nav {
             mru: RefCell::new(Mru::new()),
             history: RefCell::new(History::new()),
             shown: glib::WeakRef::new(),
-            navigating: Cell::new(false),
+            navigating: Flag::default(),
             ctrl_held: Cell::new(false),
             show_pending: Debounce::default(),
             switcher: Switcher::new(),
@@ -197,6 +197,49 @@ pub(in crate::window) enum NavCommand {
     Forward,
 }
 
+/// The Ctrl+Tab keys, the mouse's back and forward buttons, and quick open.
+pub(in crate::window) fn connect(window: &Window) {
+    let inner = &window.inner;
+    let nav = &inner.nav;
+    inner.window.add_controller(nav.keys.clone());
+    nav.keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        window,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, _| window.on_nav_key_pressed(key)
+    ));
+    nav.keys.connect_key_released(glib::clone!(
+        #[weak]
+        window,
+        move |_, key, _, _| window.on_nav_key_released(key)
+    ));
+    for (gesture, back) in [(&nav.back_button, true), (&nav.forward_button, false)] {
+        gesture.connect_pressed(glib::clone!(
+            #[weak]
+            window,
+            move |gesture, _, _, _| {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                window.mouse_navigation(back);
+            }
+        ));
+        inner.window.add_controller(gesture.clone());
+    }
+    inner.window.connect_is_active_notify(glib::clone!(
+        #[weak]
+        window,
+        move |toplevel| {
+            if !toplevel.is_active() {
+                window.inner.nav.ctrl_held.set(false);
+                if window.inner.nav.mru.borrow().is_switching() {
+                    window.cancel_switch();
+                }
+            }
+        }
+    ));
+    super::quick_open::connect(window);
+}
+
 impl Window {
     /// Runs a navigation command.
     pub(in crate::window) fn run_nav(&self, command: NavCommand) {
@@ -210,67 +253,24 @@ impl Window {
 }
 
 impl Window {
-    pub(in crate::window) fn connect_nav(&self) {
-        let inner = &self.inner;
-        let nav = &inner.nav;
-        inner.window.add_controller(nav.keys.clone());
-        nav.keys.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_, key, _, _| Window { inner }.on_nav_key_pressed(key)
-        ));
-        nav.keys.connect_key_released(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_, key, _, _| Window { inner }.on_nav_key_released(key)
-        ));
-        for (gesture, back) in [(&nav.back_button, true), (&nav.forward_button, false)] {
-            gesture.connect_pressed(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |gesture, _, _, _| {
-                    gesture.set_state(gtk::EventSequenceState::Claimed);
-                    Window { inner }.mouse_navigation(back);
-                }
-            ));
-            inner.window.add_controller(gesture.clone());
-        }
-        inner.window.connect_is_active_notify(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |window| {
-                if !window.is_active() {
-                    let window = Window { inner };
-                    window.inner.nav.ctrl_held.set(false);
-                    if window.inner.nav.mru.borrow().is_switching() {
-                        window.cancel_switch();
-                    }
-                }
-            }
-        ));
-        self.connect_quick_open();
-    }
-
     /// A new tab: it joins the switcher's order at the end until it is shown, its edits move
     /// the history's places along, and an untitled tab follows its first line.
     pub(in crate::window) fn on_nav_page_attached(&self, page: &EditorPage) {
         self.inner.nav.mru.borrow_mut().add_last(page.clone());
         let buffer = page.buffer();
         buffer.connect_insert_text(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
+            #[weak(rename_to = window)]
+            self,
             #[weak]
             page,
             move |_, iter, text| {
                 let at = usize::try_from(iter.offset()).unwrap_or(0);
-                Window { inner }.remap_history(&page, at, || TextEdit::insert(at, text));
+                window.remap_history(&page, at, || TextEdit::insert(at, text));
             }
         ));
         buffer.connect_delete_range(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
+            #[weak(rename_to = window)]
+            self,
             #[weak]
             page,
             move |_, start, end| {
@@ -278,17 +278,17 @@ impl Window {
                     usize::try_from(start.offset()).unwrap_or(0),
                     usize::try_from(end.offset()).unwrap_or(0),
                 );
-                Window { inner }.remap_history(&page, start, || TextEdit::delete(start..end));
+                window.remap_history(&page, start, || TextEdit::delete(start..end));
             }
         ));
         buffer.connect_changed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
+            #[weak(rename_to = window)]
+            self,
             #[weak]
             page,
             move |_| {
                 if page.path().is_none() && page.first_line_changed() {
-                    Window { inner }.refresh_page(&page);
+                    window.refresh_page(&page);
                 }
             }
         ));
@@ -321,7 +321,7 @@ impl Window {
         nav.shown.set(Some(&page));
         if let Some(previous) = previous
             && previous != page
-            && !nav.navigating.get()
+            && !nav.navigating.is_raised()
             && self.tab_page(&previous).is_some()
         {
             self.record_place(&previous);
@@ -341,7 +341,7 @@ impl Window {
 
     fn record_place(&self, page: &EditorPage) {
         let nav = &self.inner.nav;
-        if nav.navigating.get() || page.is_loading() || page.session().stub.is_some() {
+        if nav.navigating.is_raised() || page.is_loading() || page.session().stub.is_some() {
             return;
         }
         nav.history
@@ -389,9 +389,10 @@ impl Window {
     /// Shows the tab of `place` and puts the caret there, once a restored tab has loaded.
     fn go_to_place(&self, place: Location<EditorPage>) {
         let nav = &self.inner.nav;
-        nav.navigating.set(true);
-        self.select(&place.doc);
-        nav.navigating.set(false);
+        {
+            let _navigating = nav.navigating.raise();
+            self.select(&place.doc);
+        }
         let window = self.clone();
         self.spawn(async move {
             let page = place.doc;
@@ -406,11 +407,12 @@ impl Window {
             let offset = i32::try_from(place.offset)
                 .unwrap_or(i32::MAX)
                 .min(buffer.char_count());
-            window.inner.nav.navigating.set(true);
-            buffer.place_cursor(&buffer.iter_at_offset(offset));
-            page.view()
-                .scroll_to_mark(&buffer.get_insert(), 0.1, false, 0.0, 0.0);
-            window.inner.nav.navigating.set(false);
+            {
+                let _navigating = window.inner.nav.navigating.raise();
+                buffer.place_cursor(&buffer.iter_at_offset(offset));
+                page.view()
+                    .scroll_to_mark(&buffer.get_insert(), 0.1, false, 0.0, 0.0);
+            }
             window.restore_focus();
         });
     }
@@ -458,12 +460,12 @@ impl Window {
         }
         self.refresh_switcher();
         if !nav.switcher.is_shown() && !nav.show_pending.is_pending() {
-            let weak = Rc::downgrade(&self.inner);
+            let weak = self.downgrade();
             nav.show_pending.schedule(SWITCHER_DELAY, move || {
-                if let Some(inner) = weak.upgrade()
-                    && inner.nav.mru.borrow().is_switching()
+                if let Some(window) = weak.upgrade()
+                    && window.inner.nav.mru.borrow().is_switching()
                 {
-                    inner.nav.switcher.root.set_visible(true);
+                    window.inner.nav.switcher.root.set_visible(true);
                 }
             });
         }

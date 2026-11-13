@@ -16,6 +16,33 @@ use stet_domain::settings::keymap::default_keys_file;
 use stet_domain::settings::{Keymap, Settings, default_config_file};
 use stet_infrastructure::settings_files::create_if_missing;
 
+/// Applies what is loaded now, then every later change.
+pub(in crate::window) fn connect(window: &Window) {
+    let preferences = window.inner.shared.preferences.clone();
+    let mut problems = Vec::new();
+    for (file, errors) in [
+        (stet_domain::settings::CONFIG_FILE, &preferences.errors()[0]),
+        (stet_domain::settings::KEYS_FILE, &preferences.errors()[1]),
+    ] {
+        if let Some(first) = errors.first() {
+            problems.push(format!("{file} not applied: {first}"));
+        }
+    }
+    window.apply_preferences(
+        &Update {
+            settings_before: None,
+            keymap_changed: true,
+            problems,
+        },
+        true,
+    );
+    preferences.connect_changed(glib::clone!(
+        #[weak]
+        window,
+        move |update| window.apply_preferences(update, false)
+    ));
+}
+
 impl Window {
     /// The settings in use.
     pub fn settings(&self) -> Settings {
@@ -25,33 +52,6 @@ impl Window {
     /// The keymap in use.
     pub fn keymap(&self) -> Keymap {
         self.inner.shared.preferences.keymap()
-    }
-
-    /// Applies what is loaded now, then every later change.
-    pub(in crate::window) fn connect_preferences(&self) {
-        let preferences = self.inner.shared.preferences.clone();
-        let mut problems = Vec::new();
-        for (file, errors) in [
-            (stet_domain::settings::CONFIG_FILE, &preferences.errors()[0]),
-            (stet_domain::settings::KEYS_FILE, &preferences.errors()[1]),
-        ] {
-            if let Some(first) = errors.first() {
-                problems.push(format!("{file} not applied: {first}"));
-            }
-        }
-        self.apply_preferences(
-            &Update {
-                settings_before: None,
-                keymap_changed: true,
-                problems,
-            },
-            true,
-        );
-        preferences.connect_changed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |update| Window { inner }.apply_preferences(update, false)
-        ));
     }
 
     fn apply_preferences(&self, update: &Update, initial: bool) {
@@ -214,9 +214,9 @@ impl Window {
             dialog.add(section);
         }
         dialog.connect_closed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_| Window { inner }.restore_focus_later()
+            #[weak(rename_to = window)]
+            self,
+            move |_| window.restore_focus_later()
         ));
         dialog.present(Some(&self.inner.window));
     }

@@ -9,6 +9,34 @@ use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::prelude::*;
 
+/// The main menu is built when it opens (`Window::rebuild_menu`); it and the editors'
+/// context menus name their items when they open; the tab menu does from its setup
+/// (`tabs.rs`).
+pub(in crate::window) fn connect(window: &Window) {
+    window
+        .inner
+        .layout
+        .menu_button
+        .set_create_popup_func(glib::clone!(
+            #[weak]
+            window,
+            move |_| window.ensure_menu()
+        ));
+    window
+        .inner
+        .layout
+        .menu_button
+        .connect_active_notify(glib::clone!(
+            #[weak]
+            window,
+            move |button| {
+                if button.is_active() {
+                    window.name_menu_items_soon();
+                }
+            }
+        ));
+}
+
 impl Window {
     /// Names the menu items under the window once the menu that is opening has its widgets.
     pub(in crate::window) fn name_menu_items_soon(&self) {
@@ -19,26 +47,6 @@ impl Window {
         });
     }
 
-    /// The main menu is built when it opens (`Window::rebuild_menu`); it and the editors'
-    /// context menus name their items when they open; the tab menu does from its setup
-    /// (`tabs.rs`).
-    pub(in crate::window) fn connect_menu_names(&self) {
-        self.inner.menu_button.set_create_popup_func(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_| Window { inner }.ensure_menu()
-        ));
-        self.inner.menu_button.connect_active_notify(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |button| {
-                if button.is_active() {
-                    Window { inner }.name_menu_items_soon();
-                }
-            }
-        ));
-    }
-
     /// A right click on an editor opens GtkTextView's context menu.
     pub(in crate::window) fn connect_editor_menu_names(&self, view: &gtk::Widget) {
         let click = gtk::GestureClick::builder()
@@ -46,9 +54,9 @@ impl Window {
             .propagation_phase(gtk::PropagationPhase::Capture)
             .build();
         click.connect_pressed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_, _, _, _| Window { inner }.name_menu_items_soon()
+            #[weak(rename_to = window)]
+            self,
+            move |_, _, _, _| window.name_menu_items_soon()
         ));
         view.add_controller(click);
     }

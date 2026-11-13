@@ -4,13 +4,16 @@
 //! encoding picker), the indentation (a button that opens its popover) and INS/OVR; while two
 //! documents are compared, the comparison's summary.
 
+use crate::convert::{BufferPositions, IterPosition, to_usize};
 use crate::editor::EditorPage;
 use crate::runtime::Debounce;
 use crate::window::Window;
+use crate::window::documents::encoding::format_labels;
 use crate::window::snapshot::{PageSnapshot, run_sized};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gio, glib};
+use sourceview5::prelude::*;
 use std::cell::RefCell;
 use std::time::Duration;
 use stet_domain::text::plural;
@@ -242,6 +245,64 @@ impl StatusBar {
 }
 
 impl Window {
+    /// Shows the current tab's position, length, indentation, language, encoding, line
+    /// endings and INS/OVR, and gives the encoding picker its encoding.
+    pub fn update_status(&self) {
+        let Some(page) = self.current_page() else {
+            return;
+        };
+        let buffer = page.buffer();
+        let view = page.view();
+        let cursor = buffer.iter_at_mark(&buffer.get_insert());
+        let (selected, lines) = buffer.selection_bounds().map_or((0, 0), |(start, end)| {
+            let last = if end.line() > start.line() && end.starts_line() {
+                end.line() - 1
+            } else {
+                end.line()
+            };
+            (
+                end.char_offset() - start.char_offset(),
+                to_usize(last - start.line() + 1),
+            )
+        });
+        let status = &self.inner.status;
+        match page.column_view().rect() {
+            Some(rect) => status.set_column_position(
+                rect.cursor.line + 1,
+                rect.cursor.column + 1,
+                rect.lines().len(),
+                rect.width(),
+            ),
+            None => status.set_position(
+                cursor.line_number() + 1,
+                view.visual_column(&cursor) as usize + 1,
+                selected,
+                lines,
+            ),
+        }
+        status.set_length(buffer.total_lines(), buffer.total_chars());
+        status.set_indentation(&page.indentation().label());
+        if status.words_shown() {
+            self.update_word_count(&page);
+        }
+        status.set_language(&page.language().map_or_else(
+            || "Plain Text".to_owned(),
+            |language| language.name().to_string(),
+        ));
+        let state = page.state();
+        let (encoding, eol) = format_labels(&state.save.format, state.eol.mixed);
+        status.set_eol(eol);
+        status.set_encoding(&encoding);
+        status.set_overwrite(view.overwrites());
+        self.inner.encodings.prepare(
+            stet_infrastructure::encoding::entry_for(
+                state.save.format.encoding,
+                state.save.format.bom,
+            ),
+            state.path.is_some(),
+        );
+    }
+
     /// The status bar's word count (config.toml's `word_count`): counted 250 ms after the
     /// text last changed, on a worker for a large document; not in large-file mode.
     pub(in crate::window) fn update_word_count(&self, page: &EditorPage) {

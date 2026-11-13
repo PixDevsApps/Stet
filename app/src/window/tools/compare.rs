@@ -351,9 +351,9 @@ impl Window {
         for page in [&new, &old] {
             let buffer = page.buffer();
             let handler = buffer.connect_changed(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |_| Window { inner }.schedule_recompare()
+                #[weak(rename_to = window)]
+                self,
+                move |_| window.schedule_recompare()
             ));
             handlers.push((buffer, handler));
             for view in page.document_pages() {
@@ -374,13 +374,13 @@ impl Window {
 
     /// Runs the comparison again shortly after the last edit.
     fn schedule_recompare(&self) {
-        let weak = Rc::downgrade(&self.inner);
+        let weak = self.downgrade();
         self.inner
             .comparing
             .pending
             .schedule(RECOMPARE_DELAY, move || {
-                if let Some(inner) = weak.upgrade() {
-                    Window { inner }.recompare();
+                if let Some(window) = weak.upgrade() {
+                    window.recompare();
                 }
             });
     }
@@ -470,10 +470,10 @@ impl Window {
             &clock,
             |clock, run| clock.connect_after_paint(run),
             glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
+                #[weak(rename_to = window)]
+                self,
                 move |_| {
-                    let state = &inner.comparing;
+                    let state = &window.inner.comparing;
                     if ticket.is_current()
                         && let Some(mut run) = state.last.get()
                     {
@@ -502,12 +502,11 @@ impl Window {
 
     /// Puts the other view level with the active one, once both are laid out.
     fn level_views(&self) {
-        let weak = Rc::downgrade(&self.inner);
+        let weak = self.downgrade();
         glib::idle_add_local_once(move || {
-            let Some(inner) = weak.upgrade() else {
+            let Some(window) = weak.upgrade() else {
                 return;
             };
-            let window = Window { inner };
             if !window.comparison_shown() {
                 return;
             }

@@ -1,7 +1,9 @@
-//! Routes every registry action to the window feature that runs it. The match below has no
-//! wildcard: a new [`ActionId`] does not compile until it is routed here, and each feature
-//! matches its own command enum exhaustively.
+//! The window's actions: registered once for every window-scoped [`ActionId`], routed to the
+//! window feature that runs each, and enabled when they have something to act on. The match
+//! below has no wildcard: a new [`ActionId`] does not compile until it is routed here, and each
+//! feature matches its own command enum exhaustively.
 
+use super::SessionPhase;
 use super::Window;
 use super::chrome::language::LanguageCommand;
 use super::documents::encoding::{EncodingCommand, FixedEncoding};
@@ -17,12 +19,82 @@ use super::workspace::split::SplitCommand;
 use super::workspace::tabs::{TabCommand, TabTool};
 use super::workspace::view::ViewCommand;
 use crate::editor::column::Motion;
+use gtk4::gio;
+use gtk4::prelude::*;
 use std::path::PathBuf;
 use stet_domain::actions::ActionId;
+use stet_domain::document::ReadOnly;
 use stet_domain::marks::MarkStyle;
 use stet_domain::text::Eol;
 
 impl Window {
+    /// Adds `action`, the window's action for `id`, to the window.
+    pub(crate) fn register_action(&self, id: ActionId, action: gio::SimpleAction) {
+        self.inner.window.add_action(&action);
+        self.inner.actions.borrow_mut().insert(id, action);
+    }
+
+    /// The window's action for `id`; `None` for an application-scoped one.
+    pub fn action(&self, id: ActionId) -> Option<gio::SimpleAction> {
+        self.inner.actions.borrow().get(&id).cloned()
+    }
+
+    /// Enables the actions that have something to act on.
+    pub(in crate::window) fn update_actions(&self) {
+        let has_closed = self.inner.tabs.has_closed();
+        let has_recent = !self.inner.shared.recent().is_empty();
+        let page = self.current_page();
+        let ready = page.as_ref().is_some_and(|page| !page.is_loading());
+        let on_disk = ready && page.as_ref().is_some_and(|page| page.path().is_some());
+        let convertible = ready
+            && page
+                .as_ref()
+                .is_some_and(|page| page.read_only() != Some(ReadOnly::DisplayBreaks));
+        let mut enabled = vec![
+            (ActionId::RestoreClosedTab, has_closed),
+            (ActionId::ClearRecent, has_recent),
+            (ActionId::ReloadFromDisk, on_disk),
+            (
+                ActionId::ForgetDrafts,
+                self.session_phase() == SessionPhase::On,
+            ),
+        ];
+        enabled.extend(
+            [
+                ActionId::EncodeUtf8,
+                ActionId::EncodeUtf8Bom,
+                ActionId::EncodeUtf16BeBom,
+                ActionId::EncodeUtf16LeBom,
+                ActionId::Reinterpret,
+            ]
+            .map(|id| (id, on_disk)),
+        );
+        enabled.extend(
+            [
+                ActionId::ConvertToAnsi,
+                ActionId::ConvertToUtf8,
+                ActionId::ConvertToUtf8Bom,
+                ActionId::ConvertToUtf16BeBom,
+                ActionId::ConvertToUtf16LeBom,
+                ActionId::ConvertEncoding,
+                ActionId::EolCrLf,
+                ActionId::EolLf,
+                ActionId::EolCr,
+            ]
+            .map(|id| (id, convertible)),
+        );
+        for (id, enabled) in enabled {
+            if let Some(action) = self.action(id) {
+                action.set_enabled(enabled);
+            }
+        }
+        self.update_tab_actions();
+        self.update_pin_actions();
+        self.update_mark_actions();
+        self.update_split_actions();
+        self.update_compare_actions();
+    }
+
     /// Runs a window action. `param` is the string parameter of `WithString` actions.
     pub fn run_action(&self, id: ActionId, param: Option<String>) {
         // Column mode closes its typing burst first, and ends for actions that don't know

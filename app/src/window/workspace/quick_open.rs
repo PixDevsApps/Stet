@@ -744,21 +744,22 @@ fn rank_loop(requests: &mpsc::Receiver<RankRequest>, replies: &async_channel::Se
     }
 }
 
-impl Window {
-    pub(in crate::window) fn connect_quick_open(&self) {
-        let quick_open = &self.inner.nav.quick_open;
-        quick_open.connect_choose(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |choice| Window { inner }.quick_open_chosen(choice)
-        ));
-        quick_open.popover.connect_closed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_| Window { inner }.restore_focus_later()
-        ));
-    }
+/// A file chosen in quick open opens; the focus goes back when it closes.
+pub(in crate::window) fn connect(window: &Window) {
+    let quick_open = &window.inner.nav.quick_open;
+    quick_open.connect_choose(glib::clone!(
+        #[weak]
+        window,
+        move |choice| window.quick_open_chosen(choice)
+    ));
+    quick_open.popover.connect_closed(glib::clone!(
+        #[weak]
+        window,
+        move |_| window.restore_focus_later()
+    ));
+}
 
+impl Window {
     /// Quick Open (Ctrl+P), with `text` in its field.
     pub fn open_quick_open(&self, text: &str) {
         self.open_quick_open_from(text, None);
@@ -804,7 +805,7 @@ impl Window {
                 .and_then(|path| path.parent().map(Path::to_path_buf))
         });
         let quick_open = Rc::clone(&self.inner.nav.quick_open);
-        let parent: gtk::Widget = self.inner.content.clone().upcast();
+        let parent: gtk::Widget = self.inner.layout.content.clone().upcast();
         match folder {
             Some(folder) => {
                 // Finding the project root looks at the disk: on a worker, then the popup.

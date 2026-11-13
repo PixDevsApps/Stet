@@ -6,9 +6,10 @@
 //! Probes that need a feature's private state live with that feature, in a
 //! `#[cfg(feature = "selftest")]` block at the end of its module.
 
+use super::layout::ViewPane;
 use super::text::toolbox::ToolStats;
 use super::workspace::quick_open::QuickOpenStats;
-use super::{BarMode, IndentChoice, PickerMode, Shared, ViewPane, Window};
+use super::{BarMode, IndentChoice, PickerMode, Shared, Window};
 use crate::convert::to_i32;
 use crate::editor::search::Compiled;
 use gtk4 as gtk;
@@ -121,24 +122,24 @@ impl Window {
     }
 
     pub fn closed_count(&self) -> usize {
-        self.inner.closed.borrow().len()
+        self.inner.tabs.closed_count()
     }
 
     // ----- the menu, popovers and dialogs ---------------------------------------------------
 
     pub fn menu_model(&self) -> Option<gio::MenuModel> {
         self.ensure_menu();
-        self.inner.menu_button.menu_model()
+        self.inner.layout.menu_button.menu_model()
     }
 
     /// The hamburger menu's button.
     pub fn menu_button(&self) -> &gtk::MenuButton {
-        &self.inner.menu_button
+        &self.inner.layout.menu_button
     }
 
     /// The view whose tab strip has the menu at its start.
     pub fn menu_view(&self) -> Option<usize> {
-        let start = self.inner.start.upcast_ref::<gtk::Widget>();
+        let start = self.inner.layout.start.upcast_ref::<gtk::Widget>();
         self.inner
             .views
             .iter()
@@ -193,12 +194,12 @@ impl Window {
 
     /// The alert dialog on screen, if any.
     pub fn open_dialog(&self) -> Option<adw::AlertDialog> {
-        self.inner.dialog.borrow().clone()
+        self.inner.messages.dialog.borrow().clone()
     }
 
     /// The text of the last toast.
     pub fn last_toast(&self) -> String {
-        self.inner.last_toast.borrow().clone()
+        self.inner.messages.last_toast.borrow().clone()
     }
 
     pub fn close_palette(&self) {

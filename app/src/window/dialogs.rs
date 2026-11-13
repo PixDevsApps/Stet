@@ -8,7 +8,7 @@ use gtk4 as gtk;
 use gtk4::{gio, glib};
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -71,17 +71,38 @@ const LISTED_UNMAPPABLE: usize = 20;
 /// The label of the buttons that go to a character in the unmappable dialog.
 pub const GO_TO_LABEL: &str = "Go To";
 
+/// What the window tells and asks the user: the toasts over it and the alert dialog on screen.
+pub(in crate::window) struct Messages {
+    pub(in crate::window) toasts: adw::ToastOverlay,
+    /// The alert dialog on screen, which the self-test finds and answers.
+    pub(in crate::window) dialog: RefCell<Option<adw::AlertDialog>>,
+    #[cfg(feature = "selftest")]
+    pub(in crate::window) last_toast: RefCell<String>,
+}
+
+impl Messages {
+    /// Toasts show over `toasts`.
+    pub(in crate::window) fn new(toasts: adw::ToastOverlay) -> Self {
+        Self {
+            toasts,
+            dialog: RefCell::new(None),
+            #[cfg(feature = "selftest")]
+            last_toast: RefCell::new(String::new()),
+        }
+    }
+}
+
 impl Window {
     /// Shows `dialog` until it is answered and returns the response id; the self-test finds
     /// it while it is open. Afterwards the editor gets the focus back, unless what the answer
     /// led to put it elsewhere.
     pub(super) async fn ask(&self, dialog: &adw::AlertDialog) -> String {
-        self.inner.dialog.replace(Some(dialog.clone()));
+        self.inner.messages.dialog.replace(Some(dialog.clone()));
         let answered = Rc::new(Cell::new(false));
         keep_focus_through_popover(dialog, answered.clone());
         let response = dialog.clone().choose_future(Some(&self.inner.window)).await;
         answered.set(true);
-        self.inner.dialog.replace(None);
+        self.inner.messages.dialog.replace(None);
         self.restore_focus_later();
         response.to_string()
     }
@@ -353,9 +374,9 @@ impl Window {
             .license_type(gtk::License::MitX11)
             .build();
         about.connect_closed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_| Window { inner }.restore_focus_later()
+            #[weak(rename_to = window)]
+            self,
+            move |_| window.restore_focus_later()
         ));
         about.present(Some(&self.inner.window));
     }
@@ -368,9 +389,9 @@ impl Window {
             .use_markup(false)
             .timeout(4)
             .build();
-        self.inner.toasts.add_toast(toast);
+        self.inner.messages.toasts.add_toast(toast);
         #[cfg(feature = "selftest")]
-        self.inner.last_toast.replace(message.to_owned());
+        self.inner.messages.last_toast.replace(message.to_owned());
     }
 }
 

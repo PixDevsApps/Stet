@@ -3,7 +3,9 @@
 
 use crate::editor::ViewSettings;
 use crate::window::Window;
+use gtk4::glib;
 use gtk4::prelude::*;
+use stet_domain::actions::ActionId;
 use stet_domain::view::Zoom;
 
 /// The View menu's commands on the window.
@@ -16,6 +18,22 @@ pub(in crate::window) enum ViewCommand {
     ZoomOut,
     ZoomReset,
     FullScreen,
+}
+
+/// Full Screen's check mark follows the window, also when the compositor changes it.
+pub(in crate::window) fn connect(window: &Window) {
+    window
+        .inner
+        .window
+        .connect_fullscreened_notify(glib::clone!(
+            #[weak]
+            window,
+            move |toplevel| {
+                if let Some(action) = window.action(ActionId::FullScreen) {
+                    action.set_state(&toplevel.is_fullscreen().to_variant());
+                }
+            }
+        ));
 }
 
 impl Window {
@@ -49,6 +67,23 @@ impl Window {
         let mut settings = self.inner.settings.get();
         change(&mut settings);
         self.set_view_settings(settings);
+    }
+
+    /// Applies the window's view settings to every editor and the View menu's check marks.
+    pub(in crate::window) fn set_view_settings(&self, settings: ViewSettings) {
+        self.inner.settings.set(settings);
+        for page in self.pages() {
+            page.apply_settings(settings);
+        }
+        for (id, on) in [
+            (ActionId::WordWrap, settings.wrap),
+            (ActionId::ShowWhitespace, settings.whitespace),
+            (ActionId::DocumentMap, settings.map),
+        ] {
+            if let Some(action) = self.action(id) {
+                action.set_state(&on.to_variant());
+            }
+        }
     }
 
     fn set_zoom(&self, next: impl FnOnce(Zoom) -> Zoom) {

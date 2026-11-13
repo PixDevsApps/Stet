@@ -33,72 +33,70 @@ const OWN_REFRESH_DELAY: Duration = Duration::from_millis(150);
 /// The same in large-file mode, where taking the snapshot itself is noticeable.
 const OWN_REFRESH_DELAY_LARGE: Duration = Duration::from_millis(1_000);
 
-impl Window {
-    /// Hooks the find bar's keys, query, buttons and folder chooser to the window.
-    pub(in crate::window) fn connect_find_bar(&self) {
-        let find = &self.inner.find;
-        find.connect_key(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |key| Window { inner }.on_bar_key(key)
-        ));
-        find.connect_query_changed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |incremental| Window { inner }.on_query_changed(incremental)
-        ));
-        find.connect_wrap_toggled(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move || Window { inner }.sync_search_highlight()
-        ));
-        find.connect_step(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |forward| Window { inner }.find_step(forward)
-        ));
-        find.connect_close(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move || Window { inner }.hide_find()
-        ));
-        find.connect_command(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |command| {
-                let window = Window { inner };
-                match command {
-                    BarCommand::Count => window.run_search(SearchCommand::Count),
-                    BarCommand::FindAllInDocument => {
-                        window.run_search(SearchCommand::FindAllInDocument);
-                    }
-                    BarCommand::FindAllInOpenDocuments => {
-                        window.run_search(SearchCommand::FindAllInOpenDocuments);
-                    }
-                    BarCommand::ReplaceNext => window.run_search(SearchCommand::ReplaceNext),
-                    BarCommand::ReplaceAll => window.run_search(SearchCommand::ReplaceAll),
-                    BarCommand::ReplaceAllInOpenDocuments => {
-                        window.run_search(SearchCommand::ReplaceAllInOpenDocuments);
-                    }
-                    BarCommand::FindInFiles => window.start_find_in_files(),
-                    BarCommand::ReplaceInFiles => window.run_search(SearchCommand::ReplaceInFiles),
-                    BarCommand::MarkAll => window.run_mark(MarkCommand::MarkAll),
-                    BarCommand::ClearMarks => window.run_mark(MarkCommand::ClearMarks),
-                    BarCommand::CopyMarkedText => window.run_mark(MarkCommand::CopyMarkedText),
+/// Hooks the find bar's keys, query, buttons and folder chooser to the window.
+pub(in crate::window) fn connect(window: &Window) {
+    let find = &window.inner.find;
+    find.connect_key(glib::clone!(
+        #[weak]
+        window,
+        move |key| window.on_bar_key(key)
+    ));
+    find.connect_query_changed(glib::clone!(
+        #[weak]
+        window,
+        move |incremental| window.on_query_changed(incremental)
+    ));
+    find.connect_wrap_toggled(glib::clone!(
+        #[weak]
+        window,
+        move || window.sync_search_highlight()
+    ));
+    find.connect_step(glib::clone!(
+        #[weak]
+        window,
+        move |forward| window.find_step(forward)
+    ));
+    find.connect_close(glib::clone!(
+        #[weak]
+        window,
+        move || window.hide_find()
+    ));
+    find.connect_command(glib::clone!(
+        #[weak]
+        window,
+        move |command| {
+            match command {
+                BarCommand::Count => window.run_search(SearchCommand::Count),
+                BarCommand::FindAllInDocument => {
+                    window.run_search(SearchCommand::FindAllInDocument);
                 }
+                BarCommand::FindAllInOpenDocuments => {
+                    window.run_search(SearchCommand::FindAllInOpenDocuments);
+                }
+                BarCommand::ReplaceNext => window.run_search(SearchCommand::ReplaceNext),
+                BarCommand::ReplaceAll => window.run_search(SearchCommand::ReplaceAll),
+                BarCommand::ReplaceAllInOpenDocuments => {
+                    window.run_search(SearchCommand::ReplaceAllInOpenDocuments);
+                }
+                BarCommand::FindInFiles => window.start_find_in_files(),
+                BarCommand::ReplaceInFiles => window.run_search(SearchCommand::ReplaceInFiles),
+                BarCommand::MarkAll => window.run_mark(MarkCommand::MarkAll),
+                BarCommand::ClearMarks => window.run_mark(MarkCommand::ClearMarks),
+                BarCommand::CopyMarkedText => window.run_mark(MarkCommand::CopyMarkedText),
             }
-        ));
-        find.connect_browse(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move || {
-                let window = Window { inner };
-                let clone = window.clone();
-                window.spawn(async move { clone.choose_search_folder().await });
-            }
-        ));
-    }
+        }
+    ));
+    find.connect_browse(glib::clone!(
+        #[weak]
+        window,
+        move || {
+            let clone = window.clone();
+            window.spawn(async move { clone.choose_search_folder().await });
+        }
+    ));
+}
 
+impl Window {
     /// Enter in a field runs its command; Escape closes the bar.
     fn on_bar_key(&self, key: FieldKey) {
         let mode = self.inner.find.bar_mode();
@@ -189,16 +187,16 @@ impl Window {
         let (context, created) = page.search().context(&page.buffer());
         if created {
             context.connect_occurrences_count_notify(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
-                move |_| Window { inner }.update_match_count()
+                #[weak(rename_to = window)]
+                self,
+                move |_| window.update_match_count()
             ));
             context.connect_regex_error_notify(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
+                #[weak(rename_to = window)]
+                self,
                 move |context| {
                     if let Some(error) = context.regex_error() {
-                        Window { inner }
+                        window
                             .inner
                             .find
                             .set_message(&error.to_string(), Tone::Error);
@@ -322,19 +320,18 @@ impl Window {
     pub(in crate::window) fn connect_page_search(&self, page: &EditorPage) {
         let buffer = page.buffer();
         buffer.connect_changed(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
+            #[weak(rename_to = window)]
+            self,
             #[weak]
             page,
-            move |_| Window { inner }.on_buffer_changed(&page)
+            move |_| window.on_buffer_changed(&page)
         ));
         buffer.connect_mark_set(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
+            #[weak(rename_to = window)]
+            self,
             #[weak]
             page,
             move |_, _, mark| {
-                let window = Window { inner };
                 match mark.name().as_deref() {
                     Some("insert") => {
                         window.on_caret_moved(&page);
@@ -347,11 +344,11 @@ impl Window {
         ));
         if let Some(adjustment) = page.view().vadjustment() {
             adjustment.connect_value_changed(glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
+                #[weak(rename_to = window)]
+                self,
                 #[weak]
                 page,
-                move |_| Window { inner }.on_editor_scrolled(&page)
+                move |_| window.on_editor_scrolled(&page)
             ));
         }
     }

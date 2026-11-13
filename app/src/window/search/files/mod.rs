@@ -164,11 +164,11 @@ impl Window {
         glib::timeout_add_local(
             DRAIN_INTERVAL,
             glib::clone!(
-                #[weak(rename_to = inner)]
-                self.inner,
+                #[weak(rename_to = window)]
+                self,
                 #[upgrade_or]
                 glib::ControlFlow::Break,
-                move || Window { inner }.drain::<F>(&ticket)
+                move || window.drain::<F>(&ticket)
             ),
         );
     }

@@ -6,12 +6,13 @@
 
 use crate::convert::to_i32;
 use crate::editor::{EditorPage, IndentSource};
+use crate::runtime::Flag;
 use crate::window::Window;
 use crate::window::text::toolbox::Reach;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::prelude::*;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 use stet_domain::document::indent::{self, Indentation};
 use stet_domain::ops::lines::{self, Scope};
@@ -37,7 +38,7 @@ pub struct IndentPicker {
     spaces: gtk::ToggleButton,
     tabs: gtk::ToggleButton,
     widths: Vec<(u32, gtk::ToggleButton)>,
-    showing: Cell<bool>,
+    showing: Flag,
     on_chosen: RefCell<Option<OnChosen>>,
 }
 
@@ -90,7 +91,7 @@ impl IndentPicker {
             spaces,
             tabs,
             widths,
-            showing: Cell::new(false),
+            showing: Flag::default(),
             on_chosen: RefCell::new(None),
         });
         let toggled = |picker: &Rc<Self>, button: &gtk::ToggleButton, choice: IndentChoice| {
@@ -98,7 +99,7 @@ impl IndentPicker {
             button.connect_toggled(move |button| {
                 if let Some(picker) = weak.upgrade()
                     && button.is_active()
-                    && !picker.showing.get()
+                    && !picker.showing.is_raised()
                 {
                     picker.emit(choice);
                 }
@@ -137,7 +138,7 @@ impl IndentPicker {
 
     /// Shows `indentation` in the toggles without choosing anything.
     pub fn show(&self, indentation: Indentation) {
-        self.showing.set(true);
+        let _showing = self.showing.raise();
         if indentation.insert_spaces {
             self.spaces.set_active(true);
         } else {
@@ -146,7 +147,6 @@ impl IndentPicker {
         for (width, button) in &self.widths {
             button.set_active(*width == indentation.tab_width);
         }
-        self.showing.set(false);
     }
 
     /// Chooses as a click would, for the self-test.
@@ -176,27 +176,26 @@ impl IndentPicker {
     }
 }
 
-impl Window {
-    /// The status bar's popover shows the current document's indentation and changes it.
-    pub(in crate::window) fn connect_indentation(&self) {
-        let picker = &self.inner.indentation;
-        picker.connect_chosen(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |choice| Window { inner }.indent_chosen(choice)
-        ));
-        picker.popover.connect_show(glib::clone!(
-            #[weak(rename_to = inner)]
-            self.inner,
-            move |_| {
-                let window = Window { inner };
-                if let Some(page) = window.current_page() {
-                    window.inner.indentation.show(page.indentation());
-                }
+/// The status bar's popover shows the current document's indentation and changes it.
+pub(in crate::window) fn connect(window: &Window) {
+    let picker = &window.inner.indentation;
+    picker.connect_chosen(glib::clone!(
+        #[weak]
+        window,
+        move |choice| window.indent_chosen(choice)
+    ));
+    picker.popover.connect_show(glib::clone!(
+        #[weak]
+        window,
+        move |_| {
+            if let Some(page) = window.current_page() {
+                window.inner.indentation.show(page.indentation());
             }
-        ));
-    }
+        }
+    ));
+}
 
+impl Window {
     /// The indentation `page` gets from the settings, for its language.
     pub(in crate::window) fn default_indentation(&self, page: &EditorPage) -> Indentation {
         let language = page.language().map(|language| language.id().to_string());

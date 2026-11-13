@@ -98,11 +98,11 @@ pub fn open(window: &Window, view: &StetView) {
     let editor = Rc::new(EditorDialog::new(view));
     editor.load(&LAST.with(|last| last.borrow().clone()).unwrap_or_default());
     editor.connect();
-    let weak = Rc::downgrade(&window.inner);
+    let weak = window.downgrade();
     editor.dialog.connect_closed(move |_| {
         OPEN.with(RefCell::take);
-        if let Some(inner) = weak.upgrade() {
-            Window { inner }.restore_focus_later();
+        if let Some(window) = weak.upgrade() {
+            window.restore_focus_later();
         }
     });
     OPEN.with(|open| open.replace(Some(editor.clone())));

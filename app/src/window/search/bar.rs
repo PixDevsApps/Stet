@@ -6,6 +6,7 @@
 
 use crate::convert::to_u32;
 use crate::editor::search::Compiled;
+use crate::runtime::Flag;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib, pango};
@@ -294,7 +295,7 @@ pub struct FindBar {
     recalls: RefCell<[Recall; 4]>,
     /// The text each field's history walk last put in, so that only other edits end the walk.
     recalled: RefCell<[Option<String>; 4]>,
-    recalling: Cell<bool>,
+    recalling: Flag,
 }
 
 fn toggle(label: &str, tooltip: &str) -> gtk::ToggleButton {
@@ -603,7 +604,7 @@ impl FindBar {
             history: RefCell::new(SearchHistory::default()),
             recalls: RefCell::new(Default::default()),
             recalled: RefCell::new(Default::default()),
-            recalling: Cell::new(false),
+            recalling: Flag::default(),
         });
         bar.connect_own();
         bar
@@ -944,9 +945,10 @@ impl FindBar {
             Some(text) => {
                 self.recalled.borrow_mut()[field.index()] = Some(text.clone());
                 // Setting the text deletes the old one first; neither change ends the walk.
-                self.recalling.set(true);
-                editable.set_text(&text);
-                self.recalling.set(false);
+                {
+                    let _recalling = self.recalling.raise();
+                    editable.set_text(&text);
+                }
                 editable.set_position(-1);
                 true
             }
@@ -956,7 +958,7 @@ impl FindBar {
 
     /// A field's text changed: unless the history walk put it there, the walk ends.
     fn field_changed(&self, field: Field) {
-        if self.recalling.get() {
+        if self.recalling.is_raised() {
             return;
         }
         let text = self.editable(field).text();

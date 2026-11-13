@@ -749,8 +749,8 @@ impl Window {
                 signal,
                 false,
                 glib::clone!(
-                    #[weak(rename_to = inner)]
-                    self.inner,
+                    #[weak(rename_to = window)]
+                    self,
                     #[weak]
                     page,
                     #[upgrade_or]
@@ -760,7 +760,6 @@ impl Window {
                         if page.buffer().has_selection() || page.column_view().rect().is_some() {
                             return None;
                         }
-                        let window = Window { inner };
                         if cut {
                             window.run_text_tool(TextTool::CutLine);
                         } else {

@@ -8,7 +8,7 @@
 //! - [`column`](mod@column): column mode and rectangular selections.
 //! - [`diff`]: comparing two documents.
 //! - [`marks`]: bookmarks, marked lines and the token styles.
-//! - [`nav`]: the tab switcher, position history, recent files and quick open.
+//! - [`nav`]: the tab switcher, position history, recent files, closed tabs and quick open.
 //! - [`fuzzy`]: the fuzzy matcher that quick open, the palette and the pickers rank with.
 //! - [`session`]: the tabs and window state that `session.json` keeps, and the backup policy.
 //! - [`settings`]: `config.toml` and the keymap in `keys.toml`.

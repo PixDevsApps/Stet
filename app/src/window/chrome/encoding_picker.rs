@@ -3,11 +3,14 @@
 //! in). A popover of its own rather than a menu: a menu's submenus are pages named by their
 //! labels, so the same groups under Reinterpret and Convert would collide.
 
+use crate::actions;
+use crate::window::Window;
 use gtk4 as gtk;
 use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use stet_domain::actions::ActionId;
 use stet_domain::fuzzy;
 use stet_infrastructure::encoding::{ENCODINGS, EncodingEntry};
 
@@ -306,4 +309,27 @@ impl EncodingPicker {
         self.choose(&row);
         true
     }
+}
+
+/// An encoding chosen in the picker runs through Reinterpret or Convert's action, so that
+/// their enablement applies.
+pub(in crate::window) fn connect(window: &Window) {
+    window.inner.encodings.connect_chosen(glib::clone!(
+        #[weak]
+        window,
+        move |mode, entry| {
+            let id = match mode {
+                PickerMode::Reinterpret => ActionId::Reinterpret,
+                PickerMode::Convert => ActionId::ConvertEncoding,
+            };
+            let _ = WidgetExt::activate_action(
+                &window.inner.window,
+                &actions::detailed_name(id),
+                Some(&entry.id().to_variant()),
+            );
+            if let Some(page) = window.current_page() {
+                page.view().grab_focus();
+            }
+        }
+    ));
 }
