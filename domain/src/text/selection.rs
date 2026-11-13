@@ -143,10 +143,10 @@ mod tests {
     proptest! {
         #[test]
         fn mapped_selections_stay_in_the_new_text((len, edits, a, b) in edits_and_offsets()) {
-            let new_len = edits.iter().fold(len as isize, |len, edit| len + edit.delta());
+            let new_len = edits.iter().fold(len.cast_signed(), |len, edit| len + edit.delta());
             for selection in [Selection { cursor: a, anchor: b }, caret(a)] {
                 let mapped = selection.map(&edits);
-                prop_assert!(mapped.range().end as isize <= new_len, "{mapped:?} past {new_len}");
+                prop_assert!(mapped.range().end.cast_signed() <= new_len, "{mapped:?} past {new_len}");
                 if !mapped.range().is_empty() {
                     prop_assert_eq!(mapped.is_backward(), selection.is_backward());
                 }
@@ -169,7 +169,7 @@ mod tests {
             if offset <= edit.start {
                 prop_assert_eq!(mapped, offset);
             } else if offset >= edit.end {
-                prop_assert_eq!(mapped as isize, offset as isize + edit.delta());
+                prop_assert_eq!(mapped.cast_signed(), offset.cast_signed() + edit.delta());
             } else {
                 prop_assert_eq!(mapped, edit.start);
             }

@@ -489,7 +489,7 @@ proptest! {
         let first = index.line_chars(lines.start).start;
         let window = &text[index.line_bytes(lines.start).start..index.line_bytes(lines.end - 1).end];
         let window_index = LineIndex::new(window);
-        let shift = lines.start as isize;
+        let shift = isize::try_from(lines.start).unwrap();
         let local = type_text(window, &window_index, rect.shift_lines(-shift), &typed, tab).unwrap();
         let whole = type_text(&text, &index, rect, &typed, tab).unwrap();
         let moved: Vec<_> = local

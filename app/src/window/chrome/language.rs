@@ -194,7 +194,9 @@ impl LanguagePicker {
             .and_then(|row| visible.iter().position(|visible| **visible == row));
         let next = match current {
             None => 0,
-            Some(index) => (index as i32 + step).clamp(0, visible.len() as i32 - 1) as usize,
+            Some(index) => index
+                .saturating_add_signed(step as isize)
+                .min(visible.len() - 1),
         };
         self.list.select_row(Some(visible[next]));
         scroll_to(&self.scrolled, &self.list, visible[next]);

@@ -249,7 +249,8 @@ fn command_line_received(
             } else {
                 command_line.print_literal(&text);
             }
-            return glib::ExitCode::from(error.exit_code() as u8);
+            return u8::try_from(error.exit_code())
+                .map_or(glib::ExitCode::FAILURE, glib::ExitCode::from);
         }
     };
     #[cfg(feature = "selftest")]

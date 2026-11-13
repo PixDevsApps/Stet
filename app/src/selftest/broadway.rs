@@ -194,7 +194,12 @@ impl Client {
         let words = [*event, i64::from(self.serial), 0]
             .into_iter()
             .chain(args.iter().copied());
-        let payload: Vec<u8> = words.flat_map(|word| (word as i32).to_be_bytes()).collect();
+        let payload: Vec<u8> = words
+            .flat_map(|word| {
+                let [.., a, b, c, d] = word.to_be_bytes();
+                [a, b, c, d]
+            })
+            .collect();
         let mask = [0x6e, 0x6f, 0x74, 0x65];
         let length = u8::try_from(payload.len()).map_err(|_| invalid("event too long"))?;
         let mut frame = vec![0x82, 0x80 | length];

@@ -12,6 +12,7 @@
 //! - **Style tokens** mark every occurrence of the selection, or of the word at the caret as a
 //!   whole word, case-sensitively, in one of five styles.
 
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::EditorPage;
 use crate::editor::edits;
 use crate::runtime::worker;
@@ -117,7 +118,7 @@ impl Window {
             }
             MarkCommand::InverseBookmarks => {
                 if let Some(page) = self.current_page() {
-                    let lines = page.buffer().line_count().max(1) as usize;
+                    let lines = page.buffer().total_lines();
                     page.set_bookmarks(&page.bookmarks().inverted(lines));
                     self.update_mark_actions();
                 }
@@ -177,7 +178,7 @@ impl Window {
             return;
         };
         let buffer = page.buffer();
-        let line = buffer.iter_at_mark(&buffer.get_insert()).line().max(0) as usize;
+        let line = buffer.iter_at_mark(&buffer.get_insert()).line_number();
         page.toggle_bookmark(line);
         self.update_mark_actions();
     }
@@ -190,7 +191,7 @@ impl Window {
         };
         let bookmarks = page.bookmarks();
         let buffer = page.buffer();
-        let line = buffer.iter_at_mark(&buffer.get_insert()).line().max(0) as usize;
+        let line = buffer.iter_at_mark(&buffer.get_insert()).line_number();
         let target = if forward {
             bookmarks.next(line)
         } else {
@@ -201,7 +202,7 @@ impl Window {
             return;
         };
         self.note_jump();
-        if let Some(iter) = buffer.iter_at_line(target as i32) {
+        if let Some(iter) = buffer.iter_at_line_number(target) {
             buffer.place_cursor(&iter);
             page.view()
                 .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);
@@ -564,8 +565,8 @@ impl Window {
             .map(|range| {
                 buffer
                     .text(
-                        &buffer.iter_at_offset(range.start as i32),
-                        &buffer.iter_at_offset(range.end as i32),
+                        &buffer.iter_at_char_offset(range.start),
+                        &buffer.iter_at_char_offset(range.end),
                         true,
                     )
                     .to_string()

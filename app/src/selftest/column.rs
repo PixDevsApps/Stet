@@ -4,6 +4,7 @@
 
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number};
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::column::{StetView, dialog, keys};
 use crate::sys::accessible_text;
 use gtk4 as gtk;
@@ -167,8 +168,9 @@ impl Harness {
             "add-source-mark" => self.page().and_then(|page| {
                 let buffer = page.buffer();
                 let line = number(arg(0))?;
-                let iter = buffer
-                    .iter_at_line(line as i32 - 1)
+                let iter = line
+                    .checked_sub(1)
+                    .and_then(|line| buffer.iter_at_line_number(line))
                     .ok_or_else(|| format!("there is no line {line}"))?;
                 buffer.create_source_mark(None, MARK_CATEGORY, &iter);
                 Ok(())
@@ -237,9 +239,13 @@ impl Harness {
             "assert-visible-line" => self.column_view().and_then(|view| {
                 let line = number(arg(0))?;
                 let visible = view.visible_rect();
-                let top = view.line_at_y(visible.y()).0.line() + 1;
-                let bottom = view.line_at_y(visible.y() + visible.height()).0.line() + 1;
-                if (top..=bottom).contains(&(line as i32)) {
+                let top = view.line_at_y(visible.y()).0.line_number() + 1;
+                let bottom = view
+                    .line_at_y(visible.y() + visible.height())
+                    .0
+                    .line_number()
+                    + 1;
+                if (top..=bottom).contains(&line) {
                     Ok(())
                 } else {
                     Err(format!("lines {top} to {bottom} are visible, not {line}"))
@@ -600,8 +606,8 @@ impl Harness {
         )?;
         let (selected, count, ranges, _) = accessible_text::probe_selection(&view, true);
         let wanted = vec![(
-            start.offset() as usize,
-            (end.offset() - start.offset()) as usize,
+            start.char_offset(),
+            end.char_offset().saturating_sub(start.char_offset()),
         )];
         equal(
             "selection (with ranges)",

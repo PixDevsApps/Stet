@@ -45,7 +45,7 @@ impl TextEdit {
 
     /// How many characters longer the text is after this edit.
     pub fn delta(&self) -> isize {
-        self.insert.chars().count() as isize - (self.end - self.start) as isize
+        self.insert.chars().count().cast_signed() - (self.end - self.start).cast_signed()
     }
 }
 
@@ -141,7 +141,7 @@ pub fn map_offset(offset: usize, edits: &[TextEdit], bias: Bias) -> usize {
             break;
         }
         if offset < edit.end || (offset == edit.end && edit.start == edit.end) {
-            let start = (edit.start as isize + shift) as usize;
+            let start = edit.start.saturating_add_signed(shift);
             return match bias {
                 Bias::Before => start,
                 Bias::After => start + edit.insert.chars().count(),
@@ -149,7 +149,7 @@ pub fn map_offset(offset: usize, edits: &[TextEdit], bias: Bias) -> usize {
         }
         shift += edit.delta();
     }
-    (offset as isize + shift) as usize
+    offset.saturating_add_signed(shift)
 }
 
 /// The one edit that turns `old` into `new` by replacing only what lies between their common

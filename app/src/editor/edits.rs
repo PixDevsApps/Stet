@@ -3,6 +3,7 @@
 //! span from the first edit to the last (ADR-003 amendment). The caret and the selection are
 //! mapped through the edits.
 
+use crate::convert::{BufferPositions, IterPosition};
 use gtk4::prelude::*;
 use std::ops::Range;
 use std::time::{Duration, Instant};
@@ -27,7 +28,7 @@ pub struct Applied {
 
 /// The buffer's caret and selection.
 fn read_selection(buffer: &sourceview5::Buffer) -> Selection {
-    let offset = |mark: &gtk4::TextMark| buffer.iter_at_mark(mark).offset() as usize;
+    let offset = |mark: &gtk4::TextMark| buffer.iter_at_mark(mark).char_offset();
     Selection {
         cursor: offset(&buffer.get_insert()),
         anchor: offset(&buffer.selection_bound()),
@@ -35,8 +36,8 @@ fn read_selection(buffer: &sourceview5::Buffer) -> Selection {
 }
 
 fn restore_selection(buffer: &sourceview5::Buffer, selection: Selection) {
-    let cursor = buffer.iter_at_offset(selection.cursor as i32);
-    let anchor = buffer.iter_at_offset(selection.anchor as i32);
+    let cursor = buffer.iter_at_char_offset(selection.cursor);
+    let anchor = buffer.iter_at_char_offset(selection.anchor);
     buffer.select_range(&cursor, &anchor);
 }
 
@@ -159,9 +160,9 @@ pub fn apply_change(buffer: &sourceview5::Buffer, change: &Change, text: &str) -
 /// Replaces one range; returns how long the deletion took.
 pub fn replace_range(buffer: &sourceview5::Buffer, edit: &TextEdit) -> Duration {
     let started = Instant::now();
-    let mut start = buffer.iter_at_offset(edit.start as i32);
+    let mut start = buffer.iter_at_char_offset(edit.start);
     if edit.end > edit.start {
-        let mut end = buffer.iter_at_offset(edit.end as i32);
+        let mut end = buffer.iter_at_char_offset(edit.end);
         buffer.delete(&mut start, &mut end);
     }
     let deleted = started.elapsed();

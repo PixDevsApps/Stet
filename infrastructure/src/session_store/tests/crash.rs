@@ -266,7 +266,7 @@ fn kill_9_victim() {
         let mut next = Snapshot::default();
         for index in 0..6 {
             let id = format!("tab{index}");
-            let mut tab = untitled(&id, index as u32 + 1);
+            let mut tab = untitled(&id, u32::try_from(index).unwrap() + 1);
             if (step + index).is_multiple_of(5) {
                 tab.dirty = false;
                 tab.backup = None;

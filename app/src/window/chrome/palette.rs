@@ -1,6 +1,7 @@
 //! The command palette (F1, Ctrl+Shift+P): every palette-visible action from the registry
 //! with its menu path and keys, the recent files, and `:line[:col]` to go to a line.
 
+use crate::convert::to_i32;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, glib};
@@ -120,8 +121,11 @@ impl Palette {
 
     /// Runs the selected row, as Enter does.
     pub fn activate_selected(&self) {
-        let index = self.list.selected_row().map(|row| row.index());
-        let item = index.and_then(|index| self.shown.borrow().get(index as usize).cloned());
+        let index = self
+            .list
+            .selected_row()
+            .and_then(|row| usize::try_from(row.index()).ok());
+        let item = index.and_then(|index| self.shown.borrow().get(index).cloned());
         if let Some(item) = item {
             self.run(item.command);
         }
@@ -149,7 +153,9 @@ impl Palette {
         let weak = Rc::downgrade(self);
         self.list.connect_row_activated(move |_, row| {
             if let Some(palette) = weak.upgrade() {
-                let item = palette.shown.borrow().get(row.index() as usize).cloned();
+                let item = usize::try_from(row.index())
+                    .ok()
+                    .and_then(|index| palette.shown.borrow().get(index).cloned());
                 if let Some(item) = item {
                     palette.run(item.command);
                 }
@@ -207,7 +213,7 @@ impl Palette {
     }
 
     fn move_selection(&self, step: i32) {
-        let count = self.shown.borrow().len() as i32;
+        let count = to_i32(self.shown.borrow().len());
         if count == 0 {
             return;
         }

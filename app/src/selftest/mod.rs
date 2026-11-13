@@ -18,6 +18,7 @@ mod views;
 use crate::actions;
 use crate::application;
 use crate::config::{APP_ID, APP_ID_ENV, AppConfig};
+use crate::convert::{to_u32, unit_to_u8};
 use crate::editor::EditorPage;
 use crate::editor::tabstops;
 use crate::runtime::worker;
@@ -478,7 +479,7 @@ impl Harness {
                 }
             }
             "set-tab-width" => {
-                self.page()?.view().set_tab_width(number(arg(0))? as u32);
+                self.page()?.view().set_tab_width(to_u32(number(arg(0))?));
                 Ok(())
             }
             "toggle-overwrite" => {
@@ -1180,9 +1181,9 @@ echo "$name" > theme.name
                 let wanted = color(arg(0))?;
                 let rgba = self.window.status_color();
                 let actual = Rgb {
-                    r: (rgba.red() * 255.0).round() as u8,
-                    g: (rgba.green() * 255.0).round() as u8,
-                    b: (rgba.blue() * 255.0).round() as u8,
+                    r: unit_to_u8(rgba.red()),
+                    g: unit_to_u8(rgba.green()),
+                    b: unit_to_u8(rgba.blue()),
                 };
                 equal("status bar colour", actual.to_string(), wanted.to_string())
             }

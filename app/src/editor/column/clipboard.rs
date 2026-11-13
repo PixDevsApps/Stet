@@ -25,7 +25,7 @@ pub(super) fn copy(view: &StetView, cut: bool) -> bool {
     let block = copy_block(
         &text,
         &index,
-        rect.shift_lines(-(first as isize)),
+        rect.shift_lines(-first.cast_signed()),
         view.tab(),
     );
     set_block(&view.clipboard(), &block);

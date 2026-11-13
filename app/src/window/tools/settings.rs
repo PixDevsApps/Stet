@@ -79,10 +79,10 @@ impl Window {
         if initial || update.settings_before.is_some() {
             let settings = self.settings();
             let before = update.settings_before.clone().unwrap_or_default();
-            self.inner
-                .shared
-                .appearance
-                .set_font_settings(settings.font.clone(), settings.font_size as i32);
+            self.inner.shared.appearance.set_font_settings(
+                settings.font.clone(),
+                i32::try_from(settings.font_size).unwrap_or(i32::MAX),
+            );
             let mut view = self.inner.settings.get();
             if initial || before.word_wrap != settings.word_wrap {
                 view.wrap = settings.word_wrap;

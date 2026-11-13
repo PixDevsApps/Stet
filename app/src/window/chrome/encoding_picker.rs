@@ -259,7 +259,9 @@ impl EncodingPicker {
             .selected_row()
             .and_then(|selected| visible.iter().position(|row| **row == selected));
         let next = match at {
-            Some(index) => (index as i32 + delta).clamp(0, visible.len() as i32 - 1) as usize,
+            Some(index) => index
+                .saturating_add_signed(delta as isize)
+                .min(visible.len() - 1),
             None => 0,
         };
         if let Some(row) = visible.get(next) {

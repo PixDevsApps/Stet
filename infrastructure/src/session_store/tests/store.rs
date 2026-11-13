@@ -406,7 +406,7 @@ fn orphans_stay_until_adopted() {
         .orphans
         .iter()
         .partition(|orphan| orphan.text != "older lost text");
-    let tabs: Vec<TabRecord> = (1..=adopted.len() as u32)
+    let tabs: Vec<TabRecord> = (1..=u32::try_from(adopted.len()).unwrap())
         .map(|number| untitled(&format!("adopted{number}"), number))
         .collect();
     let backups = tabs

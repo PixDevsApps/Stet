@@ -5,6 +5,7 @@
 //! `GtkListView` over a `GtkTreeListModel` keeps large result sets cheap.
 
 use super::SearchCommand;
+use crate::convert::{to_u32, unit_to_u16};
 use crate::editor::EditorPage;
 use crate::editor::load::JUMP_LOAD_WAIT;
 use crate::window::{Location, Window};
@@ -328,17 +329,16 @@ impl ResultsPanel {
                     let hit = &file.hits[*index];
                     let attributes = pango::AttrList::new();
                     for range in &hit.match_ranges {
-                        let (start, end) = (range.start as u32, range.end as u32);
+                        let (start, end) = (to_u32(range.start), to_u32(range.end));
                         let mut weight = pango::AttrInt::new_weight(pango::Weight::Bold);
                         weight.set_start_index(start);
                         weight.set_end_index(end);
                         attributes.insert(weight);
                         if let Some(color) = self.match_color.get() {
-                            let channel = |value: f32| (value.clamp(0.0, 1.0) * 65535.0) as u16;
                             let mut background = pango::AttrColor::new_background(
-                                channel(color.red()),
-                                channel(color.green()),
-                                channel(color.blue()),
+                                unit_to_u16(color.red()),
+                                unit_to_u16(color.green()),
+                                unit_to_u16(color.blue()),
                             );
                             background.set_start_index(start);
                             background.set_end_index(end);
@@ -579,11 +579,11 @@ impl ResultsPanel {
             return;
         };
         search_row.set_expanded(true);
-        let Some(file_row) = search_row.child_row(file as u32) else {
+        let Some(file_row) = search_row.child_row(to_u32(file)) else {
             return;
         };
         file_row.set_expanded(true);
-        let Some(hit_row) = file_row.child_row(hit as u32) else {
+        let Some(hit_row) = file_row.child_row(to_u32(hit)) else {
             return;
         };
         let position = hit_row.position();
@@ -875,7 +875,7 @@ impl Window {
             path,
             position: Some(LineCol::new(
                 u32::try_from(jump.line).unwrap_or(u32::MAX),
-                Some(jump.column as u32 + 1),
+                Some(to_u32(jump.column + 1)),
             )),
             create: false,
         }]);

@@ -2,7 +2,10 @@
 
 /// Characters in `bytes`: the bytes that do not continue a UTF-8 sequence.
 pub fn count_chars(bytes: &[u8]) -> usize {
-    bytes.iter().filter(|&&byte| (byte as i8) >= -0x40).count()
+    bytes
+        .iter()
+        .filter(|&&byte| byte.cast_signed() >= -0x40)
+        .count()
 }
 
 /// The start of the character after the one at byte `at` (one past the end at the end).

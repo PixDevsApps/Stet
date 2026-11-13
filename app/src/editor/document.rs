@@ -7,6 +7,7 @@ use super::page::EditorPage;
 use super::search::{OWN_MATCH_TAG, PageSearch};
 use super::session::TabSession;
 use super::state::DocState;
+use crate::convert::IterPosition;
 use crate::monitor::FileWatch;
 use crate::runtime::{Debounce, Notify};
 use gtk4 as gtk;
@@ -126,16 +127,14 @@ impl Document {
         let weak = Rc::downgrade(document);
         buffer.connect_insert_text(move |_, iter, _| {
             if let Some(document) = weak.upgrade() {
-                document
-                    .pending_insert
-                    .set(Some(iter.offset().max(0) as usize));
+                document.pending_insert.set(Some(iter.char_offset()));
             }
         });
         let weak = Rc::downgrade(document);
         buffer.connect_local("insert-text", true, move |values| {
             let document = weak.upgrade()?;
             let start = document.pending_insert.take()?;
-            let end = values.get(1)?.get::<gtk::TextIter>().ok()?.offset().max(0) as usize;
+            let end = values.get(1)?.get::<gtk::TextIter>().ok()?.char_offset();
             document.marks.on_insert(start, end.saturating_sub(start));
             document.schedule_retag();
             None
@@ -143,10 +142,10 @@ impl Document {
         let weak = Rc::downgrade(document);
         buffer.connect_delete_range(move |_, start, end| {
             if let Some(document) = weak.upgrade() {
-                let (start, end) = (start.offset().max(0), end.offset().max(0));
+                let (start, end) = (start.char_offset(), end.char_offset());
                 document
                     .pending_delete
-                    .set(Some((start.min(end) as usize, start.max(end) as usize)));
+                    .set(Some((start.min(end), start.max(end))));
             }
         });
         let weak = Rc::downgrade(document);

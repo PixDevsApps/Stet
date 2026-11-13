@@ -9,6 +9,7 @@
 use super::text::toolbox::ToolStats;
 use super::workspace::quick_open::QuickOpenStats;
 use super::{BarMode, IndentChoice, PickerMode, Shared, ViewPane, Window};
+use crate::convert::to_i32;
 use crate::editor::search::Compiled;
 use gtk4 as gtk;
 use gtk4::{gdk, gio, glib};
@@ -58,7 +59,7 @@ impl Window {
         for view in &self.inner.views {
             let count = usize::try_from(view.tabs.n_pages()).unwrap_or(0);
             if left < count {
-                return Some((view.tabs.clone(), view.tabs.nth_page(left as i32)));
+                return Some((view.tabs.clone(), view.tabs.nth_page(to_i32(left))));
             }
             left -= count;
         }

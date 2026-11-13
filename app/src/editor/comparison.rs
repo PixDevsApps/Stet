@@ -9,6 +9,7 @@
 
 use super::column::Pad;
 use super::page::EditorPage;
+use crate::convert::{BufferPositions, IterPosition, saturating_i32, to_i32};
 use crate::theme::scheme::{
     COMPARE_ADDED_STYLE, COMPARE_CHANGED_STYLE, COMPARE_INLINE_STYLE, COMPARE_MOVED_STYLE,
     COMPARE_REMOVED_STYLE,
@@ -103,7 +104,9 @@ pub fn line_height(view: &sourceview5::View) -> i32 {
         return measured;
     }
     let metrics = view.pango_context().metrics(None, None);
-    (f64::from(metrics.ascent() + metrics.descent()) / f64::from(gtk::pango::SCALE)).ceil() as i32
+    saturating_i32(
+        (f64::from(metrics.ascent() + metrics.descent()) / f64::from(gtk::pango::SCALE)).ceil(),
+    )
 }
 
 /// Removes the comparison from `page`'s document and every view of it.
@@ -143,7 +146,7 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
     let buffer = page.buffer();
     let line_start = |line: usize| {
         buffer
-            .iter_at_line(line as i32)
+            .iter_at_line_number(line)
             .unwrap_or_else(|| buffer.end_iter())
     };
     let mut presented = Presented::default();
@@ -155,7 +158,7 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
         presented.line_runs += 1;
         let mut iter = start;
         for line in run.lines.clone() {
-            if iter.line().max(0) as usize != line {
+            if iter.line_number() != line {
                 break;
             }
             if iter.ends_line() {
@@ -167,11 +170,11 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
     presented.empty_lines = empty_lines.len();
     let inline = tag(&buffer, INLINE_TAG);
     for diff in &comparison.inline {
-        let line = diff.line(side) as i32;
+        let line = diff.line(side);
         for columns in diff.columns(side) {
             let (Some(from), Some(to)) = (
-                buffer.iter_at_line_offset(line, columns.start as i32),
-                buffer.iter_at_line_offset(line, columns.end as i32),
+                buffer.iter_at_line_column(line, columns.start),
+                buffer.iter_at_line_column(line, columns.end),
             ) else {
                 continue;
             };
@@ -181,11 +184,11 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
     }
     let height = line_height(page.view());
     presented.line_height = height;
-    let line_count = buffer.line_count().max(1) as usize;
+    let line_count = buffer.total_lines();
     let (mut top, mut bottom) = (0, 0);
     let mut paints = Vec::new();
     for pad in comparison.alignment.pads(side) {
-        let pixels = pad.rows as i32 * height;
+        let pixels = to_i32(pad.rows).saturating_mul(height);
         if pad.before == 0 {
             top += pixels;
             paints.push(Pad::Above(pixels));
@@ -222,7 +225,7 @@ pub fn present(page: &EditorPage, comparison: &Comparison, side: Side) -> Presen
 #[cfg(feature = "selftest")]
 pub fn line_kind_at(page: &EditorPage, line: usize) -> Option<LineKind> {
     let buffer = page.buffer();
-    let iter = buffer.iter_at_line(line as i32)?;
+    let iter = buffer.iter_at_line_number(line)?;
     LINE_TAGS.iter().find_map(|(kind, name, _)| {
         let tag = buffer.tag_table().lookup(name)?;
         iter.has_tag(&tag).then_some(*kind)
@@ -236,13 +239,13 @@ pub fn inline_ranges_at(page: &EditorPage, line: usize) -> Vec<std::ops::Range<u
     let Some(tag) = buffer.tag_table().lookup(INLINE_TAG) else {
         return Vec::new();
     };
-    let Some(mut iter) = buffer.iter_at_line(line as i32) else {
+    let Some(mut iter) = buffer.iter_at_line_number(line) else {
         return Vec::new();
     };
     let mut ranges = Vec::new();
     let mut start = None;
     loop {
-        let column = iter.line_offset().max(0) as usize;
+        let column = iter.column();
         match (iter.has_tag(&tag), start) {
             (true, None) => start = Some(column),
             (false, Some(from)) => {

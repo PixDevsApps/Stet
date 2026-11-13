@@ -14,6 +14,7 @@
 //!   them from before and after too, as GTK's replay of such a step would drop them.
 
 use super::page::EditorPage;
+use crate::convert::{BufferPositions, IterPosition, to_i32, to_usize, unit_to_u8};
 use crate::sys;
 use crate::theme::scheme::{MARK_STYLE, TOKEN_STYLES};
 use gtk4 as gtk;
@@ -74,7 +75,7 @@ pub fn bookmarks(buffer: &sourceview5::Buffer) -> Bookmarks {
         lines.push(0);
     }
     while forward_to_bookmark(buffer, &mut iter) {
-        lines.push(iter.line().max(0) as usize);
+        lines.push(iter.line_number());
     }
     lines.into_iter().collect()
 }
@@ -116,9 +117,9 @@ pub fn set_bookmarks(buffer: &sourceview5::Buffer, lines: &Bookmarks) {
             break;
         }
     }
-    let count = buffer.line_count().max(1) as usize;
+    let count = buffer.total_lines();
     for &line in lines.lines().iter().take_while(|&&line| line < count) {
-        if let Some(iter) = buffer.iter_at_line(line as i32) {
+        if let Some(iter) = buffer.iter_at_line_number(line) {
             buffer.create_source_mark(None, BOOKMARK_CATEGORY, &iter);
         }
     }
@@ -126,7 +127,7 @@ pub fn set_bookmarks(buffer: &sourceview5::Buffer, lines: &Bookmarks) {
 
 /// Toggle Bookmark on `line`; returns whether it is bookmarked now.
 pub fn toggle_bookmark(buffer: &sourceview5::Buffer, line: usize) -> bool {
-    let Some(start) = buffer.iter_at_line(line as i32) else {
+    let Some(start) = buffer.iter_at_line_number(line) else {
         return false;
     };
     let mut end = start;
@@ -134,7 +135,7 @@ pub fn toggle_bookmark(buffer: &sourceview5::Buffer, line: usize) -> bool {
         end.forward_to_line_end();
     }
     let marked = !buffer
-        .source_marks_at_line(line as i32, Some(BOOKMARK_CATEGORY))
+        .source_marks_at_line(to_i32(line), Some(BOOKMARK_CATEGORY))
         .is_empty();
     if marked {
         buffer.remove_source_marks(&start, &end, Some(BOOKMARK_CATEGORY));
@@ -213,7 +214,7 @@ impl DocMarks {
         let begun = Begun {
             bookmarks: bookmarks(buffer),
             marks: self.marks.borrow().clone(),
-            len: buffer.char_count().max(0) as usize,
+            len: buffer.total_chars(),
         };
         self.own.set(self.own.get() + 1);
         begun
@@ -254,7 +255,7 @@ impl DocMarks {
             _ if marks.is_some() => Some(Step {
                 footprint,
                 len_before: begun.len,
-                len_after: buffer.char_count().max(0) as usize,
+                len_after: buffer.total_chars(),
                 lines_before: 0..0,
                 lines_after: 0..0,
                 before: Bookmarks::new(),
@@ -305,7 +306,7 @@ impl DocMarks {
         self.history.borrow_mut().record(Step {
             footprint,
             len_before: begun.len,
-            len_after: buffer.char_count().max(0) as usize,
+            len_after: buffer.total_chars(),
             lines_before: lines.clone(),
             lines_after: lines,
             before: kept.clone(),
@@ -363,7 +364,7 @@ impl DocMarks {
         if seen == Footprint::default() || self.history.borrow().is_empty() {
             return;
         }
-        let len = buffer.char_count().max(0) as usize;
+        let len = buffer.total_chars();
         let current = bookmarks(buffer);
         let mut history = self.history.borrow_mut();
         let restored = if undo {
@@ -414,15 +415,13 @@ impl DocMarks {
                     continue;
                 };
                 let ranges = marks.ranges(style);
-                let from = ranges.partition_point(|range| (range.end as i32) <= window.start);
-                for range in ranges[from..]
-                    .iter()
-                    .take_while(|range| (range.start as i32) < window.end)
-                {
+                let (start, end) = (to_usize(window.start), to_usize(window.end));
+                let from = ranges.partition_point(|range| range.end <= start);
+                for range in ranges[from..].iter().take_while(|range| range.start < end) {
                     buffer.apply_tag(
                         &tag,
-                        &buffer.iter_at_offset(range.start as i32),
-                        &buffer.iter_at_offset(range.end as i32),
+                        &buffer.iter_at_char_offset(range.start),
+                        &buffer.iter_at_char_offset(range.end),
                     );
                 }
             }
@@ -473,8 +472,7 @@ pub fn bookmark_pixbuf(color: &gtk::gdk::RGBA, size: i32) -> gtk::gdk_pixbuf::Pi
     let size = size.max(8);
     let center = size as f32 / 2.0;
     let radius = size as f32 * 0.32;
-    let mut pixels = Vec::with_capacity((size * size * 4) as usize);
-    let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let mut pixels = Vec::with_capacity(to_usize(size * size * 4));
     for y in 0..size {
         for x in 0..size {
             let dx = x as f32 + 0.5 - center;
@@ -482,10 +480,10 @@ pub fn bookmark_pixbuf(color: &gtk::gdk::RGBA, size: i32) -> gtk::gdk_pixbuf::Pi
             let distance = (dx * dx + dy * dy).sqrt();
             let coverage = (radius + 0.5 - distance).clamp(0.0, 1.0);
             pixels.extend([
-                channel(color.red()),
-                channel(color.green()),
-                channel(color.blue()),
-                channel(coverage * color.alpha()),
+                unit_to_u8(color.red()),
+                unit_to_u8(color.green()),
+                unit_to_u8(color.blue()),
+                unit_to_u8(coverage * color.alpha()),
             ]);
         }
     }

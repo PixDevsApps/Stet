@@ -229,7 +229,7 @@ mod tests {
                     None => (false, trimmed),
                 };
                 let magnitude = i64::from_str_radix(digits, radix).unwrap();
-                let expected = start + step * (line / repeat.max(1)) as i64;
+                let expected = start + step * i64::try_from(line / repeat.max(1)).unwrap();
                 prop_assert_eq!(if negative { -magnitude } else { magnitude }, expected);
                 prop_assert_eq!(digits.chars().any(|c| c.is_ascii_uppercase()), uppercase && base == Base::Hex && digits.chars().any(|c| c.is_ascii_alphabetic()));
             }

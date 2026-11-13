@@ -201,9 +201,9 @@ pub fn replaced_hits(
     let (mut line, mut line_from) = (0, 0);
     let (mut chars, mut chars_from) = (0, 0);
     for (range, edit) in ranges.iter().zip(edits).take(limit) {
-        let start = (range.start as isize + shift) as usize;
+        let start = range.start.saturating_add_signed(shift);
         let end = start + edit.insert.len();
-        shift += edit.insert.len() as isize - (range.end - range.start) as isize;
+        shift += edit.insert.len().cast_signed() - (range.end - range.start).cast_signed();
         line += memchr::memchr_iter(b'\n', &bytes[line_from..start]).count();
         chars += new_text[chars_from..start].chars().count();
         let length = edit.insert.chars().count();

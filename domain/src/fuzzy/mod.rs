@@ -301,7 +301,7 @@ impl Tables<'_> {
                     let extended = gap.saturating_add(GAP_EXTENSION);
                     if above[i - 2] > NONE && opened >= extended {
                         gap = opened;
-                        gap_from = (i - 2) as u32;
+                        gap_from = u32::try_from(i - 2).unwrap_or(u32::MAX);
                     } else {
                         gap = extended.max(NONE);
                     }
@@ -323,7 +323,7 @@ impl Tables<'_> {
                     };
                     best = above[i - 1] + SCORE_MATCH + gain;
                     chunk = run;
-                    source = (i - 1) as u32;
+                    source = u32::try_from(i - 1).unwrap_or(u32::MAX);
                 }
                 if gap > NONE && gap + SCORE_MATCH + bonus > best {
                     best = gap + SCORE_MATCH + bonus;

@@ -144,7 +144,7 @@ impl Bookmarks {
                 next_group += 1;
             }
             let span = before.line_chars(line);
-            let mut target = Some(line as isize + shift);
+            let mut target = Some(line.saturating_add_signed(shift));
             for group in groups[next_group..]
                 .iter()
                 .take_while(|group| group.first_line <= line)
@@ -155,19 +155,19 @@ impl Bookmarks {
                             || (group.end == span.start
                                 && group.start == before.line_chars(group.first_line).start));
                     target = merged_from_above
-                        .then(|| group.first_line as isize + shift + group.newlines as isize);
+                        .then(|| group.first_line.saturating_add_signed(shift) + group.newlines);
                 } else if group.last_line > line {
                     if group.start == span.start {
                         target = None;
                     }
                 } else if group.pure_insert && group.start == span.start {
-                    target = target.map(|target| target + group.newlines as isize);
+                    target = target.map(|target| target + group.newlines);
                 }
                 if target.is_none() {
                     break;
                 }
             }
-            lines.extend(target.map(|target| target as usize));
+            lines.extend(target);
         }
         lines.sort_unstable();
         lines.dedup();
@@ -230,7 +230,7 @@ impl Group {
 
     /// How many lines longer the text is after the group.
     fn line_delta(&self) -> isize {
-        self.newlines as isize - (self.last_line - self.first_line) as isize
+        self.newlines.cast_signed() - (self.last_line - self.first_line).cast_signed()
     }
 }
 

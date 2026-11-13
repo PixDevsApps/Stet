@@ -206,16 +206,16 @@ impl<'a> OffsetMap<'a> {
             }
             let inserted = self.inserted[self.next];
             if offset < edit.end || (offset == edit.end && edit.start == edit.end) {
-                let start = (edit.start as isize + self.shift) as usize;
+                let start = edit.start.saturating_add_signed(self.shift);
                 return match bias {
                     Bias::Before => start,
                     Bias::After => start + inserted,
                 };
             }
-            self.shift += inserted as isize - (edit.end - edit.start) as isize;
+            self.shift += inserted.cast_signed() - (edit.end - edit.start).cast_signed();
             self.next += 1;
         }
-        (offset as isize + self.shift) as usize
+        offset.saturating_add_signed(self.shift)
     }
 }
 

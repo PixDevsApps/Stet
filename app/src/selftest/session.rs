@@ -7,6 +7,7 @@
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
 use crate::config::APP_ID_ENV;
+use crate::convert::to_i32;
 use crate::runtime::worker;
 use crate::window::{Location, SessionPhase, Window};
 use gtk4::prelude::*;
@@ -170,7 +171,7 @@ impl Harness {
                 let (width, height) = (number(arg(0))?, number(arg(1))?);
                 self.window
                     .window()
-                    .set_default_size(width as i32, height as i32);
+                    .set_default_size(to_i32(width), to_i32(height));
                 Ok(())
             }
             // A child self-test leaves a file when it is ready; it may take a while to start.
@@ -264,7 +265,7 @@ impl Harness {
                 equal(
                     "window size",
                     self.window.window().default_size(),
-                    (width as i32, height as i32),
+                    (to_i32(width), to_i32(height)),
                 )
             }),
             "assert-file-contains" => match fs::read_to_string(arg(0)) {

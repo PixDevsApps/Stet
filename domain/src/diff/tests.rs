@@ -560,9 +560,9 @@ fn source_line(rng: &mut Lcg) -> String {
         "let", "value", "match", "self", "config", "index", "buffer", "line", "offset", "range",
         "error", "result", "text", "edit", "count", "total",
     ];
-    let indent = "    ".repeat(rng.below(4) as usize);
+    let indent = "    ".repeat(usize::try_from(rng.below(4)).unwrap());
     let words: Vec<&str> = (0..2 + rng.below(6))
-        .map(|_| WORDS[rng.below(16) as usize])
+        .map(|_| WORDS[usize::try_from(rng.below(16)).unwrap()])
         .collect();
     format!("{indent}{} = {};", words.join(" "), rng.below(1000))
 }
@@ -587,7 +587,7 @@ fn five_percent_apart(count: usize) -> (String, String) {
             _ => right.push(line.clone()),
         }
         if moved.len() == 8 {
-            let at = rng.below(right.len() as u64 + 1) as usize;
+            let at = usize::try_from(rng.below(right.len() as u64 + 1)).unwrap();
             right.splice(at..at, moved.drain(..));
         }
     }

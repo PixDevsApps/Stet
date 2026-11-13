@@ -18,6 +18,7 @@ mod workspace;
 
 use crate::actions;
 use crate::config::AppConfig;
+use crate::convert::{BufferPositions, IterPosition, saturating_i32, to_u32, to_usize};
 use crate::editor::{DocState, EditorPage, ViewSettings};
 use crate::preferences::Preferences;
 use crate::runtime::worker;
@@ -1049,8 +1050,8 @@ impl Window {
                 end.line()
             };
             (
-                (end.offset() - start.offset()) as usize,
-                (last - start.line() + 1) as usize,
+                end.char_offset() - start.char_offset(),
+                to_usize(last - start.line() + 1),
             )
         });
         let status = &self.inner.status;
@@ -1062,13 +1063,13 @@ impl Window {
                 rect.width(),
             ),
             None => status.set_position(
-                cursor.line() as usize + 1,
+                cursor.line_number() + 1,
                 view.visual_column(&cursor) as usize + 1,
                 selected,
                 lines,
             ),
         }
-        status.set_length(buffer.line_count() as usize, buffer.char_count() as usize);
+        status.set_length(buffer.total_lines(), buffer.total_chars());
         status.set_indentation(&page.indentation().label());
         if status.words_shown() {
             self.update_word_count(&page);
@@ -1298,8 +1299,8 @@ impl Window {
                 self.open_locations(vec![Location {
                     path,
                     position: Some(LineCol::new(
-                        position.line as u32 + 1,
-                        Some(position.column as u32 + 1),
+                        to_u32(position.line + 1),
+                        Some(to_u32(position.column + 1)),
                     )),
                     create: false,
                 }]);
@@ -1500,7 +1501,7 @@ impl Window {
         } else {
             bounds.y()
         };
-        let below = window.height() - top.ceil() as i32;
+        let below = window.height() - saturating_i32(f64::from(top.ceil()));
         scroller.set_max_content_height((below - MENU_MARGIN).max(MENU_MIN_HEIGHT));
     }
 

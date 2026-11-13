@@ -2,6 +2,7 @@
 //! the Column Editor. Compact alert dialogs: Tab moves between the fields, Enter applies,
 //! Escape cancels, and the fields remember their last values.
 
+use crate::convert::{BufferPositions, to_u32, to_usize};
 use crate::editor::EditorPage;
 use crate::editor::column::dialog::NUMBERS_OVERFLOW;
 use crate::editor::edits;
@@ -11,7 +12,9 @@ use crate::window::text::toolbox::Reach;
 use gtk4 as gtk;
 use libadwaita as adw;
 use libadwaita::prelude::*;
+use std::fmt::Display;
 use std::ops::Range;
+use std::str::FromStr;
 use stet_domain::ops::numbers::{Base, NumberOverflow, NumberSequence, Padding};
 use stet_domain::ops::{Change, SyntaxError, Target, prefix};
 use stet_domain::text::LineIndex;
@@ -72,10 +75,13 @@ fn entry_row(title: &str, text: &str) -> adw::EntryRow {
 }
 
 /// A whole number typed into `row`, between `min` and `max`.
-fn number(row: &adw::EntryRow, min: i64, max: i64) -> Result<i64, String> {
+fn number<T>(row: &adw::EntryRow, min: T, max: T) -> Result<T, String>
+where
+    T: FromStr + PartialOrd + Display + Copy,
+{
     let title = row.title();
     let text = row.text();
-    match text.trim().parse::<i64>() {
+    match text.trim().parse::<T>() {
         Ok(value) if (min..=max).contains(&value) => Ok(value),
         _ => Err(format!(
             "{title} must be a whole number from {min} to {max}, not “{text}”"
@@ -86,18 +92,18 @@ fn number(row: &adw::EntryRow, min: i64, max: i64) -> Result<i64, String> {
 /// How many lines Insert Numbers numbers: from the caret's line to the end, or every line the
 /// selection touches except a last one it reaches only at column 0 (as `Target::Selection`).
 fn numbered_lines(buffer: &sourceview5::Buffer, selected: &Range<usize>) -> usize {
-    let first = buffer.iter_at_offset(selected.start as i32);
+    let first = buffer.iter_at_char_offset(selected.start);
     let last = if selected.is_empty() {
         buffer.line_count() - 1
     } else {
-        let end = buffer.iter_at_offset(selected.end as i32);
+        let end = buffer.iter_at_char_offset(selected.end);
         if end.line() > first.line() && end.starts_line() {
             end.line() - 1
         } else {
             end.line()
         }
     };
-    (last - first.line() + 1) as usize
+    to_usize(last - first.line() + 1)
 }
 
 fn combo_row(title: &str, choices: &[&str], selected: usize) -> adw::ComboRow {
@@ -105,7 +111,7 @@ fn combo_row(title: &str, choices: &[&str], selected: usize) -> adw::ComboRow {
         .title(title)
         .model(&gtk::StringList::new(choices))
         .build();
-    row.set_selected(selected as u32);
+    row.set_selected(to_u32(selected));
     row
 }
 
@@ -197,11 +203,11 @@ impl Window {
             Ok(NumberSequence {
                 start: number(&start, -(1 << 53), 1 << 53)?,
                 step: number(&step, -(1 << 40), 1 << 40)?,
-                repeat: number(&repeat, 1, 1 << 30)? as usize,
+                repeat: number(&repeat, 1, 1 << 30)?,
                 base: BASES[(base.selected() as usize).min(BASES.len() - 1)].1,
                 uppercase: uppercase.is_active(),
                 padding: PADDINGS[(padding.selected() as usize).min(PADDINGS.len() - 1)].1,
-                width: number(&width, 0, 256)? as usize,
+                width: number(&width, 0, 256)?,
             })
         };
         let numbering = match read() {

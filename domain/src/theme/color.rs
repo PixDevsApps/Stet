@@ -15,11 +15,8 @@ impl Rgb {
     pub const WHITE: Self = Self::from_hex(0xffffff);
 
     pub const fn from_hex(hex: u32) -> Self {
-        Self {
-            r: (hex >> 16) as u8,
-            g: (hex >> 8) as u8,
-            b: hex as u8,
-        }
+        let [_, r, g, b] = hex.to_be_bytes();
+        Self { r, g, b }
     }
 
     /// Accepts `#rgb`, `#rrggbb`, `#rrggbbaa`, and Hyprland's `rgb(rrggbb)`, `rgba(rrggbbaa)`
@@ -72,7 +69,7 @@ impl Rgb {
     pub fn mix(self, other: Self, percent: u8) -> Self {
         let amount = f64::from(percent.min(100)) / 100.0;
         let channel = |start: u8, end: u8| {
-            (f64::from(start) * (1.0 - amount) + f64::from(end) * amount + 0.5) as u8
+            truncate_to_u8(f64::from(start) * (1.0 - amount) + f64::from(end) * amount + 0.5)
         };
         Self {
             r: channel(self.r, other.r),
@@ -124,7 +121,7 @@ impl Rgb {
         let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
         let sector = hue.rem_euclid(360.0) / 60.0;
         let x = chroma * (1.0 - (sector.rem_euclid(2.0) - 1.0).abs());
-        let (r, g, b) = match sector as u8 {
+        let (r, g, b) = match truncate_to_u8(sector) {
             0 => (chroma, x, 0.0),
             1 => (x, chroma, 0.0),
             2 => (0.0, chroma, x),
@@ -133,13 +130,23 @@ impl Rgb {
             _ => (chroma, 0.0, x),
         };
         let m = lightness - chroma / 2.0;
-        let channel = |value: f64| ((value + m) * 255.0).round().clamp(0.0, 255.0) as u8;
+        let channel = |value: f64| truncate_to_u8(((value + m) * 255.0).round());
         Self {
             r: channel(r),
             g: channel(g),
             b: channel(b),
         }
     }
+}
+
+/// The integer part of `value`, saturated to `0..=255`; NaN gives 0.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "clamped to 0..=255 first"
+)]
+fn truncate_to_u8(value: f64) -> u8 {
+    value.clamp(0.0, 255.0) as u8
 }
 
 impl fmt::Display for Rgb {

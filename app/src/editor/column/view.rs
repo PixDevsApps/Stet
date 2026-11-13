@@ -4,6 +4,7 @@
 //! hidden; the view paints the rectangle itself.
 
 use super::{Motion, clipboard, edit, keys, paint};
+use crate::convert::{BufferPositions, IterPosition, saturating_i32, saturating_usize, to_usize};
 use crate::runtime::Debounce;
 use crate::sys;
 use gtk4 as gtk;
@@ -343,7 +344,7 @@ impl StetView {
     }
 
     pub(super) fn last_line(&self) -> usize {
-        (self.buffer().line_count() - 1).max(0) as usize
+        self.buffer().total_lines() - 1
     }
 
     /// Runs `f` with the buffer hooks letting its edits and caret moves through.
@@ -393,7 +394,7 @@ impl StetView {
     /// The text of `line`, without its line break.
     pub fn line_text(&self, line: usize) -> String {
         let buffer = self.buffer();
-        let Some(start) = buffer.iter_at_line(line as i32) else {
+        let Some(start) = buffer.iter_at_line_number(line) else {
             return String::new();
         };
         let mut end = start;
@@ -406,7 +407,7 @@ impl StetView {
     /// The line and visual column of `iter`.
     pub fn visual_pos(&self, iter: &gtk::TextIter) -> VisualPos {
         VisualPos::new(
-            iter.line().max(0) as usize,
+            iter.line_number(),
             ViewExt::visual_column(self, iter) as usize,
         )
     }
@@ -417,7 +418,7 @@ impl StetView {
         let line = pos.line.min(self.last_line());
         let at = locate(&self.line_text(line), pos.column, self.tab());
         buffer
-            .iter_at_line_offset(line as i32, at.char_offset as i32)
+            .iter_at_line_column(line, at.char_offset)
             .unwrap_or_else(|| buffer.end_iter())
     }
 
@@ -534,7 +535,7 @@ impl StetView {
         let line_height = buffer
             .iter_at_line(0)
             .map_or(1, |iter| self.line_yrange(&iter).1.max(1));
-        (self.visible_rect().height() / line_height).max(1) as usize
+        to_usize((self.visible_rect().height() / line_height).max(1))
     }
 
     /// Scrolls so that `pos` is on screen, virtual space included.
@@ -563,7 +564,7 @@ impl StetView {
         self.close_burst();
         let buffer = self.buffer();
         if let Some((mark, column)) = self.imp().begin.take() {
-            let line = buffer.iter_at_mark(&mark).line().max(0) as usize;
+            let line = buffer.iter_at_mark(&mark).line_number();
             buffer.delete_mark(&mark);
             let cursor = self
                 .rect()
@@ -575,7 +576,7 @@ impl StetView {
             .rect()
             .map_or_else(|| self.caret_pos(), |rect| rect.cursor);
         self.end_column_mode(Collapse::Cursor);
-        let Some(line_start) = buffer.iter_at_line(begin.line as i32) else {
+        let Some(line_start) = buffer.iter_at_line_number(begin.line) else {
             return;
         };
         let mark = buffer.create_mark(None, &line_start, true);
@@ -626,8 +627,8 @@ impl StetView {
             return;
         }
         let typed = if self.is_insert_spaces_instead_of_tabs() {
-            let width = match self.indent_width() {
-                width if width > 0 => width as usize,
+            let width = match usize::try_from(self.indent_width()) {
+                Ok(width) if width > 0 => width,
                 _ => self.tab(),
             };
             " ".repeat(width - rect.left() % width)
@@ -701,10 +702,13 @@ impl StetView {
     /// Where a point of the widget falls, as a line and visual column (virtual space past the
     /// end of the line, cells inside a tab).
     pub fn pos_at(&self, x: f64, y: f64) -> VisualPos {
-        let (bx, by) =
-            self.window_to_buffer_coords(gtk::TextWindowType::Widget, x as i32, y as i32);
+        let (bx, by) = self.window_to_buffer_coords(
+            gtk::TextWindowType::Widget,
+            saturating_i32(x),
+            saturating_i32(y),
+        );
         let (line_start, _) = self.line_at_y(by);
-        let line = line_start.line().max(0) as usize;
+        let line = line_start.line_number();
         let text = self.line_text(line);
         let tab = self.tab();
         let mut end = line_start;
@@ -715,17 +719,17 @@ impl StetView {
         let width = text_width(&text, 0, tab);
         let bx = f64::from(bx);
         if bx >= end_x {
-            let extra = ((bx - end_x) / self.advance()).round().max(0.0) as usize;
+            let extra = saturating_usize(((bx - end_x) / self.advance()).round());
             return VisualPos::new(line, (width + extra).min(MAX_COLUMN));
         }
         // The character (grapheme) that contains the point; `iter_at_location` would round to
         // the nearest boundary instead, past a tab from its right half.
-        let Some((iter, _)) = self.iter_at_position(bx as i32, by) else {
+        let Some((iter, _)) = self.iter_at_position(saturating_i32(bx), by) else {
             return VisualPos::new(line, width);
         };
-        let offset = |iter: &gtk::TextIter| iter.line_offset().max(0) as usize;
+        let offset = |iter: &gtk::TextIter| iter.column();
         let start = visual_column(&text, offset(&iter), tab);
-        if iter.line().max(0) as usize != line {
+        if iter.line_number() != line {
             return VisualPos::new(line, start);
         }
         let mut next = iter;
@@ -736,7 +740,7 @@ impl StetView {
         let left = f64::from(self.iter_location(&iter).x());
         let right = f64::from(self.iter_location(&next).x());
         let fraction = (bx - left) / (right - left).max(1.0);
-        let into = (fraction * cells as f64).round().max(0.0) as usize;
+        let into = saturating_usize((fraction * cells as f64).round());
         VisualPos::new(line, start + into.min(cells))
     }
 
@@ -745,17 +749,13 @@ impl StetView {
     pub fn point_of(&self, pos: VisualPos) -> (f64, f64) {
         let iter = self.iter_at_pos(pos);
         let location = self.iter_location(&iter);
-        let at = locate(
-            &self.line_text(iter.line().max(0) as usize),
-            pos.column,
-            self.tab(),
-        );
+        let at = locate(&self.line_text(iter.line_number()), pos.column, self.tab());
         let x = f64::from(location.x()) + (at.offset_cells() as f64 + 0.25) * self.advance();
         let y = f64::from(location.y()) + f64::from(location.height()) / 2.0;
         let (wx, wy) = self.buffer_to_window_coords(
             gtk::TextWindowType::Widget,
-            x.round() as i32,
-            y.round() as i32,
+            saturating_i32(x.round()),
+            saturating_i32(y.round()),
         );
         (f64::from(wx), f64::from(wy))
     }

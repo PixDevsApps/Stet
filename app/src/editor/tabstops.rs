@@ -58,7 +58,7 @@ pub fn space_advance(view: &impl IsA<gtk::Widget>) -> i32 {
 
 /// The first tab stop, in Pango units: the tab width in spaces.
 pub fn stop_for(view: &sourceview5::View) -> i32 {
-    space_advance(view) * view.tab_width() as i32
+    space_advance(view).saturating_mul(i32::try_from(view.tab_width()).unwrap_or(i32::MAX))
 }
 
 /// The view's current first stop, in Pango units, if it is set in Pango units.

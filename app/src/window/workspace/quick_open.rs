@@ -9,6 +9,7 @@
 //! ranking thread ranks a snapshot of the candidates for the newest query, and a ranking for
 //! another query than the one in the field is dropped.
 
+use crate::convert::to_i32;
 use crate::editor::EditorPage;
 use crate::runtime::Debounce;
 use crate::window::{Location, Window};
@@ -553,7 +554,7 @@ impl QuickOpen {
     }
 
     fn move_selection(&self, step: i32) {
-        let count = self.state.borrow().rows.len() as i32;
+        let count = to_i32(self.state.borrow().rows.len());
         if count == 0 {
             return;
         }

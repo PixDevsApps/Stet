@@ -5,6 +5,7 @@
 //! A document without unsaved changes reloads quietly, as one undoable step; otherwise a
 //! banner asks. Nothing here switches tabs or takes focus.
 
+use crate::convert::BufferPositions;
 use crate::editor::EditorPage;
 use crate::editor::load::CHUNK_BYTES;
 use crate::monitor::FileWatch;
@@ -309,8 +310,8 @@ impl Window {
             page.set_loading(true);
             let begun = page.marks().begin(&buffer);
             buffer.begin_user_action();
-            let mut start = buffer.iter_at_offset(edit.start as i32);
-            let mut end = buffer.iter_at_offset(edit.end as i32);
+            let mut start = buffer.iter_at_char_offset(edit.start);
+            let mut end = buffer.iter_at_char_offset(edit.end);
             buffer.delete(&mut start, &mut end);
             let mark = buffer.create_mark(None, &start, false);
             let mut first = true;

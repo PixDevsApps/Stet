@@ -50,7 +50,7 @@ impl Moves {
             let partner = right_at[token.0 as usize];
             if !removed[anchor]
                 || moves.left[anchor]
-                || left_at[token.0 as usize] != anchor as u32
+                || left_at[token.0 as usize] as usize != anchor
                 || partner >= REPEATED
                 || moves.right[partner as usize]
                 || !significant(token)
@@ -85,10 +85,9 @@ fn unique_positions(tokens: &[Token], changed: &[bool], token_count: usize) -> V
     for (index, token) in tokens.iter().enumerate() {
         if changed[index] {
             let slot = &mut at[token.0 as usize];
-            *slot = if *slot == UNSEEN {
-                index as u32
-            } else {
-                REPEATED
+            *slot = match u32::try_from(index) {
+                Ok(index) if *slot == UNSEEN => index,
+                _ => REPEATED,
             };
         }
     }

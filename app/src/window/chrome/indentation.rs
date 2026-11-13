@@ -4,6 +4,7 @@
 //! popover to change it for the document. The exact tab stops of ADR-015 follow a width change
 //! at the next layout.
 
+use crate::convert::to_i32;
 use crate::editor::{EditorPage, IndentSource};
 use crate::window::Window;
 use crate::window::text::toolbox::Reach;
@@ -238,7 +239,7 @@ impl Window {
         };
         let buffer = page.buffer();
         let mut end = buffer.start_iter();
-        end.forward_lines(indent::DETECT_MAX_LINES as i32);
+        end.forward_lines(to_i32(indent::DETECT_MAX_LINES));
         let head = buffer.text(&buffer.start_iter(), &end, true);
         let defaults = self.default_indentation(&page);
         match indent::detect(indent::sample(&head)) {

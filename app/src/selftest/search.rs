@@ -3,6 +3,7 @@
 
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number, write_file};
+use crate::convert::{BufferPositions, IterPosition, to_i32, to_u32};
 use crate::editor::search::OWN_MATCH_TAG;
 use crate::runtime::worker;
 use crate::window::{Field, SearchCommand};
@@ -199,7 +200,7 @@ impl Harness {
             "report-fif" => self.report_fif(),
             "results-activate" => {
                 let position = match number(arg(0)) {
-                    Ok(position) => position as u32,
+                    Ok(position) => to_u32(position),
                     Err(error) => return Some(Err(error)),
                 };
                 if window.activate_result(position) {
@@ -215,7 +216,7 @@ impl Harness {
                     other => return Some(Err(format!("no history drop-down {other}"))),
                 };
                 match number(arg(1)) {
-                    Ok(index) if window.pick_history(name, index as i32) == Some(true) => {
+                    Ok(index) if window.pick_history(name, to_i32(index)) == Some(true) => {
                         self.wait_idle().await
                     }
                     Ok(index) => Err(format!("the drop-down has no entry {index}")),
@@ -432,8 +433,9 @@ impl Harness {
         let buffer = page.buffer();
         let iter = |line: &str, column: &str| -> Result<gtk::TextIter, String> {
             let (line, column) = (number(line)?, number(column)?);
-            let mut iter = buffer
-                .iter_at_line(line as i32 - 1)
+            let mut iter = line
+                .checked_sub(1)
+                .and_then(|line| buffer.iter_at_line_number(line))
                 .ok_or_else(|| format!("there is no line {line}"))?;
             for _ in 1..column {
                 if iter.ends_line() {
@@ -752,7 +754,7 @@ impl Harness {
                 if wrapped || widget.len() > 10_000 || end.offset() <= iter.offset() {
                     break;
                 }
-                widget.push((start.offset() as usize, end.offset() as usize));
+                widget.push((start.char_offset(), end.char_offset()));
                 iter = end;
             }
             let ours: Vec<(usize, usize)> = match Matcher::new(&query) {
@@ -766,7 +768,7 @@ impl Harness {
                 }
             };
             let count = context.occurrences_count();
-            if widget != ours || count != ours.len() as i32 {
+            if widget != ours || usize::try_from(count).ok() != Some(ours.len()) {
                 failures.push(format!(
                     "{}: GtkSourceView found {widget:?} (count {count}), our matcher {ours:?}",
                     row.name

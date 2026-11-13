@@ -5,6 +5,7 @@
 //! bulk edit above 2,000 edits, and a large result inserted in pieces so the window keeps
 //! painting (ADR-003 amendment on text tools).
 
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::EditorPage;
 use crate::editor::edits;
 use crate::window::Window;
@@ -533,8 +534,8 @@ impl Window {
                 glib::timeout_future(PIECE_INTERVAL).await;
             }
             let count = left.min(DELETE_CHARS);
-            let mut start = buffer.iter_at_offset(edit.start as i32);
-            let mut end = buffer.iter_at_offset((edit.start + count) as i32);
+            let mut start = buffer.iter_at_char_offset(edit.start);
+            let mut end = buffer.iter_at_char_offset(edit.start + count);
             buffer.delete(&mut start, &mut end);
             left -= count;
             pieces += 1;
@@ -547,7 +548,7 @@ impl Window {
                     break;
                 }
             }
-            let mut iter = buffer.iter_at_offset(at as i32);
+            let mut iter = buffer.iter_at_char_offset(at);
             buffer.insert(&mut iter, piece);
             at += piece.chars().count();
             pieces += 1;
@@ -577,7 +578,7 @@ impl Window {
     /// Moves the caret to a JSON or XML error and says what it is.
     fn show_syntax_error(&self, page: &EditorPage, what: &str, error: &SyntaxError) {
         let buffer = page.buffer();
-        let iter = buffer.iter_at_offset(error.offset as i32);
+        let iter = buffer.iter_at_char_offset(error.offset);
         buffer.place_cursor(&iter);
         page.view().scroll_mark_onscreen(&buffer.get_insert());
         self.toast(&format!(
@@ -677,8 +678,8 @@ impl Window {
     pub(in crate::window) fn copy_lines(page: &EditorPage) -> bool {
         let buffer = page.buffer();
         let (selected, _) = edits::selection(&buffer);
-        let first = buffer.iter_at_offset(selected.start as i32);
-        let mut last = buffer.iter_at_offset(selected.end as i32);
+        let first = buffer.iter_at_char_offset(selected.start);
+        let mut last = buffer.iter_at_char_offset(selected.end);
         if last.line() > first.line() && last.starts_line() {
             last.backward_line();
         }
@@ -698,8 +699,8 @@ impl Window {
     fn select_and_find(&self, page: &EditorPage, forward: bool) {
         let buffer = page.buffer();
         let (selected, _) = edits::selection(&buffer);
-        let start = buffer.iter_at_offset(selected.start as i32);
-        let end = buffer.iter_at_offset(selected.end as i32);
+        let start = buffer.iter_at_char_offset(selected.start);
+        let end = buffer.iter_at_char_offset(selected.end);
         let query = if selected.is_empty() {
             let line_start = buffer.iter_at_line(start.line()).unwrap_or(start);
             let mut line_end = line_start;
@@ -707,14 +708,14 @@ impl Window {
                 line_end.forward_to_line_end();
             }
             let line = buffer.text(&line_start, &line_end, true).to_string();
-            let column = (selected.start as i32 - line_start.offset()) as usize;
+            let column = selected.start - line_start.char_offset();
             match case::word_at(&line, column) {
                 Some(word) => {
-                    let base = line_start.offset() as usize;
+                    let base = line_start.char_offset();
                     let (from, to) = (base + word.start, base + word.end);
                     edits::select(&buffer, from..to, false);
-                    let from = buffer.iter_at_offset(from as i32);
-                    let to = buffer.iter_at_offset(to as i32);
+                    let from = buffer.iter_at_char_offset(from);
+                    let to = buffer.iter_at_char_offset(to);
                     buffer.text(&from, &to, true).to_string()
                 }
                 None => String::new(),

@@ -29,10 +29,9 @@ where
         // when `len` is negative); `data` is the handler boxed in `connect_insert_text`.
         unsafe {
             let handler = &*(data as *const F);
-            let bytes = if len < 0 {
-                CStr::from_ptr(text).to_bytes()
-            } else {
-                std::slice::from_raw_parts(text.cast::<u8>(), len as usize)
+            let bytes = match usize::try_from(len) {
+                Ok(len) => std::slice::from_raw_parts(text.cast::<u8>(), len),
+                Err(_) => CStr::from_ptr(text).to_bytes(),
             };
             let Ok(text) = std::str::from_utf8(bytes) else {
                 return;

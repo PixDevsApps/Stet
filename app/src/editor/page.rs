@@ -9,6 +9,7 @@ use super::document::Document;
 use super::session::TabSession;
 use super::state::{Activity, DocState};
 use super::tabstops::TabStops;
+use crate::convert::IterPosition;
 use crate::monitor::FileWatch;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -167,7 +168,7 @@ impl EditorPage {
             page,
             move |_, iter, button, _, _| {
                 if button == gtk::gdk::BUTTON_PRIMARY {
-                    page.toggle_bookmark(iter.line().max(0) as usize);
+                    page.toggle_bookmark(iter.line_number());
                 }
             }
         ));

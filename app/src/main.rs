@@ -3,6 +3,7 @@ mod activation;
 mod application;
 mod cli;
 mod config;
+mod convert;
 mod editor;
 mod logging;
 mod monitor;
@@ -32,7 +33,7 @@ fn main() -> ExitCode {
         Ok(parsed) => parsed,
         Err(error) => {
             let _ = error.print();
-            return ExitCode::from(error.exit_code() as u8);
+            return u8::try_from(error.exit_code()).map_or(ExitCode::FAILURE, ExitCode::from);
         }
     };
     let exit_after = match config::exit_after_from_env() {

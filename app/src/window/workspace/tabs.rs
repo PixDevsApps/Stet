@@ -5,6 +5,7 @@
 //! section 7). A double-click on a tab renames it too.
 
 use crate::actions;
+use crate::convert::to_i32;
 use crate::editor::EditorPage;
 use crate::runtime::worker;
 use crate::window::Window;
@@ -613,7 +614,7 @@ fn select_stem_on_focus(entry: &adw::EntryRow, name: &str) {
         if text.has_focus() && text.text() == name {
             let text = text.clone();
             glib::idle_add_local_full(glib::Priority::HIGH_IDLE, move || {
-                text.select_region(0, stem as i32);
+                text.select_region(0, to_i32(stem));
                 glib::ControlFlow::Break
             });
         }

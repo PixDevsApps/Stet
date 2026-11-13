@@ -14,6 +14,7 @@
 //! a result for texts that changed meanwhile is dropped. Word wrap is off in compared views, so
 //! the two sides' lines stay level.
 
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::load::LOAD_WAIT;
 use crate::editor::{DocState, EditorPage};
 use crate::runtime::{Debounce, Latest, Ticket, connect_once, worker};
@@ -491,11 +492,8 @@ impl Window {
             return;
         };
         let buffer = new.buffer();
-        let line = hunk
-            .right
-            .start
-            .min(buffer.line_count().max(1) as usize - 1);
-        if let Some(iter) = buffer.iter_at_line(line as i32) {
+        let line = hunk.right.start.min(buffer.total_lines() - 1);
+        if let Some(iter) = buffer.iter_at_line_number(line) {
             buffer.place_cursor(&iter);
             new.view()
                 .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);
@@ -557,8 +555,8 @@ impl Window {
             return;
         }
         let buffer = page.buffer();
-        let line = buffer.iter_at_mark(&buffer.get_insert()).line().max(0) as usize;
-        let last = buffer.line_count().max(1) as usize - 1;
+        let line = buffer.iter_at_mark(&buffer.get_insert()).line_number();
+        let last = buffer.total_lines() - 1;
         let target = |index: usize| comparison.hunks[index].lines(side).start.min(last);
         let mut index = if forward {
             comparison.next_hunk(side, line).unwrap_or(0)
@@ -576,7 +574,7 @@ impl Window {
         }
         let target = target(index);
         self.note_jump();
-        if let Some(iter) = buffer.iter_at_line(target as i32) {
+        if let Some(iter) = buffer.iter_at_line_number(target) {
             buffer.place_cursor(&iter);
             page.view()
                 .scroll_to_mark(&buffer.get_insert(), 0.1, true, 0.0, 0.3);

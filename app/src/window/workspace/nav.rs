@@ -18,6 +18,7 @@
 //! its places (`stet_domain::nav::History`). Alt+Left and Alt+Right are application
 //! accelerators as well, which takes them from GtkSourceView's `move-words`.
 
+use crate::convert::to_i32;
 use crate::editor::EditorPage;
 use crate::editor::load::JUMP_LOAD_WAIT;
 use crate::runtime::Debounce;
@@ -107,7 +108,7 @@ impl Switcher {
             self.list
                 .append(&gtk::ListBoxRow::builder().child(&content).build());
         }
-        match selected.and_then(|index| self.list.row_at_index(index as i32)) {
+        match selected.and_then(|index| self.list.row_at_index(to_i32(index))) {
             Some(row) => self.list.select_row(Some(&row)),
             None => self.list.unselect_all(),
         }
@@ -125,7 +126,7 @@ impl Switcher {
         let selected = self
             .list
             .selected_row()
-            .and_then(|row| rows.get(row.index() as usize))
+            .and_then(|row| rows.get(usize::try_from(row.index()).ok()?))
             .map(EditorPage::name);
         (rows.iter().map(EditorPage::name).collect(), selected)
     }

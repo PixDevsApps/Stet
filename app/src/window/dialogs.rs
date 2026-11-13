@@ -1,6 +1,7 @@
 //! In-window dialogs, only where a decision is needed (DESIGN.md), plus the file choosers.
 
 use super::Window;
+use crate::convert::BufferPositions;
 use crate::editor::EditorPage;
 use crate::runtime::connect_once;
 use gtk4 as gtk;
@@ -197,7 +198,7 @@ impl Window {
             .build();
         let buffer = page.buffer();
         for &(offset, character) in error.chars.iter().take(LISTED_UNMAPPABLE) {
-            let iter = buffer.iter_at_offset(offset as i32);
+            let iter = buffer.iter_at_char_offset(offset);
             let text = format!(
                 "Line {}, column {}: {character} (U+{:04X})",
                 iter.line() + 1,

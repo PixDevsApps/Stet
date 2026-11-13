@@ -6,6 +6,7 @@
 
 use super::document::CURRENT_MATCH_TAG;
 use super::page::EditorPage;
+use crate::convert::{BufferPositions, to_usize};
 use crate::runtime::{Debounce, Latest};
 use crate::theme::scheme::SMART_HIGHLIGHT_STYLE;
 use gtk4 as gtk;
@@ -262,19 +263,20 @@ impl PageSearch {
             .iter_at_line(last_line)
             .map_or_else(|| buffer.char_count(), |iter| iter.offset());
         let matches = &own.matches;
-        let from = matches.partition_point(|found| (found.end as i32) < start);
+        let (first, last) = (to_usize(start), to_usize(end));
+        let from = matches.partition_point(|found| found.end < first);
         let Some(tag) = buffer.tag_table().lookup(OWN_MATCH_TAG) else {
             return;
         };
         for found in matches[from..]
             .iter()
-            .take_while(|found| (found.start as i32) <= end)
+            .take_while(|found| found.start <= last)
         {
             if found.end > found.start {
                 buffer.apply_tag(
                     &tag,
-                    &buffer.iter_at_offset(found.start as i32),
-                    &buffer.iter_at_offset(found.end as i32),
+                    &buffer.iter_at_char_offset(found.start),
+                    &buffer.iter_at_char_offset(found.end),
                 );
             }
         }

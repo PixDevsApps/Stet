@@ -105,7 +105,7 @@ pub fn detect(text: &str) -> Option<Detected> {
     );
     Some(Detected {
         insert_spaces: true,
-        width: best.map(|width| width as u32),
+        width: best.and_then(|width| u32::try_from(width).ok()),
     })
 }
 

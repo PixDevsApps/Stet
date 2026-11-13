@@ -508,7 +508,7 @@ fn generate_log(lines: usize) -> String {
     let mut millis = 0;
     for _ in 0..lines {
         millis += next(40);
-        let level = LEVELS[next(5) as usize];
+        let level = LEVELS[usize::try_from(next(5)).unwrap()];
         let _ = writeln!(
             text,
             "2026-09-30T{:02}:{:02}:{:02}.{:03}Z {level} [worker-{:02}] GET /api/v1/{}/{} status=200 duration_ms={}.{} ip=10.{}.{}.{} user={} msg=\"{} {}\"",
@@ -517,16 +517,16 @@ fn generate_log(lines: usize) -> String {
             millis / 1000 % 60,
             millis % 1000,
             next(16),
-            WORDS[next(8) as usize],
+            WORDS[usize::try_from(next(8)).unwrap()],
             next(99_999) + 1,
             next(900),
             next(10),
             next(256),
             next(256),
             next(254) + 1,
-            NAMES[next(14) as usize],
-            WORDS[next(8) as usize],
-            WORDS[next(8) as usize],
+            NAMES[usize::try_from(next(14)).unwrap()],
+            WORDS[usize::try_from(next(8)).unwrap()],
+            WORDS[usize::try_from(next(8)).unwrap()],
         );
     }
     text

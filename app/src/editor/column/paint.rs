@@ -6,6 +6,7 @@
 //! and wide characters push the edges right as their glyphs do.
 
 use super::view::{Pad, StetView};
+use crate::convert::{BufferPositions, IterPosition, to_f32};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::{gdk, graphene};
@@ -20,33 +21,32 @@ const CARET_WIDTH: f32 = 2.0;
 pub(super) fn paint(view: &StetView, rect: Rect, snapshot: &gtk::Snapshot) -> usize {
     let buffer = view.buffer();
     let visible = view.visible_rect();
-    let top = view.line_at_y(visible.y()).0.line().max(0) as usize;
+    let top = view.line_at_y(visible.y()).0.line_number();
     let bottom = view
         .line_at_y(visible.y() + visible.height())
         .0
-        .line()
-        .max(0) as usize;
+        .line_number();
     let (first, last) = (rect.top().max(top), rect.bottom().min(bottom));
     if first > last {
         return 0;
     }
     let (fill, caret) = colors(view);
-    let advance = view.advance() as f32;
+    let advance = to_f32(view.advance());
     let tab = view.tab();
     let mut rows = 0;
     for line in first..=last {
-        let Some(start) = buffer.iter_at_line(line as i32) else {
+        let Some(start) = buffer.iter_at_line_number(line) else {
             break;
         };
         let text = view.line_text(line);
-        let span = LineSpan::new(line, &text, start.offset().max(0) as usize, rect, tab);
-        let left = view.iter_location(&buffer.iter_at_offset(span.chars.start as i32));
+        let span = LineSpan::new(line, &text, start.char_offset(), rect, tab);
+        let left = view.iter_location(&buffer.iter_at_char_offset(span.chars.start));
         let x = left.x() as f32 + span.pad_left as f32 * advance;
         let (y, height) = (left.y() as f32, left.height() as f32);
         if rect.is_empty() {
             snapshot.append_color(&caret, &graphene::Rect::new(x, y, CARET_WIDTH, height));
         } else {
-            let right = view.iter_location(&buffer.iter_at_offset(span.chars.end as i32));
+            let right = view.iter_location(&buffer.iter_at_char_offset(span.chars.end));
             let width = right.x() as f32 + span.pad_right as f32 * advance - x;
             snapshot.append_color(&fill, &graphene::Rect::new(x, y, width, height));
             if line == rect.cursor.line {
@@ -76,7 +76,7 @@ pub(super) fn pads(view: &StetView, pads: &[Pad], snapshot: &gtk::Snapshot) {
         let (y, height) = match *pad {
             Pad::Above(pixels) => (-pixels, pixels),
             Pad::Below { line, pixels } => {
-                let Some(iter) = buffer.iter_at_line(line as i32) else {
+                let Some(iter) = buffer.iter_at_line_number(line) else {
                     continue;
                 };
                 let (y, height) = view.line_yrange(&iter);
@@ -107,12 +107,11 @@ pub(super) fn empty_lines(
 ) {
     let buffer = view.buffer();
     let visible = view.visible_rect();
-    let top = view.line_at_y(visible.y()).0.line().max(0) as usize;
+    let top = view.line_at_y(visible.y()).0.line_number();
     let bottom = view
         .line_at_y(visible.y() + visible.height())
         .0
-        .line()
-        .max(0) as usize;
+        .line_number();
     let mut colors: Vec<(&str, Option<gdk::RGBA>)> = Vec::new();
     let first = lines.partition_point(|(line, _)| *line < top);
     for &(line, style) in lines[first..]
@@ -127,7 +126,7 @@ pub(super) fn empty_lines(
                 color
             }
         };
-        let (Some(color), Some(iter)) = (color, buffer.iter_at_line(line as i32)) else {
+        let (Some(color), Some(iter)) = (color, buffer.iter_at_line_number(line)) else {
             continue;
         };
         let (y, height) = view.line_yrange(&iter);
@@ -157,11 +156,7 @@ fn scheme_color(view: &StetView, name: &str) -> Option<gdk::RGBA> {
 /// The x of `pos` in buffer coordinates.
 pub(super) fn x_of(view: &StetView, pos: VisualPos) -> f64 {
     let iter = view.iter_at_pos(pos);
-    let at = locate(
-        &view.line_text(iter.line().max(0) as usize),
-        pos.column,
-        view.tab(),
-    );
+    let at = locate(&view.line_text(iter.line_number()), pos.column, view.tab());
     f64::from(view.iter_location(&iter).x()) + at.offset_cells() as f64 * view.advance()
 }
 

@@ -120,7 +120,7 @@ fn start_service(connection: &gio::DBusConnection, name: &str) -> Result<(), gli
             Some(&(name, 0u32).to_variant()),
             Some(glib::VariantTy::new("(u)").expect("a valid type")),
             gio::DBusCallFlags::NONE,
-            START_TIMEOUT.as_millis() as i32,
+            i32::try_from(START_TIMEOUT.as_millis()).unwrap_or(i32::MAX),
             gio::Cancellable::NONE,
         )
         .map(|_| ())

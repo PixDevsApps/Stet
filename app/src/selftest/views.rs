@@ -4,6 +4,7 @@
 
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, WAIT_TIMEOUT, equal, number};
+use crate::convert::{BufferPositions, IterPosition, to_i32};
 use crate::editor::EditorPage;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -77,7 +78,7 @@ impl Harness {
                 let line = number(arg(0))?;
                 let buffer = page.buffer();
                 let iter = buffer
-                    .iter_at_line(line.saturating_sub(1) as i32)
+                    .iter_at_line_number(line.saturating_sub(1))
                     .ok_or_else(|| format!("there is no line {line}"))?;
                 let state = gtk::gdk::ModifierType::empty();
                 page.view().emit_by_name::<()>(
@@ -195,7 +196,7 @@ impl Harness {
                 (Ok(page), Ok(line)) => {
                     let view = page.view();
                     let buffer = page.buffer();
-                    match buffer.iter_at_line(line.saturating_sub(1) as i32) {
+                    match buffer.iter_at_line_number(line.saturating_sub(1)) {
                         Some(iter) => {
                             let (y, _) = view.line_yrange(&iter);
                             if let Some(adjustment) = view.vadjustment() {
@@ -210,7 +211,7 @@ impl Harness {
                 (Err(error), _) | (_, Err(error)) => Err(error),
             },
             "set-split-position" => number(arg(0)).map(|position| {
-                self.window.set_split_position(position as i32);
+                self.window.set_split_position(to_i32(position));
             }),
             "wait-compare" => {
                 let started = Instant::now();
@@ -333,8 +334,8 @@ impl Harness {
                     .ok_or_else(|| format!("there are {} marks", marks.len()))?;
                 let buffer = page.buffer();
                 let text = buffer.text(
-                    &buffer.iter_at_offset(range.start as i32),
-                    &buffer.iter_at_offset(range.end as i32),
+                    &buffer.iter_at_char_offset(range.start),
+                    &buffer.iter_at_char_offset(range.end),
                     true,
                 );
                 equal("marked text", text.to_string(), arg(2).to_owned())
@@ -414,10 +415,10 @@ impl Harness {
                     .view_page(index)
                     .ok_or_else(|| format!("view {} shows no tab", arg(0)))?;
                 let (caret, _) = page.own_selection();
-                let iter = page.buffer().iter_at_offset(caret as i32);
+                let iter = page.buffer().iter_at_char_offset(caret);
                 equal(
                     "cursor (line, column)",
-                    (iter.line() as usize + 1, iter.line_offset() as usize + 1),
+                    (iter.line_number() + 1, iter.column() + 1),
                     (number(arg(1))?, number(arg(2))?),
                 )
             }),
@@ -425,7 +426,7 @@ impl Harness {
                 equal(
                     "divider position",
                     self.window.split_position(),
-                    wanted as i32,
+                    to_i32(wanted),
                 )
             }),
             "assert-comparing" => boolean(arg(0))
@@ -505,7 +506,7 @@ impl Harness {
             "assert-compare-aligned" => self.check_aligned(),
             // No line of the current document is coloured or padded for a comparison.
             "assert-compare-clean" => self.page().and_then(|page| {
-                let lines = page.buffer().line_count().max(1) as usize;
+                let lines = page.buffer().total_lines();
                 let coloured = (0..lines)
                     .filter(|line| crate::editor::comparison::line_kind_at(&page, *line).is_some())
                     .count();
@@ -589,7 +590,7 @@ impl Harness {
         let alignment = &comparison.alignment;
         let y = |page: &EditorPage, line: usize| {
             page.buffer()
-                .iter_at_line(line as i32)
+                .iter_at_line_number(line)
                 .map(|iter| page.view().line_yrange(&iter).0)
         };
         let mut checked = 0;
@@ -940,7 +941,7 @@ fn painted_kind(page: &EditorPage, line: usize) -> Result<(&'static str, [u8; 4]
     let view = page.view();
     let buffer = page.buffer();
     let iter = buffer
-        .iter_at_line(line as i32)
+        .iter_at_line_number(line)
         .ok_or_else(|| format!("there is no line {}", line + 1))?;
     let (top, _) = view.line_yrange(&iter);
     let (_, y) = view.buffer_to_window_coords(gtk::TextWindowType::Widget, 0, top);
@@ -979,7 +980,7 @@ fn text_background(page: &EditorPage, line: usize, column: usize, style: &str) -
     let view = page.view();
     let buffer = page.buffer();
     let iter = buffer
-        .iter_at_line_offset(line as i32, column as i32)
+        .iter_at_line_column(line, column)
         .ok_or_else(|| format!("there is no line {}, column {}", line + 1, column + 1))?;
     let cell = view.iter_location(&iter);
     let (x, y) =

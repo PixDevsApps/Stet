@@ -11,6 +11,7 @@
 //! caret move that column mode did not make ends column mode first.
 
 use super::view::{Collapse, StetView};
+use crate::convert::{BufferPositions, IterPosition};
 use crate::sys;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -43,16 +44,16 @@ pub(super) fn snapshot(view: &StetView, lines: Range<usize>) -> (usize, String, 
     let first = lines.start.min(last);
     let end_line = lines.end.saturating_sub(1).clamp(first, last);
     let start = buffer
-        .iter_at_line(first as i32)
+        .iter_at_line_number(first)
         .unwrap_or_else(|| buffer.start_iter());
     let mut end = buffer
-        .iter_at_line(end_line as i32)
+        .iter_at_line_number(end_line)
         .unwrap_or_else(|| buffer.end_iter());
     if !end.ends_line() {
         end.forward_to_line_end();
     }
     let text = buffer.text(&start, &end, true).to_string();
-    (first, text, start.offset().max(0) as usize)
+    (first, text, start.char_offset())
 }
 
 /// Runs a column operation on `lines`, applies its edits as one undo step (inside a typing
@@ -66,8 +67,8 @@ pub(super) fn apply(
     let started = Instant::now();
     let (first, text, base) = snapshot(view, lines);
     let index = LineIndex::new(&text);
-    let edit = op(&text, &index, rect.shift_lines(-(first as isize)))?;
-    let after = edit.rect.shift_lines(first as isize);
+    let edit = op(&text, &index, rect.shift_lines(-first.cast_signed()))?;
+    let after = edit.rect.shift_lines(first.cast_signed());
     let buffer = view.source_buffer();
     let applying = Instant::now();
     let bulk = edit.needs_bulk();
@@ -133,7 +134,7 @@ fn apply_bulk(
 ) -> Vec<TextEdit> {
     let started = Instant::now();
     let visible = view.visible_rect();
-    let line_at = |y: i32| view.line_at_y(y).0.line().max(0) as usize;
+    let line_at = |y: i32| view.line_at_y(y).0.line_number();
     let near = line_at(visible.y() - visible.height()).saturating_sub(first)
         ..line_at(visible.y() + 2 * visible.height()).saturating_sub(first) + 1;
     let line_of = |change: &TextEdit| index.line_of_char(change.start);
@@ -192,7 +193,7 @@ fn replace_lines(
         let name = mark.name();
         let category = mark.category();
         buffer.delete_mark(&mark);
-        if let Some(iter) = buffer.iter_at_line(line as i32) {
+        if let Some(iter) = buffer.iter_at_line_number(line) {
             buffer.create_source_mark(name.as_deref(), &category, &iter);
         }
     }
@@ -205,11 +206,11 @@ fn source_marks(
     lines: Range<usize>,
 ) -> Vec<(usize, sourceview5::Mark)> {
     let mut found = Vec::new();
-    let Some(mut iter) = buffer.iter_at_line(lines.start as i32) else {
+    let Some(mut iter) = buffer.iter_at_line_number(lines.start) else {
         return found;
     };
     loop {
-        let line = iter.line().max(0) as usize;
+        let line = iter.line_number();
         if line >= lines.end {
             break;
         }
@@ -227,9 +228,9 @@ fn source_marks(
 }
 
 fn replace(buffer: &sourceview5::Buffer, base: usize, edit: &TextEdit) {
-    let mut start = buffer.iter_at_offset((base + edit.start) as i32);
+    let mut start = buffer.iter_at_char_offset(base + edit.start);
     if edit.end > edit.start {
-        let mut end = buffer.iter_at_offset((base + edit.end) as i32);
+        let mut end = buffer.iter_at_char_offset(base + edit.end);
         buffer.delete(&mut start, &mut end);
     }
     if !edit.insert.is_empty() {
@@ -421,7 +422,7 @@ impl StetView {
         let buffer = self.buffer();
         let caret = buffer.iter_at_mark(&buffer.get_insert());
         if location.offset() == caret.offset()
-            && location.line().max(0) as usize == rect.cursor.line
+            && location.line_number() == rect.cursor.line
             && !text.is_empty()
             && !text.contains(['\n', '\r'])
         {
@@ -453,7 +454,7 @@ impl StetView {
         if self.overwrites()
             && *from == caret
             && next == *to
-            && from.line().max(0) as usize == rect.cursor.line
+            && from.line_number() == rect.cursor.line
         {
             return true;
         }

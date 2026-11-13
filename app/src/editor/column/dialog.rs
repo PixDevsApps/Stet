@@ -5,6 +5,7 @@
 //! gets the focus back when it closes. The values are kept for the next time while Stet runs.
 
 use super::view::StetView;
+use crate::convert::to_u32;
 use crate::window::Window;
 use gtk4 as gtk;
 use gtk4::glib;
@@ -339,7 +340,7 @@ impl EditorDialog {
             .iter()
             .position(|(leading, _)| *leading == choice.leading)
             .unwrap_or(0);
-        self.leading.set_selected(leading as u32);
+        self.leading.set_selected(to_u32(leading));
         for ((base, _, _), button) in BASES.iter().zip(&self.bases) {
             button.set_active(*base == choice.base);
         }
@@ -461,7 +462,7 @@ impl EditorDialog {
             .position(|(_, label)| label.eq_ignore_ascii_case(name))
         {
             Some(index) => {
-                self.leading.set_selected(index as u32);
+                self.leading.set_selected(to_u32(index));
                 true
             }
             None => false,

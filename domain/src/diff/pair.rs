@@ -129,7 +129,7 @@ fn similarity(a: &str, b: &str) -> u32 {
             }
         }
     }
-    (2000 * shared / (a.len() + b.len())) as u32
+    u32::try_from(2000 * shared / (a.len() + b.len())).unwrap_or(u32::MAX)
 }
 
 #[derive(Clone, Copy)]

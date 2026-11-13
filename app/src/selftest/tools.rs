@@ -6,6 +6,7 @@
 use super::script::{Step, boolean};
 use super::{Harness, StepResult, equal, labels_in, number};
 use crate::actions::EDITOR_SHORTCUTS;
+use crate::convert::BufferPositions;
 use crate::window::IndentChoice;
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -268,7 +269,10 @@ impl Harness {
             "assert-line" => match (self.page(), number(arg(0))) {
                 (Ok(page), Ok(line)) => {
                     let buffer = page.buffer();
-                    match buffer.iter_at_line(line as i32 - 1) {
+                    match line
+                        .checked_sub(1)
+                        .and_then(|line| buffer.iter_at_line_number(line))
+                    {
                         Some(start) => {
                             let mut end = start;
                             if !end.ends_line() {

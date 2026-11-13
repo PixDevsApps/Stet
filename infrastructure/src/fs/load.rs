@@ -60,7 +60,7 @@ impl LoadError {
 pub fn load(path: &Path, policy: &SizePolicy) -> Result<Loaded, LoadError> {
     let file = OpenOptions::new()
         .read(true)
-        .custom_flags(OFlags::NONBLOCK.bits() as i32)
+        .custom_flags(OFlags::NONBLOCK.bits().cast_signed())
         .open(path)
         .map_err(|error| LoadError::io(path, error))?;
     let metadata = file

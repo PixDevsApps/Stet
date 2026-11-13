@@ -3,6 +3,7 @@
 
 use super::column::StetView;
 use super::page::EditorPage;
+use crate::convert::IterPosition;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
@@ -66,10 +67,7 @@ impl EditorPage {
                 buffer.iter_at_mark(&buffer.selection_bound()),
             ),
         };
-        let (insert, bound) = (
-            insert.offset().max(0) as usize,
-            bound.offset().max(0) as usize,
-        );
+        let (insert, bound) = (insert.char_offset(), bound.char_offset());
         (
             insert,
             (insert != bound).then(|| (insert.min(bound), insert.max(bound))),
@@ -169,7 +167,7 @@ impl EditorPage {
     pub fn cursor(&self) -> Position {
         let buffer = self.buffer();
         let iter = buffer.iter_at_mark(&buffer.get_insert());
-        Position::new(iter.line() as usize, iter.line_offset() as usize)
+        Position::new(iter.line_number(), iter.column())
     }
 
     /// The vertical scroll position, to keep it across a reload.

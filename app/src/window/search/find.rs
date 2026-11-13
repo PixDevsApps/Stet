@@ -11,6 +11,7 @@
 use super::SearchCommand;
 use super::bar::{BarCommand, BarMode, Field, FieldKey, Tone};
 use super::marking::MarkCommand;
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::EditorPage;
 use crate::editor::search::{Compiled, OwnMatches};
 use crate::runtime::worker;
@@ -443,7 +444,7 @@ impl Window {
         self.note_jump();
         let (start, end) = self.search_anchor(&page);
         let from = if forward { end } else { start };
-        self.search_from(page, from.offset(), forward);
+        self.search_from(page, from.char_offset(), forward);
     }
 
     /// Incremental search while typing: the first match at or after the current one.
@@ -452,11 +453,11 @@ impl Window {
             return;
         };
         let (start, _) = self.search_anchor(&page);
-        self.search_from(page, start.offset(), true);
+        self.search_from(page, start.char_offset(), true);
     }
 
     /// Searches from character `from` in `page`, with GtkSourceView or our matcher.
-    pub(in crate::window) fn search_from(&self, page: EditorPage, from: i32, forward: bool) {
+    pub(in crate::window) fn search_from(&self, page: EditorPage, from: usize, forward: bool) {
         let find = &self.inner.find;
         let Some(compiled) = find.compiled() else {
             return;
@@ -469,7 +470,6 @@ impl Window {
             let (snapshot, text) = PageSnapshot::take(&page);
             let matcher = Arc::clone(&compiled.matcher);
             self.spawn(async move {
-                let from = from.max(0) as usize;
                 let found =
                     worker::run(move || matcher.find_next(&text, from, !forward, wrap)).await;
                 if snapshot.edited() {
@@ -478,8 +478,8 @@ impl Window {
                 match found {
                     Some(Ok(Some(next))) => window.show_match(
                         &page,
-                        next.found.start as i32,
-                        next.found.end as i32,
+                        next.found.start,
+                        next.found.end,
                         forward,
                         next.wrapped,
                     ),
@@ -496,11 +496,17 @@ impl Window {
         }
         let context = self.context_for(&page);
         context.set_highlight(self.shows_matches(&page));
-        let from = page.buffer().iter_at_offset(from);
+        let from = page.buffer().iter_at_char_offset(from);
         self.spawn(async move {
             match crate::sys::search::find(&context, &from, forward).await {
                 Some((start, end, wrapped)) => {
-                    window.show_match(&page, start.offset(), end.offset(), forward, wrapped);
+                    window.show_match(
+                        &page,
+                        start.char_offset(),
+                        end.char_offset(),
+                        forward,
+                        wrapped,
+                    );
                 }
                 None => window.not_found(forward, wrap),
             }
@@ -514,14 +520,14 @@ impl Window {
     pub(in crate::window) fn show_match(
         &self,
         page: &EditorPage,
-        start: i32,
-        end: i32,
+        start: usize,
+        end: usize,
         forward: bool,
         wrapped: bool,
     ) {
         let buffer = page.buffer();
-        let start = buffer.iter_at_offset(start);
-        let end = buffer.iter_at_offset(end);
+        let start = buffer.iter_at_char_offset(start);
+        let end = buffer.iter_at_char_offset(end);
         let caret = if forward { &end } else { &start };
         if self.inner.find.is_open() {
             page.set_current_match(&start, &end);
@@ -565,7 +571,7 @@ impl Window {
                         let (start, end) = self.search_anchor(&page);
                         let position = page
                             .search()
-                            .own_position(start.offset() as usize, end.offset() as usize);
+                            .own_position(start.char_offset(), end.char_offset());
                         let more = if truncated { "+" } else { "" };
                         match (count, position) {
                             (0, _) => "No matches".to_owned(),

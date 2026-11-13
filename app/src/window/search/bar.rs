@@ -4,6 +4,7 @@
 //! ([`FindBar::options`], [`FindBar::files_request`], [`FindBar::mark_options`]) and reacts to
 //! it through its `connect_*` callbacks.
 
+use crate::convert::to_u32;
 use crate::editor::search::Compiled;
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -175,7 +176,9 @@ impl HistoryButton {
             #[weak]
             popover,
             move |_, row| {
-                let entry = entries.borrow().get(row.index() as usize).cloned();
+                let entry = usize::try_from(row.index())
+                    .ok()
+                    .and_then(|index| entries.borrow().get(index).cloned());
                 let chosen = chosen.borrow().clone();
                 if let (Some(entry), Some(chosen)) = (entry, chosen) {
                     popover.popdown();
@@ -814,7 +817,7 @@ impl FindBar {
 
     pub fn set_search_mode(&self, mode: SearchMode) {
         if let Some(index) = MODES.iter().position(|(candidate, _)| *candidate == mode) {
-            self.mode.set_selected(index as u32);
+            self.mode.set_selected(to_u32(index));
         }
     }
 
@@ -1033,8 +1036,8 @@ impl FindBar {
                         .map_or(pattern.len(), |(byte, _)| byte);
                     let attributes = pango::AttrList::new();
                     let mut underline = pango::AttrInt::new_underline(pango::Underline::Error);
-                    underline.set_start_index(start as u32);
-                    underline.set_end_index(end.max(start + 1) as u32);
+                    underline.set_start_index(to_u32(start));
+                    underline.set_end_index(to_u32(end.max(start + 1)));
                     attributes.insert(underline);
                     text.set_attributes(Some(&attributes));
                 }
@@ -1182,7 +1185,7 @@ impl FindBar {
 
     pub fn set_mark_style(&self, style: MarkStyle) {
         if let Some(index) = MARK_STYLES.iter().position(|(each, _)| *each == style) {
-            self.mark_style.set_selected(index as u32);
+            self.mark_style.set_selected(to_u32(index));
         }
     }
 

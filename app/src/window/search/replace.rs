@@ -4,6 +4,7 @@
 
 use super::bar::{BarMode, Field, Tone};
 use super::results::{FileNode, FileTarget};
+use crate::convert::{BufferPositions, IterPosition};
 use crate::editor::EditorPage;
 use crate::editor::edits;
 use crate::editor::search::Compiled;
@@ -116,16 +117,16 @@ impl Window {
         options: SearchOptions,
     ) -> (Range<usize>, ScopeKind) {
         let buffer = page.buffer();
-        let caret = buffer.iter_at_mark(&buffer.get_insert()).offset() as usize;
+        let caret = buffer.iter_at_mark(&buffer.get_insert()).char_offset();
         let live = buffer
             .selection_bounds()
-            .map(|(start, end)| start.offset() as usize..end.offset() as usize)
+            .map(|(start, end)| start.char_offset()..end.char_offset())
             .filter(|range| range.start < range.end);
         let remembered = || {
             let start = buffer.mark(SCOPE_START_MARK)?;
             let end = buffer.mark(SCOPE_END_MARK)?;
-            let range = buffer.iter_at_mark(&start).offset() as usize
-                ..buffer.iter_at_mark(&end).offset() as usize;
+            let range =
+                buffer.iter_at_mark(&start).char_offset()..buffer.iter_at_mark(&end).char_offset();
             (range.start < range.end).then_some(range)
         };
         let selection = match live {
@@ -133,7 +134,7 @@ impl Window {
             None if options.in_selection => remembered(),
             None => None,
         };
-        let len = buffer.char_count() as usize;
+        let len = buffer.total_chars();
         (
             options.scope(caret, selection.clone(), len),
             options.scope_kind(selection.is_some()),
@@ -203,14 +204,14 @@ impl Window {
         let has_match = page.current_match().is_some();
         let (start, end) = self.search_anchor(&page);
         if start == end && !has_match {
-            self.search_from(page, start.offset(), forward);
+            self.search_from(page, start.char_offset(), forward);
             return;
         }
         let (snapshot, text) = PageSnapshot::take(&page);
         let found = Match {
-            start: start.offset() as usize,
-            end: end.offset() as usize,
-            line: start.line() as usize,
+            start: start.char_offset(),
+            end: end.char_offset(),
+            line: start.line_number(),
         };
         let matcher = Arc::clone(&compiled.matcher);
         let window = self.clone();
@@ -229,10 +230,10 @@ impl Window {
                     edits::apply_edits(&page.buffer(), std::slice::from_ref(&edit));
                     let after = edit.start + edit.insert.chars().count();
                     let from = if forward { after } else { edit.start };
-                    window.search_from(page, from as i32, forward);
+                    window.search_from(page, from, forward);
                 }
                 Err(SearchError::NotAMatch) => {
-                    window.search_from(page, found.start as i32, forward);
+                    window.search_from(page, found.start, forward);
                 }
                 Err(error) => window
                     .inner
