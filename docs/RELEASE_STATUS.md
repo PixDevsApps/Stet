@@ -1,8 +1,8 @@
-# Release status: Stet 1.7.0
+# Release status: Stet 1.7.1
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
-Synced: 2026-11-13
+Synced: 2026-11-14
 
 The M9 exit criteria ([the plan history](history/PLAN-to-1.0.md#m9--polish-qa-and-10-68-days)) are: every checklist item passes or is recorded here, no P1 bugs, and the user's sign-off. This page is the record. Evidence, with commands, dates and caveats, is in [TESTING.md](TESTING.md); decisions in [DECISIONS.md](DECISIONS.md).
 
@@ -33,6 +33,8 @@ The M9 exit criteria ([the plan history](history/PLAN-to-1.0.md#m9--polish-qa-an
 **1.6.0 (2026-11-12)** adds a Flatpak for other Linux systems, from Stet's own signed Flatpak repository, at the user's request ([ADR-019](DECISIONS.md#adr-019--a-flatpak-from-stets-own-repository-2026-11-12), [release notes](RELEASE_NOTES.md#160--2026-11-12), [PLAN.md](PLAN.md#stet-160-a-flatpak-from-stets-own-repository--2026-11-12)). Built and checked locally, installed into a scratch Flatpak installation from a test repository and run headless ([TESTING.md](TESTING.md#2026-11-12--160-the-flatpak)). The user accepted it and authorized its release the same day. It is the [v1.6.0 release](https://github.com/PixDevsApps/Stet/releases/tag/v1.6.0), built from `v1.6.0` (`1d6119e`), with two files: `stet-x86_64.pkg.tar.zst` (SHA-256 `c0ab8a1f0f1fec752e5ace1e25f9d12295ad3fcdd0097b9f24f156bff4371237`), which passed the container's fresh-install test and is what the README's pacman line installs, and `io.github.pixdevsapps.Stet.flatpakref`, which the README's Flatpak line fetches and whose downloads count the Flatpak installs. The Flatpak itself is in Stet's repository, `PixDevsApps/stet-flatpak` on GitHub Pages (https://pixdevsapps.github.io/stet-flatpak/), signed with the key `C17A 8DBE F8BC 6E47 F84A 9F35 B266 A479 CC75 F6AC`; installed from there with signature checks on, also with the README's line as written, it started headless. Checked with `bash tools/ci.sh` (721 tests). Not verified: the Flatpak on a live desktop and on another distribution, and an update between two published versions.
 
 **1.7.0 (2026-11-13)** is the architecture cleanup's release, at the user's request ([ADR-020](DECISIONS.md#adr-020--code-architecture-layers-bounded-contexts-and-lints-2026-11-13), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [release notes](RELEASE_NOTES.md#170--2026-11-13), [PLAN.md](PLAN.md#stet-170-the-architecture-cleanups-release--2026-11-13)): two bug fixes (restored tabs and the highlighting limits; non-UTF-8 names in Open Recent), the palette and the pickers ranking like quick open, Insert Numbers refusing numbers beyond 64 bits, and the code reorganised with no other change to what Stet does. Checked with `bash tools/ci.sh --ui` (52 of 52 scripts) on each step and with the fresh-install test of its package; the packages no longer contain the self-test harness.
+
+**1.7.1 (2026-11-14)** changes only a test and the CI workflow: the crash-safety test `kill_9_never_leaves_a_dangling_reference` no longer fails when its first victims are killed before they write anything, and CI uses `actions/checkout` 7.0.1 (Dependabot's PR #1) ([release notes](RELEASE_NOTES.md#171--2026-11-14), [PLAN.md](PLAN.md#stet-171-dependabots-actionscheckout-bump-and-a-flaky-crash-test--2026-11-14)). Not tagged; no package or Flatpak.
 
 ## Milestones
 

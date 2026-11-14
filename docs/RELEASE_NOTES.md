@@ -2,6 +2,10 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
+## 1.7.1 — 2026-11-14
+
+- No change to Stet itself. A test of crash safety, which kills a process that writes the session at many moments, no longer fails now and then on a slow machine when the process is killed before it has written anything. The checks on GitHub use `actions/checkout` 7.0.1.
+
 ## 1.7.0 — 2026-11-13
 
 - **Restored tabs follow your highlighting limits.** A tab restored from its backup when Stet starts now decides syntax highlighting with `highlight_max_bytes` and `highlight_max_lines` from `config.toml`, as an opened file always did; before, it used the built-in limits. The banner that offers Highlight Anyway now names the limits in effect instead of the built-in ones.

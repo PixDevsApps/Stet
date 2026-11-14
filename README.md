@@ -42,7 +42,7 @@ On Omarchy and Arch, use the package above: the Flatpak has no Open Terminal Her
 
 ## Status
 
-**Stet 1.6.0** (2026-11-12) is the latest release; it adds the Flatpak. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
+**Stet 1.7.1** (2026-11-14) is the latest version; the latest release with a package on GitHub is 1.7.0, which the lines above install. The [release notes](docs/RELEASE_NOTES.md) list what each version added. There is no AUR package yet.
 
 ## Build from source
 

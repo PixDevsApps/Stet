@@ -12,6 +12,19 @@ The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). 
 
 Dated test and acceptance results go here, newest first. Spike results go to `docs/spikes/` and are linked from [RESEARCH.md](RESEARCH.md#m0-spike-results).
 
+### 2026-11-14 — 1.7.1: a flaky crash test
+
+Run by the agent on the development machine, 2026-11-14. The scratch edit that makes the victim die at once replaced `thread::sleep(Duration::from_millis(20 + round * 37 % 120))` in `kill_9_coordinator` and was reverted before the commit. No GTK program was run. No live check was run.
+
+| Command | Result |
+| --- | --- |
+| GitHub Actions run 43609743880 on Dependabot's PR #1 (head `a0190a8`), job "Latest stable Rust (early warning)" | **Failed:** `kill_9_never_leaves_a_dangling_reference`; the coordinator panicked at `tests/mod.rs:124` with `NotFound` (the `read_dir` of `backup/`). The same test passed in the run's main job. Re-run: passed. |
+| `cargo test -q -p stet-infrastructure --lib session_store::tests::crash::kill_9_never` with 1.7.0's test and an immediate kill in every round, 2 runs | **Failed** both times as in CI: `NotFound` at `tests/mod.rs:124`. |
+| The same with the fix and an immediate kill in rounds 0–2 only, 3 runs, `--nocapture` | **Pass**, 3 of 3: "3 before the first manifest", 7 to 9 left temp files. |
+| The same with the fix and an immediate kill in every round | **Failed**, as it should, on the new assertion "no victim lived long enough to commit". |
+| The same with the fix as committed, 10 runs | **Pass**, 10 of 10: "0 before the first manifest" each time. |
+| `bash tools/ci.sh` on the tree committed as 1.7.1 | **Pass:** fmt, the crate-list and link checks, Clippy `-D warnings` with and without `selftest`, tests (`stet` 64, `stet-domain` 506 with 9 ignored, `stet-infrastructure` 232 with 5 ignored, 1 doc test; `stet` without `selftest` 54), rustdoc, `cargo deny` ok, build. `appstreamcli validate --no-net` on the metainfo with its 1.7.1 entry: passed (1 pedantic note). `target/debug/stet --version` without a display: `stet 1.7.1`. |
+
 ### 2026-11-13 — 1.7.0, the architecture cleanup's release
 
 Run by the agent on the development machine after the user's authorization, 19:55–20:10 CET: the commit `7091313` and its tag `v1.7.0`. The published Flatpak was installed only into a scratch Flatpak installation with a scratch `HOME`, deleted afterwards; the user's own Flatpak installation and Arch package were not touched. Headless runs on Broadway display 93; no `gtk4-broadwayd` was left. No live check was run.

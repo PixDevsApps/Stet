@@ -176,7 +176,10 @@ fn kill_9_coordinator() {
     let Some(dir) = std::env::var_os(KILL_DIR).map(PathBuf::from) else {
         return;
     };
-    let (mut interrupted, mut fallbacks, mut orphans) = (0, 0, 0);
+    let (mut interrupted, mut fallbacks, mut orphans, mut empty) = (0, 0, 0, 0);
+    // A victim can be killed before its first commit, in the first rounds on a slow machine;
+    // once a manifest is written, it must never be lost again.
+    let mut written = false;
     for round in 0..ROUNDS {
         let mut victim = this_test(
             "session_store::tests::crash::kill_9_victim",
@@ -196,10 +199,12 @@ fn kill_9_coordinator() {
             "round {round}: the victim ended on its own: {status}"
         );
 
+        // A victim killed before its store was open has made no `backup/` yet.
         let backup = dir.join("backup");
-        if file_names(&backup)
-            .iter()
-            .any(|name| has_extension(name, "tmp"))
+        if (backup.is_dir()
+            && file_names(&backup)
+                .iter()
+                .any(|name| has_extension(name, "tmp")))
             || dir.join("session.json.tmp").exists()
         {
             interrupted += 1;
@@ -207,14 +212,17 @@ fn kill_9_coordinator() {
         let store = open(&dir);
         let restored = store.load().unwrap();
         match &restored.source {
-            ManifestSource::Current => {}
+            ManifestSource::Current => written = true,
             ManifestSource::Previous {
                 current: ManifestProblem::Missing,
-            } => fallbacks += 1,
+            } => {
+                written = true;
+                fallbacks += 1;
+            }
             ManifestSource::Empty {
                 current: ManifestProblem::Missing,
                 previous: ManifestProblem::Missing,
-            } if round == 0 => {}
+            } if !written => empty += 1,
             other => panic!("round {round}: unusable manifest: {other:?}"),
         }
         assert!(
@@ -244,9 +252,10 @@ fn kill_9_coordinator() {
         );
         orphans = restored.orphans.len();
     }
+    assert!(written, "no victim lived long enough to commit");
     eprintln!(
-        "kill -9: {ROUNDS} rounds; {interrupted} left temp files, {fallbacks} fell back to \
-         session.json.prev, {orphans} orphans at the end"
+        "kill -9: {ROUNDS} rounds; {empty} before the first manifest, {interrupted} left temp \
+         files, {fallbacks} fell back to session.json.prev, {orphans} orphans at the end"
     );
 }
 
