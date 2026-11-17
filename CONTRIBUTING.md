@@ -53,11 +53,11 @@ A decision with long-term cost (a dependency, a file format or location, hard-to
 
 [Open an issue](https://github.com/PixDevsApps/Stet/issues/new/choose) with the bug form or the idea form. For a bug it asks for the Stet version (`stet --version`), how you installed it (Arch package, Flatpak or from source), your system, the steps to reproduce and a short log (`RUST_LOG=debug stet`). Never attach files that may contain private text: Stet's session and backups keep unsaved documents.
 
-Questions may already be answered in the [user guide](https://pixdevs.com/guides/stet/). No GitHub account? Write to **support@pixdevs.com**.
+A question goes to [Discussions → Q&A](https://github.com/PixDevsApps/Stet/discussions/categories/q-a), and an idea you'd like to talk through first to [Discussions → Ideas](https://github.com/PixDevsApps/Stet/discussions/categories/ideas); the [user guide](https://pixdevs.com/guides/stet/) may already have the answer. No GitHub account? Write to **support@pixdevs.com**.
 
 ## Security
 
-Report a security problem privately to **support@pixdevs.com**, with "Security" in the subject, never in a public issue, pull request or discussion.
+Report a security problem privately, as the [security policy](SECURITY.md) describes, never in a public issue, pull request or discussion.
 
 ## License
 

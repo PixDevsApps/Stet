@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Stet keeps its feature set lean on purpose, so not every idea is built, but every one is read.
+        Stet keeps its feature set lean on purpose, so not every idea is built, but every one is read. For a loose idea you'd like to talk through first, [Discussions → Ideas](https://github.com/PixDevsApps/Stet/discussions/categories/ideas) works too.
   - type: textarea
     id: need
     attributes:

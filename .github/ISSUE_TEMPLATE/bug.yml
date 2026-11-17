@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time. Please leave out the text of your documents and any file that may hold private text: Stet's session and backups keep unsaved documents.
-        A security problem goes privately to support@pixdevs.com instead.
+        A security problem goes privately to the [security policy](https://github.com/PixDevsApps/Stet/security/policy) instead.
   - type: textarea
     id: what
     attributes:
