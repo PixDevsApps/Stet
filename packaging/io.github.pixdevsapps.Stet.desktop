@@ -10,5 +10,5 @@ StartupNotify=true
 StartupWMClass=io.github.pixdevsapps.Stet
 DBusActivatable=true
 Categories=Utility;TextEditor;Development;
-Keywords=text;editor;code;notepad;
+Keywords=text;editor;code;notepad;programming;markdown;regex;keyboard;autosave;omarchy;
 MimeType=text/plain;text/markdown;text/rust;application/toml;text/x-shellscript;application/json;application/xml;application/yaml;text/x-python;text/x-csrc;text/x-c++src;text/x-makefile;text/x-log;text/css;text/html;text/javascript;

@@ -1,6 +1,6 @@
 # Contributing to Stet
 
-Stet is a native, keyboard-first text and code editor for Omarchy, written in Rust with GTK 4, libadwaita and GtkSourceView 5. Thank you for helping. This page is for anyone opening an issue or a pull request; [AGENTS.md](AGENTS.md) adds the rules for AI coding agents working in the project owner's checkout.
+Stet is a native, keyboard-first text and code editor for Linux and Omarchy, written in Rust with GTK 4, libadwaita and GtkSourceView 5. Thank you for helping. This page is for anyone opening an issue or a pull request; [AGENTS.md](AGENTS.md) adds the rules for AI coding agents working in the project owner's checkout.
 
 The repository is [PixDevsApps/Stet](https://github.com/PixDevsApps/Stet). `main` is the only long-lived branch and releases are annotated tags (`v1.6.0`). Propose a change as a branch and a pull request against `main`.
 

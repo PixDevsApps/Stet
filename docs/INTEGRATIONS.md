@@ -92,7 +92,7 @@ As built on 2026-10-01: `fc-match` runs off the GTK thread; the family goes into
 
 **1.3.3, 2026-10-02:** the comment is "Edit text and code files, keyboard-first", at the user's request.
 
-`/usr/share/applications/io.github.pixdevsapps.Stet.desktop`, drafted 2026-09-30, with the comment of 1.3.3:
+`/usr/share/applications/io.github.pixdevsapps.Stet.desktop`, drafted 2026-09-30, with the comment of 1.3.3 and the keywords of 2026-11-17:
 
 ```ini
 [Desktop Entry]
@@ -107,7 +107,7 @@ StartupNotify=true
 StartupWMClass=io.github.pixdevsapps.Stet
 DBusActivatable=true
 Categories=Utility;TextEditor;Development;
-Keywords=text;editor;code;notepad;
+Keywords=text;editor;code;notepad;programming;markdown;regex;keyboard;autosave;omarchy;
 MimeType=text/plain;text/markdown;text/rust;application/toml;text/x-shellscript;application/json;application/xml;application/yaml;text/x-python;text/x-csrc;text/x-c++src;text/x-makefile;text/x-log;text/css;text/html;text/javascript;
 ```
 

@@ -41,10 +41,10 @@
     <mediatype>application/xml</mediatype>
   </provides>
 
-  <url type="homepage">https://github.com/PixDevsApps/Stet</url>
+  <url type="homepage">https://pixdevs.com/omarchy/stet/</url>
+  <url type="help">https://pixdevs.com/guides/stet/</url>
   <url type="bugtracker">https://github.com/PixDevsApps/Stet/issues</url>
   <url type="vcs-browser">https://github.com/PixDevsApps/Stet</url>
-  <url type="help">https://github.com/PixDevsApps/Stet/blob/main/docs/USER_GUIDE.md</url>
 
   <categories>
     <category>Utility</category>
@@ -56,6 +56,12 @@
     <keyword>editor</keyword>
     <keyword>code</keyword>
     <keyword>notepad</keyword>
+    <keyword>programming</keyword>
+    <keyword>markdown</keyword>
+    <keyword>regex</keyword>
+    <keyword>keyboard</keyword>
+    <keyword>autosave</keyword>
+    <keyword>omarchy</keyword>
   </keywords>
 
   <branding>

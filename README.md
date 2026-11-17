@@ -1,6 +1,6 @@
 # Stet
 
-A fast text and code editor for Omarchy, written in Rust.
+A fast text and code editor for Linux and Omarchy, written in Rust.
 
 **Keyboard-first, and it never loses your work.** The name is the proofreading mark *stet*, Latin for "let it stand", which cancels a correction.
 

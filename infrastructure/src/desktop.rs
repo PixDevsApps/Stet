@@ -202,7 +202,7 @@ mod tests {
     fn the_package_texts_describe_stet() {
         let recipe = include_str!("../../packaging/PKGBUILD.in");
         assert!(DESKTOP_ENTRY.contains("Comment=Edit text and code files, keyboard-first\n"));
-        assert!(DESKTOP_ENTRY.contains("Keywords=text;editor;code;notepad;\n"));
+        assert!(DESKTOP_ENTRY.contains("Keywords=text;editor;code;notepad;programming;markdown;regex;keyboard;autosave;omarchy;\n"));
         assert!(
             recipe.contains("pkgdesc='Fast, keyboard-first text and code editor for Omarchy'\n")
         );

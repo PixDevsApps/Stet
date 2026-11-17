@@ -2,6 +2,10 @@
 
 Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
+## Unreleased
+
+- **Easier to find in app launchers and software centres.** Stet's launcher entry and AppStream data also match *programming*, *markdown*, *regex*, *keyboard*, *autosave* and *omarchy*, and the software centre's links now lead to Stet's page and the user guide at pixdevs.com.
+
 ## 1.7.1 — 2026-11-14
 
 - No change to Stet itself. A test of crash safety, which kills a process that writes the session at many moments, no longer fails now and then on a slow machine when the process is killed before it has written anything. The checks on GitHub use `actions/checkout` 7.0.1.
