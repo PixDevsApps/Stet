@@ -51,8 +51,14 @@ A decision with long-term cost (a dependency, a file format or location, hard-to
 
 ## Issues
 
-For a bug, include the Stet version (`stet --version`), how you installed it (Arch package or Flatpak), your distribution and the GTK, libadwaita and GtkSourceView versions, the steps to reproduce, and a short log (`RUST_LOG=debug stet`). Never attach files that may contain private text: Stet's session and backups keep unsaved documents.
+[Open an issue](https://github.com/PixDevsApps/Stet/issues/new/choose) with the bug form or the idea form. For a bug it asks for the Stet version (`stet --version`), how you installed it (Arch package, Flatpak or from source), your system, the steps to reproduce and a short log (`RUST_LOG=debug stet`). Never attach files that may contain private text: Stet's session and backups keep unsaved documents.
+
+Questions may already be answered in the [user guide](https://pixdevs.com/guides/stet/). No GitHub account? Write to **support@pixdevs.com**.
+
+## Security
+
+Report a security problem privately to **support@pixdevs.com**, with "Security" in the subject, never in a public issue, pull request or discussion.
 
 ## License
 
-Contributions are under the repository's [MIT license](LICENSE). Keep third-party notices when dependencies change (`python3 tools/license-report.py`).
+Contributions are under the repository's [MIT license](LICENSE). Keep third-party notices when dependencies change (`python3 tools/license-report.py`). Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).

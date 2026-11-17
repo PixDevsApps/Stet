@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Help using Stet
+    url: https://pixdevs.com/guides/stet/
+    about: The user guide may already have the answer. Otherwise, open a bug report or an idea, or write to support@pixdevs.com.
+  - name: No GitHub account? Email support
+    url: https://pixdevs.com/guides/stet/
+    about: Write to support@pixdevs.com with your Stet version and system.
+  - name: Security problem
+    url: https://github.com/PixDevsApps/Stet/blob/main/CONTRIBUTING.md#security
+    about: Report it privately to support@pixdevs.com, never in a public issue.

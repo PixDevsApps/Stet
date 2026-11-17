@@ -1,0 +1,25 @@
+name: Idea or feature request
+description: Something Stet could do, or do better.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Stet keeps its feature set lean on purpose, so not every idea is built, but every one is read.
+  - type: textarea
+    id: need
+    attributes:
+      label: What you'd like to do
+      description: The task or the problem, in your own words. What gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How it could work
+      description: How you picture it, the keys you'd press, or how another editor does it.
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Your setup (Omarchy or another Linux system) if it matters, or a sketch.

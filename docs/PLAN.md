@@ -4,11 +4,22 @@ Project: Stet, a fast, keyboard-first text and code editor for Omarchy
 
 Source: the plan the user approved on 2026-09-30 (`~/.claude/plans/i-want-to-create-vivid-donut.md`, outside the repository). This file is its canonical repository form.
 
-Synced: 2026-11-14
+Synced: 2026-11-17
 
 The repository docs are the canonical project memory ([ADR-012](DECISIONS.md)). Dated entries describe the state at that date; newer entries take precedence.
 
 ---
+
+## Community files: code of conduct, issue forms, PR template — 2026-11-17
+
+The user, showing GitHub's community health for Stet (3 of 6 recommended files, 57 %; missing a code of conduct, an issue template and a pull request template): "Let's update the Community health, the same way as we did with Sealwax". Sealwax's commit `72ce006` (2026-11-14) was the model, adapted to Stet:
+
+- `CODE_OF_CONDUCT.md`: Contributor Covenant 2.1, reports to support@pixdevs.com (Sealwax's text unchanged).
+- `.github/ISSUE_TEMPLATE/`: a bug form (what happened, steps, `stet --version`, Arch package, Flatpak or source, the system, a `RUST_LOG=debug` log, no private text), an idea form, and blank issues off with links to the [user guide](https://pixdevs.com/guides/stet/), email support and private security reports.
+- `.github/PULL_REQUEST_TEMPLATE.md`: the checks run (`tools/ci.sh`, `--ui`, by hand, what headless runs don't cover) and a short checklist.
+- `CONTRIBUTING.md` points at the forms and gains a Security section (private reports to support@pixdevs.com) and the code of conduct; the README's document table names both.
+
+Unlike Sealwax, Stet's GitHub repository has Discussions and private vulnerability reporting off (checked with `gh api` on 2026-11-17), so the files link to neither; turning them on is a repository setting for the user to decide.
 
 ## Stet 1.7.1: Dependabot's actions/checkout bump and a flaky crash test — 2026-11-14
 
@@ -454,6 +465,7 @@ M0 status on 2026-09-30:
 | 2026-11-13 | Stet 1.7.0, the cleanup's release: merge `cleanup/offsets` into `main` (fast-forward); the version commit and the annotated tag `v1.7.0`; `makepkg` and the fresh-install test in the container; the Flatpak built from the tag, `site` and `publish` to `PixDevsApps/stet-flatpak`; push `main` and `v1.7.0`; the GitHub release v1.7.0 with `stet-x86_64.pkg.tar.zst` and `io.github.pixdevsapps.Stet.flatpakref`; commit and push the records of it | Authorized by the user in chat: "Please merge this into main, bump the version, release and push", in answer to the agent's question whether to merge `cleanup/offsets` and push | Performed 2026-11-13 ([entry](#stet-170-the-architecture-cleanups-release--2026-11-13)): `7091313` tagged `v1.7.0`; the package built and tested; the Flatpak built, published (`12a831c`) and installed from there into a scratch installation; `main` and the tag pushed; the release created with both files; then this record pushed |
 | 2026-11-14 | Dependabot's PR #1 (`actions/checkout` 5.1.0 → 7.0.1 in `.github/workflows/ci.yml`): comment `@dependabot rebase` so that it is rebuilt on `main` after `cfa970d` (its early-warning job had failed on the Clippy lint `cfa970d` fixes), and merge it on GitHub once all four checks pass. No other commit or push | Authorized by the user in chat: "go ahead", in answer to the agent's offer to ask for the rebase and merge the PR once its checks pass | Performed 2026-11-14 ([entry](#stet-171-dependabots-actionscheckout-bump-and-a-flaky-crash-test--2026-11-14)): rebased to `a0190a8`; the early-warning job's flaky failure re-run (read as part of getting the checks to pass); all four checks passed; rebase-merged as `50eeee8`. This record was committed under the next row |
 | 2026-11-14 | 1.7.1: fix the flaky `kill_9_never_leaves_a_dangling_reference`; bump the version to 1.7.1; commit it on `main` with the records of the Dependabot PR, and push `main`, this row included. No tag, package, Flatpak or GitHub release (not asked for) | Authorized by the user in chat: "Please fix the test, commit it together with the PLAN.md record, bump the version and push" | Performed 2026-11-14 ([entry](#stet-171-dependabots-actionscheckout-bump-and-a-flaky-crash-test--2026-11-14)): `bash tools/ci.sh` passed; `main` pushed with this record |
+| 2026-11-17 | Commit on `main` the community files (CODE_OF_CONDUCT.md, the issue forms, the pull request template), the CONTRIBUTING and README changes and their record; push `main`, this row included. No version bump, tag or release (not asked for) | Authorized by the user in chat: "please commit and push", after being shown the files | Performed 2026-11-17 ([entry](#community-files-code-of-conduct-issue-forms-pr-template--2026-11-17)): `main` pushed with this record |
 | — | `makepkg`, `pacman -S`/`-U`, `cargo install` | Not authorized on 2026-09-30 | Since 2026-10-01 local package builds and user-local test installs are covered by the standing authorization; a system-wide `pacman -U` stays the user's step |
 
 An authorization covers only what it names ([OPERATING.md](OPERATING.md#authorization-gates)).

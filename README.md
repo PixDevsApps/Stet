@@ -87,7 +87,7 @@ Details are in [BUILD.md](docs/BUILD.md); installing for your user only, and mak
 | [Operating guide](docs/OPERATING.md) | How work proceeds: milestones, preview gates, authorizations |
 | [Upstream issue draft](docs/upstream/sourceview5-replace-all.md) | The `sourceview5` search-binding bugs, for the user to file |
 | [Third-party notices](THIRD_PARTY.md) | System libraries and Rust crate licenses |
-| [Contributing](CONTRIBUTING.md) | Setting up, checks, making a change, ADRs, issues |
+| [Contributing](CONTRIBUTING.md) | Setting up, checks, making a change, ADRs, issues, security; the [code of conduct](CODE_OF_CONDUCT.md) |
 | [Agent guide](AGENTS.md) | Rules for coding agents working in this repository |
 
 ## License

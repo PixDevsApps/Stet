@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in Stet doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please leave out the text of your documents and any file that may hold private text: Stet's session and backups keep unsaved documents.
+        A security problem goes privately to support@pixdevs.com instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      placeholder: |
+        1. Open …
+        2. Press …
+        3. See …
+  - type: input
+    id: version
+    attributes:
+      label: Stet version
+      description: The output of `stet --version`, or the version in the menu's About Stet.
+      placeholder: stet 1.7.1
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How Stet was installed
+      options:
+        - The Arch package (the README's install line)
+        - The Flatpak
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: Omarchy or the distribution and its version, and the desktop if it isn't Hyprland.
+      placeholder: Omarchy 4.0, or Fedora 43 with GNOME
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The lines around the problem from `RUST_LOG=debug stet`, started from a terminal. Stet never logs the contents of documents.
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: A screenshot (with nothing private in it), the GTK, libadwaita and GtkSourceView versions if you built Stet yourself, or what you've tried.
